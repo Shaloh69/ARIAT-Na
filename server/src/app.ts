@@ -1,4 +1,5 @@
 import express, { Application } from 'express';
+import http from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -7,6 +8,7 @@ import { config } from './config/env';
 import { testConnection } from './config/database';
 import { logger } from './utils/logger';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
+import { initializeWebSocket } from './services/websocket.service';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -14,6 +16,7 @@ import destinationRoutes from './routes/destination.routes';
 import categoryRoutes from './routes/category.routes';
 import intersectionRoutes from './routes/intersection.routes';
 import roadRoutes from './routes/road.routes';
+import routeRoutes from './routes/route.routes';
 
 // Create Express application
 const app: Application = express();
@@ -82,6 +85,7 @@ app.use(`${apiPrefix}/destinations`, destinationRoutes);
 app.use(`${apiPrefix}/categories`, categoryRoutes);
 app.use(`${apiPrefix}/intersections`, intersectionRoutes);
 app.use(`${apiPrefix}/roads`, roadRoutes);
+app.use(`${apiPrefix}/routes`, routeRoutes);
 
 // =====================================================
 // ERROR HANDLING
@@ -99,17 +103,24 @@ app.use(errorHandler);
 
 const PORT = config.port;
 
+// Create HTTP server
+const httpServer = http.createServer(app);
+
+// Initialize WebSocket server
+initializeWebSocket(httpServer);
+
 const startServer = async (): Promise<void> => {
   try {
     // Test database connection
     await testConnection();
 
     // Start server
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       logger.info(`🚀 Server is running on port ${PORT}`);
       logger.info(`📝 Environment: ${config.nodeEnv}`);
       logger.info(`🌐 API Base URL: http://localhost:${PORT}${apiPrefix}`);
       logger.info(`📊 Health Check: http://localhost:${PORT}/health`);
+      logger.info(`🔌 WebSocket server ready for real-time navigation`);
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
