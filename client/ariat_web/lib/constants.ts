@@ -17,7 +17,12 @@ export const API_ENDPOINTS = {
   CATEGORIES: '/categories',
 
   // Intersections
+  INTERSECTIONS: '/intersections',
   INTERSECTIONS_GEOJSON: '/intersections/geojson',
+
+  // Roads
+  ROADS: '/roads',
+  ROADS_GEOJSON: '/roads/geojson',
 };
 
 export const TOKEN_KEY = 'ariat_admin_token';

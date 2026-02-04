@@ -12,6 +12,8 @@ import { errorHandler, notFoundHandler } from './middleware/error.middleware';
 import authRoutes from './routes/auth.routes';
 import destinationRoutes from './routes/destination.routes';
 import categoryRoutes from './routes/category.routes';
+import intersectionRoutes from './routes/intersection.routes';
+import roadRoutes from './routes/road.routes';
 
 // Create Express application
 const app: Application = express();
@@ -78,11 +80,8 @@ const apiPrefix = config.apiPrefix;
 app.use(`${apiPrefix}/auth`, authRoutes);
 app.use(`${apiPrefix}/destinations`, destinationRoutes);
 app.use(`${apiPrefix}/categories`, categoryRoutes);
-
-// Serve GeoJSON file
-app.get(`${apiPrefix}/intersections/geojson`, (req, res) => {
-  res.sendFile('public/intersection_points.geojson', { root: '.' });
-});
+app.use(`${apiPrefix}/intersections`, intersectionRoutes);
+app.use(`${apiPrefix}/roads`, roadRoutes);
 
 // =====================================================
 // ERROR HANDLING

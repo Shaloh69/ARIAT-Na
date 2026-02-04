@@ -38,40 +38,86 @@ export default function MapPage() {
 
   const handleSavePoint = async (point: any) => {
     try {
-      // In a real implementation, this would call the API to save the point
-      // For now, we'll simulate the API call
       console.log('Saving point:', point);
 
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Call the backend API to save the intersection point
+      const response = await apiClient.post(API_ENDPOINTS.INTERSECTIONS, point);
 
-      // In production, uncomment this:
-      // await apiClient.post('/intersections', point);
-
-      // Refetch data
-      await refetch();
-
-      toast.success(`${point.point_type} added successfully!`);
-    } catch (error) {
+      if (response.success) {
+        // Refetch data to show the new point
+        await refetch();
+        toast.success(`${point.point_type.replace('_', ' ')} added successfully!`);
+      } else {
+        throw new Error(response.error || 'Failed to save point');
+      }
+    } catch (error: any) {
       console.error('Error saving point:', error);
+      toast.error(error.message || 'Failed to save point');
       throw error;
     }
   };
 
   const handleSaveRoad = async (road: any) => {
     try {
-      // In a real implementation, this would call the API to save the road
       console.log('Saving road:', road);
 
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Need to find start and end intersections
+      // For now, we'll get all intersections and find the nearest ones
+      const allIntersections = await apiClient.get<any[]>(API_ENDPOINTS.INTERSECTIONS);
 
-      // In production, uncomment this:
-      // await apiClient.post('/roads', road);
+      if (allIntersections.success && allIntersections.data && Array.isArray(allIntersections.data)) {
+        const intersections: any[] = allIntersections.data;
 
-      toast.success('Road saved successfully!');
-    } catch (error) {
+        // Find nearest intersection to start point
+        const startPoint = road.path[0];
+        const endPoint = road.path[road.path.length - 1];
+
+        const findNearest = (point: [number, number], intersections: any[]) => {
+          let minDist = Infinity;
+          let nearest = null;
+
+          for (const int of intersections) {
+            const dist = Math.sqrt(
+              Math.pow(int.latitude - point[0], 2) + Math.pow(int.longitude - point[1], 2)
+            );
+            if (dist < minDist) {
+              minDist = dist;
+              nearest = int;
+            }
+          }
+          return nearest;
+        };
+
+        const startIntersection = findNearest(startPoint, intersections);
+        const endIntersection = findNearest(endPoint, intersections);
+
+        if (!startIntersection || !endIntersection) {
+          toast.error('Could not find nearby intersections. Please add intersection points first.');
+          return;
+        }
+
+        // Call the backend API to save the road
+        const roadData = {
+          name: road.name,
+          description: road.description,
+          start_intersection_id: startIntersection.id,
+          end_intersection_id: endIntersection.id,
+          road_type: road.road_type,
+          path: road.path,
+          is_bidirectional: road.is_bidirectional,
+        };
+
+        const response = await apiClient.post(API_ENDPOINTS.ROADS, roadData);
+
+        if (response.success) {
+          toast.success('Road saved successfully!');
+        } else {
+          throw new Error(response.error || 'Failed to save road');
+        }
+      }
+    } catch (error: any) {
       console.error('Error saving road:', error);
+      toast.error(error.message || 'Failed to save road');
       throw error;
     }
   };

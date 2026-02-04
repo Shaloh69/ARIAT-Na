@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet-polylinedecorator';
 import { Button } from '@heroui/button';
 import { Card, CardBody } from '@heroui/card';
 import { Select, SelectItem } from '@heroui/select';
 import { Input } from '@heroui/input';
+import { Checkbox } from '@heroui/checkbox';
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@heroui/modal';
 import { toast } from 'sonner';
 import type { GeoJSONFeatureCollection, GeoJSONPoint } from '@/types/api';
@@ -43,6 +45,7 @@ interface NewRoad {
   end_intersection_id: string;
   road_type: 'highway' | 'main_road' | 'local_road';
   path: [number, number][];
+  is_bidirectional: boolean;
 }
 
 // Map Click Handler Component
@@ -81,10 +84,89 @@ function CenterMapButton() {
   );
 }
 
+// Road Polyline with Directional Arrows
+interface RoadPolylineProps {
+  positions: [number, number][];
+  color: string;
+  weight?: number;
+  opacity?: number;
+  isBidirectional: boolean;
+}
+
+function RoadPolyline({ positions, color, weight = 4, opacity = 0.7, isBidirectional }: RoadPolylineProps) {
+  const map = useMap();
+  const decoratorRef = useRef<L.PolylineDecorator | null>(null);
+
+  useEffect(() => {
+    if (!map || positions.length < 2) return;
+
+    // Create the base polyline
+    const polyline = L.polyline(positions, {
+      color,
+      weight,
+      opacity,
+    }).addTo(map);
+
+    // Define arrow patterns based on direction
+    const arrowPattern = isBidirectional
+      ? [
+          // Two-way arrows
+          {
+            offset: '25%',
+            repeat: '50%',
+            symbol: L.Symbol.arrowHead({
+              pixelSize: 12,
+              polygon: false,
+              pathOptions: { stroke: true, color, weight: 2, opacity: 0.8 },
+            }),
+          },
+          {
+            offset: '75%',
+            repeat: '50%',
+            symbol: L.Symbol.arrowHead({
+              pixelSize: 12,
+              polygon: false,
+              pathOptions: { stroke: true, color, weight: 2, opacity: 0.8 },
+            }),
+          },
+        ]
+      : [
+          // One-way arrow
+          {
+            offset: '50%',
+            repeat: 0,
+            symbol: L.Symbol.arrowHead({
+              pixelSize: 15,
+              polygon: false,
+              pathOptions: { stroke: true, color, weight: 3, opacity: 0.9 },
+            }),
+          },
+        ];
+
+    // Create decorator with arrows
+    const decorator = (L as any).polylineDecorator(polyline, {
+      patterns: arrowPattern,
+    }).addTo(map);
+
+    decoratorRef.current = decorator;
+
+    // Cleanup
+    return () => {
+      if (decoratorRef.current) {
+        map.removeLayer(decoratorRef.current);
+      }
+      map.removeLayer(polyline);
+    };
+  }, [map, positions, color, weight, opacity, isBidirectional]);
+
+  return null;
+}
+
 export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: MapManagerProps) {
   const [mode, setMode] = useState<'view' | 'add_point' | 'add_road'>('view');
   const [pointType, setPointType] = useState<NewPoint['point_type']>('intersection');
   const [roadType, setRoadType] = useState<NewRoad['road_type']>('local_road');
+  const [isBidirectional, setIsBidirectional] = useState(true);
 
   const [markers, setMarkers] = useState<Array<{ position: [number, number]; name: string; type: string }>>([]);
   const [roadPoints, setRoadPoints] = useState<[number, number][]>([]);
@@ -173,12 +255,14 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
         end_intersection_id: 'temp_end',
         road_type: roadType,
         path: roadPoints,
+        is_bidirectional: isBidirectional,
       });
 
       toast.success('Road saved successfully!');
       setIsRoadModalOpen(false);
       setRoadName('');
       setRoadPoints([]);
+      setIsBidirectional(true);
       setMode('view');
     } catch (error) {
       toast.error('Failed to save road');
@@ -277,8 +361,18 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
                   <SelectItem key="local_road">Local Road</SelectItem>
                 </Select>
 
+                <Checkbox
+                  isSelected={isBidirectional}
+                  onValueChange={setIsBidirectional}
+                  size="sm"
+                >
+                  Two-way road (bidirectional)
+                </Checkbox>
+
                 <div className="text-sm text-gray-600 dark:text-gray-400">
                   Points added: {roadPoints.length}
+                  <br />
+                  Direction: {isBidirectional ? '↔ Two-way' : '→ One-way'}
                 </div>
 
                 <div className="flex gap-2">
@@ -343,7 +437,13 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
 
         {/* Road in progress */}
         {roadPoints.length > 0 && (
-          <Polyline positions={roadPoints} color="blue" weight={4} opacity={0.7} />
+          <RoadPolyline
+            positions={roadPoints}
+            color="blue"
+            weight={4}
+            opacity={0.7}
+            isBidirectional={isBidirectional}
+          />
         )}
       </MapContainer>
 
@@ -399,8 +499,9 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
                 isRequired
               />
               <div className="text-sm text-gray-600 dark:text-gray-400">
-                <p>Road Type: {roadType}</p>
-                <p>Total Points: {roadPoints.length}</p>
+                <p>Road Type: <span className="font-medium">{roadType.replace('_', ' ')}</span></p>
+                <p>Total Points: <span className="font-medium">{roadPoints.length}</span></p>
+                <p>Direction: <span className="font-medium">{isBidirectional ? '↔ Two-way' : '→ One-way'}</span></p>
               </div>
             </div>
           </ModalBody>
