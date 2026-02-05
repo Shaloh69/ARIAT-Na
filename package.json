@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@heroui/switch": "^2.2.26"
+  }
+}

@@ -23,6 +23,9 @@ export const API_ENDPOINTS = {
   // Roads
   ROADS: '/roads',
   ROADS_GEOJSON: '/roads/geojson',
+
+  // Routes (Pathfinding)
+  ROUTES: '/routes',
 };
 
 export const TOKEN_KEY = 'ariat_admin_token';
