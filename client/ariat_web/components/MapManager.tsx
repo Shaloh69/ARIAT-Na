@@ -303,15 +303,15 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
 
   return (
     <div className="relative h-full w-full">
-      {/* Control Panel */}
-      <Card className="absolute top-4 left-4 z-[1000] w-80">
+      {/* Control Panel — solid white bg with dark text so it's readable over the map */}
+      <Card className="absolute top-4 left-4 z-[1000] w-80 map-control-panel">
         <CardBody>
-          <h3 className="font-semibold mb-4">Map Controls</h3>
+          <h3 className="font-semibold mb-4 text-black">Map Controls</h3>
 
           {/* Mode Selection */}
           <div className="space-y-3">
             <div>
-              <label className="text-sm font-medium mb-2 block">Mode</label>
+              <label className="text-sm font-medium mb-2 block text-gray-800">Mode</label>
               <div className="grid grid-cols-3 gap-2">
                 <Button
                   size="sm"
@@ -376,7 +376,7 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
                   Two-way road (bidirectional)
                 </Checkbox>
 
-                <div className="text-sm text-gray-600 dark:text-gray-400">
+                <div className="text-sm text-gray-700">
                   Points added: {roadPoints.length}
                   <br />
                   Direction: {isBidirectional ? '↔ Two-way' : '→ One-way'}
@@ -394,9 +394,9 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
             )}
 
             {/* Legend */}
-            <div className="pt-3 border-t">
-              <p className="text-sm font-medium mb-2">Legend</p>
-              <div className="space-y-1 text-xs">
+            <div className="pt-3 border-t border-gray-200">
+              <p className="text-sm font-medium mb-2 text-black">Legend</p>
+              <div className="space-y-1 text-xs text-gray-800">
                 {[
                   { type: 'tourist_spot', label: 'Tourist Spot' },
                   { type: 'bus_terminal', label: 'Bus Terminal' },

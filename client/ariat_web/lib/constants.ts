@@ -26,6 +26,11 @@ export const API_ENDPOINTS = {
 
   // Routes (Pathfinding)
   ROUTES: '/routes',
+
+  // Admin Profile
+  ADMIN_PROFILE: '/admin/profile',
+  ADMIN_PROFILE_IMAGE: '/admin/profile/image',
+  ADMIN_CHANGE_PASSWORD: '/admin/profile/password',
 };
 
 export const TOKEN_KEY = 'ariat_admin_token';

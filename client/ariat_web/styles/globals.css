@@ -411,6 +411,24 @@ body {
   -webkit-backdrop-filter: blur(12px) !important;
 }
 
+/* ===== Map Control Panel - override glass theme for readability ===== */
+
+.map-control-panel,
+.map-control-panel [data-slot="base"],
+.map-control-panel [data-slot="body"] {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  color: #1a1a2e !important;
+}
+
+.map-control-panel [data-slot="base"][class*="heroui-button"][data-color="default"],
+.map-control-panel [data-slot="base"][class*="heroui-button"][data-variant="flat"] {
+  color: #374151 !important;
+  border-color: #d1d5db !important;
+  background: rgba(243, 244, 246, 0.8) !important;
+}
+
 /* ===== Custom Scrollbar ===== */
 
 ::-webkit-scrollbar {
