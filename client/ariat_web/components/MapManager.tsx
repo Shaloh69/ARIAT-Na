@@ -11,19 +11,20 @@ import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@herou
 import { toast } from '@/lib/toast';
 import type { GeoJSONFeatureCollection, GeoJSONPoint } from '@/types/api';
 
-// Fix Leaflet default icon issue
+// Fix Leaflet default icon issue with Next.js webpack
 import 'leaflet/dist/leaflet.css';
-import icon from 'leaflet/dist/images/marker-icon.png';
+import iconImg from 'leaflet/dist/images/marker-icon.png';
+import iconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
-const DefaultIcon = L.icon({
-  iconUrl: icon.src,
-  shadowUrl: iconShadow.src,
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconUrl: typeof iconImg === 'string' ? iconImg : iconImg?.src,
+  iconRetinaUrl: typeof iconRetina === 'string' ? iconRetina : iconRetina?.src,
+  shadowUrl: typeof iconShadow === 'string' ? iconShadow : iconShadow?.src,
   iconSize: [25, 41],
   iconAnchor: [12, 41],
 });
-
-L.Marker.prototype.options.icon = DefaultIcon;
 
 interface MapManagerProps {
   geojsonData?: GeoJSONFeatureCollection;
@@ -150,12 +151,18 @@ function RoadPolyline({ positions, color, weight = 4, opacity = 0.7, isBidirecti
 
     decoratorRef.current = decorator;
 
-    // Cleanup
+    // Cleanup — guard against already-removed layers to prevent _leaflet_events error
     return () => {
-      if (decoratorRef.current) {
-        map.removeLayer(decoratorRef.current);
+      try {
+        if (decoratorRef.current && map.hasLayer(decoratorRef.current)) {
+          map.removeLayer(decoratorRef.current);
+        }
+        if (map.hasLayer(polyline)) {
+          map.removeLayer(polyline);
+        }
+      } catch {
+        // Ignore cleanup errors during component unmount
       }
-      map.removeLayer(polyline);
     };
   }, [map, positions, color, weight, opacity, isBidirectional]);
 
