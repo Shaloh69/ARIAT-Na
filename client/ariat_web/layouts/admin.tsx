@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Button } from '@heroui/button';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { ThemeSwitch } from '@/components/theme-switch';
+import AnimatedBackground from '@/components/animated-background';
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -108,21 +109,23 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
-      {/* Sidebar */}
-      <aside
-        className={`${
-          isSidebarCollapsed ? 'w-20' : 'w-64'
-        } flex flex-col border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950 transition-all duration-300`}
-      >
+    <>
+      <AnimatedBackground />
+      <div className="flex h-screen overflow-hidden">
+        {/* Sidebar */}
+        <aside
+          className={`${
+            isSidebarCollapsed ? 'w-20' : 'w-64'
+          } flex flex-col glass-sidebar transition-all duration-300`}
+        >
         {/* Logo */}
-        <div className="flex h-16 items-center justify-between border-b border-gray-200 dark:border-gray-800 px-4">
+        <div className="flex h-16 items-center justify-between px-4" style={{ borderBottom: '1px solid var(--border)' }}>
           {!isSidebarCollapsed && (
-            <span className="text-xl font-bold text-primary">ARIAT-NA</span>
+            <span className="text-xl font-bold" style={{ color: 'var(--red-600)' }}>ARIAT-NA</span>
           )}
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="rounded-lg p-2 hover:bg-white/20"
           >
             <svg
               className="h-5 w-5"
@@ -157,11 +160,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
-                  isActive
-                    ? 'bg-primary text-white'
-                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
+                className={`flex items-center gap-3 px-3 py-2 glass-nav-item ${
+                  isActive ? 'active' : ''
                 }`}
+                style={{
+                  color: isActive ? 'white' : 'var(--text-strong)'
+                }}
               >
                 {item.icon}
                 {!isSidebarCollapsed && <span>{item.name}</span>}
@@ -171,16 +175,22 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         </nav>
 
         {/* User section */}
-        <div className="border-t border-gray-200 dark:border-gray-800 p-4">
+        <div className="p-4" style={{ borderTop: '1px solid var(--border)' }}>
           {!isSidebarCollapsed ? (
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-full font-semibold"
+                  style={{
+                    backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                    color: 'var(--red-600)'
+                  }}
+                >
                   {admin?.full_name.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{admin?.full_name}</p>
-                  <p className="text-xs text-gray-500 truncate">{admin?.email}</p>
+                  <p className="text-sm font-medium truncate" style={{ color: 'var(--text-strong)' }}>{admin?.full_name}</p>
+                  <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{admin?.email}</p>
                 </div>
               </div>
               <div className="flex items-center justify-between">
@@ -197,13 +207,20 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             </div>
           ) : (
             <div className="flex flex-col items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold">
+              <div
+                className="flex h-10 w-10 items-center justify-center rounded-full font-semibold"
+                style={{
+                  backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                  color: 'var(--red-600)'
+                }}
+              >
                 {admin?.full_name.charAt(0).toUpperCase()}
               </div>
               <ThemeSwitch />
               <button
                 onClick={handleLogout}
-                className="rounded-lg p-2 text-danger hover:bg-danger/10"
+                className="rounded-lg p-2 hover:bg-white/20"
+                style={{ color: 'var(--danger)' }}
                 title="Logout"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -220,20 +237,21 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         </div>
       </aside>
 
-      {/* Main content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Header */}
-        <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950 px-6">
-          <h1 className="text-2xl font-semibold">
-            {navigation.find((item) => item.href === router.pathname)?.name || 'Admin Panel'}
-          </h1>
-        </header>
+        {/* Main content */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Header */}
+          <header className="flex h-16 items-center justify-between glass-topbar px-6">
+            <h1 className="text-2xl font-semibold" style={{ color: 'var(--text-strong)' }}>
+              {navigation.find((item) => item.href === router.pathname)?.name || 'Admin Panel'}
+            </h1>
+          </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900 p-6">
-          {children}
-        </main>
+          {/* Page content */}
+          <main className="flex-1 overflow-y-auto glass-main p-6">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
