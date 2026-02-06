@@ -5,6 +5,7 @@ import { Button } from '@heroui/button';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { ThemeSwitch } from '@/components/theme-switch';
 import AnimatedBackground from '@/components/animated-background';
+import DefaultPasswordWarning from '@/components/default-password-warning';
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -121,7 +122,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         {/* Logo */}
         <div className="flex h-16 items-center justify-between px-4" style={{ borderBottom: '1px solid var(--border)' }}>
           {!isSidebarCollapsed && (
-            <span className="text-xl font-bold" style={{ color: 'var(--red-600)' }}>ARIAT-NA</span>
+            <span className="text-xl font-bold" style={{ color: 'var(--red-600)' }}>AIRAT-NA</span>
           )}
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -179,15 +180,23 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           {!isSidebarCollapsed ? (
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <div
-                  className="flex h-10 w-10 items-center justify-center rounded-full font-semibold"
-                  style={{
-                    backgroundColor: 'rgba(244, 63, 94, 0.1)',
-                    color: 'var(--red-600)'
-                  }}
-                >
-                  {admin?.full_name.charAt(0).toUpperCase()}
-                </div>
+                {admin?.profile_image_url ? (
+                  <img
+                    src={admin.profile_image_url}
+                    alt={admin.full_name}
+                    className="h-10 w-10 rounded-full object-cover ring-2 ring-primary/20"
+                  />
+                ) : (
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-full font-semibold"
+                    style={{
+                      backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                      color: 'var(--red-600)'
+                    }}
+                  >
+                    {admin?.full_name.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate" style={{ color: 'var(--text-strong)' }}>{admin?.full_name}</p>
                   <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{admin?.email}</p>
@@ -207,15 +216,25 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             </div>
           ) : (
             <div className="flex flex-col items-center gap-3">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-full font-semibold"
-                style={{
-                  backgroundColor: 'rgba(244, 63, 94, 0.1)',
-                  color: 'var(--red-600)'
-                }}
-              >
-                {admin?.full_name.charAt(0).toUpperCase()}
-              </div>
+              {admin?.profile_image_url ? (
+                <img
+                  src={admin.profile_image_url}
+                  alt={admin.full_name}
+                  className="h-10 w-10 rounded-full object-cover ring-2 ring-primary/20"
+                  title={admin.full_name}
+                />
+              ) : (
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-full font-semibold"
+                  style={{
+                    backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                    color: 'var(--red-600)'
+                  }}
+                  title={admin?.full_name}
+                >
+                  {admin?.full_name.charAt(0).toUpperCase()}
+                </div>
+              )}
               <ThemeSwitch />
               <button
                 onClick={handleLogout}
@@ -248,6 +267,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
           {/* Page content */}
           <main className="flex-1 overflow-y-auto glass-main p-6">
+            <DefaultPasswordWarning />
             {children}
           </main>
         </div>

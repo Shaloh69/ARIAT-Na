@@ -3,7 +3,9 @@ export interface Admin {
   id: string;
   email: string;
   full_name: string;
+  profile_image_url?: string;
   role: 'super_admin' | 'admin' | 'moderator';
+  is_default_password?: boolean;
   created_at: string;
 }
 

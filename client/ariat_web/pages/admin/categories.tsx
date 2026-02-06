@@ -164,7 +164,7 @@ export default function CategoriesPage() {
   return (
     <AdminLayout>
       <Head>
-        <title>Categories - ARIAT-NA Admin</title>
+        <title>Categories - AIRAT-NA Admin</title>
       </Head>
 
       <div className="space-y-6">

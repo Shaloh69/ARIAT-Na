@@ -48,7 +48,7 @@ export default function LoginPage() {
   return (
     <>
       <Head>
-        <title>Admin Login - ARIAT-NA</title>
+        <title>Admin Login - AIRAT-NA</title>
       </Head>
 
       <AnimatedBackground />
@@ -73,7 +73,7 @@ export default function LoginPage() {
               </div>
             </div>
             <div className="text-center">
-              <h1 className="text-2xl font-bold">ARIAT-NA Admin</h1>
+              <h1 className="text-2xl font-bold">AIRAT-NA Admin</h1>
               <p className="text-sm text-default-500">Sign in to manage the travel platform</p>
             </div>
           </CardHeader>
@@ -83,7 +83,7 @@ export default function LoginPage() {
               <Input
                 type="email"
                 label="Email"
-                placeholder="admin@ariat-na.com"
+                placeholder="admin@airat-na.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 isRequired

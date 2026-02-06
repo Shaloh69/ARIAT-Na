@@ -125,7 +125,7 @@ export default function MapPage() {
   return (
     <AdminLayout>
       <Head>
-        <title>Map Manager - ARIAT-NA Admin</title>
+        <title>Map Manager - AIRAT-NA Admin</title>
       </Head>
 
       {isLoading ? (

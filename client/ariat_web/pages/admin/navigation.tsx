@@ -17,7 +17,7 @@ export default function NavigationDashboardPage() {
   return (
     <AdminLayout>
       <Head>
-        <title>Real-time Navigation - ARIAT-NA Admin</title>
+        <title>Real-time Navigation - AIRAT-NA Admin</title>
       </Head>
 
       <div className="space-y-6">

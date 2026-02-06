@@ -185,7 +185,7 @@ export default function DestinationsPage() {
   return (
     <AdminLayout>
       <Head>
-        <title>Destinations - ARIAT-NA Admin</title>
+        <title>Destinations - AIRAT-NA Admin</title>
       </Head>
 
       <div className="space-y-6">

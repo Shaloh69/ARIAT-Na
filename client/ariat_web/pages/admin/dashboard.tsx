@@ -71,7 +71,7 @@ export default function DashboardPage() {
   return (
     <AdminLayout>
       <Head>
-        <title>Dashboard - ARIAT-NA Admin</title>
+        <title>Dashboard - AIRAT-NA Admin</title>
       </Head>
 
       <div className="space-y-6">

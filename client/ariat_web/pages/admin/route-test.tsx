@@ -99,7 +99,7 @@ export default function RouteTestPage() {
   return (
     <AdminLayout>
       <Head>
-        <title>Route Testing - ARIAT-NA Admin</title>
+        <title>Route Testing - AIRAT-NA Admin</title>
       </Head>
 
       <div className="space-y-6">

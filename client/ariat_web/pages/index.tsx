@@ -13,7 +13,7 @@ export default function IndexPage() {
   return (
     <>
       <Head>
-        <title>ARIAT-NA Admin Console</title>
+        <title>AIRAT-NA Admin Console</title>
       </Head>
       <AnimatedBackground />
       <div className="flex h-screen items-center justify-center">
