@@ -46,7 +46,13 @@ const seedAdmin = async (): Promise<void> => {
   const sql = `
     INSERT INTO admins (id, email, password_hash, is_default_password, full_name, profile_image_url, role, is_active)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP
+    ON DUPLICATE KEY UPDATE
+      password_hash = VALUES(password_hash),
+      is_default_password = VALUES(is_default_password),
+      full_name = VALUES(full_name),
+      role = VALUES(role),
+      is_active = VALUES(is_active),
+      updated_at = CURRENT_TIMESTAMP
   `;
 
   await pool.execute(sql, [

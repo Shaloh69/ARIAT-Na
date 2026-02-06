@@ -5,10 +5,12 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import { config } from './config/env';
-import { testConnection } from './config/database';
+import { testConnection, pool } from './config/database';
 import { logger } from './utils/logger';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
 import { initializeWebSocket } from './services/websocket.service';
+import { hashPassword } from './utils/auth';
+import { v4 as uuidv4 } from 'uuid';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -113,10 +115,44 @@ const httpServer = http.createServer(app);
 // Initialize WebSocket server
 initializeWebSocket(httpServer);
 
+/**
+ * Ensure the default admin user exists in the database.
+ * This runs on every server startup so login always works
+ * even if db:seed was not run after db:init.
+ */
+const ensureAdminExists = async (): Promise<void> => {
+  try {
+    const [admins]: any = await pool.execute(
+      'SELECT id FROM admins WHERE email = ?',
+      [config.admin.email]
+    );
+
+    if (admins.length === 0) {
+      const adminId = uuidv4();
+      const hashedPassword = await hashPassword(config.admin.password);
+
+      await pool.execute(
+        `INSERT INTO admins (id, email, password_hash, is_default_password, full_name, profile_image_url, role, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [adminId, config.admin.email, hashedPassword, true, 'System Administrator', null, 'super_admin', true]
+      );
+
+      logger.info(`Default admin created: ${config.admin.email}`);
+    } else {
+      logger.info(`Default admin already exists: ${config.admin.email}`);
+    }
+  } catch (error) {
+    logger.error('Failed to ensure admin exists:', error);
+  }
+};
+
 const startServer = async (): Promise<void> => {
   try {
     // Test database connection
     await testConnection();
+
+    // Ensure default admin user exists
+    await ensureAdminExists();
 
     // Start server
     httpServer.listen(PORT, () => {
