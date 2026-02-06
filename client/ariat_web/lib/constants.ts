@@ -31,6 +31,12 @@ export const API_ENDPOINTS = {
   ADMIN_PROFILE: '/admin/profile',
   ADMIN_PROFILE_IMAGE: '/admin/profile/image',
   ADMIN_CHANGE_PASSWORD: '/admin/profile/password',
+
+  // Uploads
+  UPLOAD_IMAGE: '/upload/image',
+  UPLOAD_IMAGES: '/upload/images',
+  UPLOAD_VIDEO: '/upload/video',
+  UPLOAD_DELETE: '/upload',
 };
 
 export const TOKEN_KEY = 'ariat_admin_token';

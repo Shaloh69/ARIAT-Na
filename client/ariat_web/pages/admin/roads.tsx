@@ -3,6 +3,10 @@ import AdminLayout from '@/layouts/admin';
 import Head from 'next/head';
 import { Card, CardBody, CardHeader } from '@heroui/card';
 import { Button } from '@heroui/button';
+import { Input, Textarea } from '@heroui/input';
+import { Select, SelectItem } from '@heroui/select';
+import { Checkbox } from '@heroui/checkbox';
+import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@heroui/modal';
 import { Chip } from '@heroui/chip';
 import { toast } from '@/lib/toast';
 import { apiClient } from '@/lib/api';
@@ -33,6 +37,14 @@ export default function RoadsPage() {
   const [roads, setRoads] = useState<Road[]>([]);
   const [intersections, setIntersections] = useState<Map<string, Intersection>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [editingRoad, setEditingRoad] = useState<Road | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    description: '',
+    road_type: 'local_road',
+    is_bidirectional: true,
+  });
 
   useEffect(() => {
     fetchData();
@@ -91,6 +103,41 @@ export default function RoadsPage() {
       }
     } catch (error) {
       toast.error('Failed to delete road');
+    }
+  };
+
+  const handleOpenEdit = (road: Road) => {
+    setEditingRoad(road);
+    setEditForm({
+      name: road.name,
+      description: road.description || '',
+      road_type: road.road_type,
+      is_bidirectional: road.is_bidirectional,
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingRoad || !editForm.name.trim()) {
+      toast.error('Road name is required');
+      return;
+    }
+
+    try {
+      const response = await apiClient.put(`${API_ENDPOINTS.ROADS}/${editingRoad.id}`, {
+        name: editForm.name,
+        description: editForm.description || undefined,
+        road_type: editForm.road_type,
+        is_bidirectional: editForm.is_bidirectional,
+      });
+      if (response.success) {
+        toast.success('Road updated successfully');
+        setIsEditModalOpen(false);
+        setEditingRoad(null);
+        fetchData();
+      }
+    } catch (error) {
+      toast.error('Failed to update road');
     }
   };
 
@@ -212,6 +259,9 @@ export default function RoadsPage() {
                       </div>
                     </div>
                     <div className="flex gap-2">
+                      <Button size="sm" color="primary" variant="flat" onClick={() => handleOpenEdit(road)}>
+                        Edit
+                      </Button>
                       <Button
                         size="sm"
                         color={road.is_active ? 'warning' : 'success'}
@@ -231,6 +281,52 @@ export default function RoadsPage() {
           </div>
         )}
       </div>
+      {/* Edit Road Modal */}
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} size="lg">
+        <ModalContent>
+          <ModalHeader>Edit Road</ModalHeader>
+          <ModalBody>
+            <div className="space-y-4">
+              <Input
+                label="Road Name"
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                isRequired
+              />
+              <Textarea
+                label="Description"
+                placeholder="Optional description"
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                minRows={2}
+              />
+              <Select
+                label="Road Type"
+                selectedKeys={[editForm.road_type]}
+                onChange={(e) => setEditForm({ ...editForm, road_type: e.target.value })}
+              >
+                <SelectItem key="highway">Highway</SelectItem>
+                <SelectItem key="main_road">Main Road</SelectItem>
+                <SelectItem key="local_road">Local Road</SelectItem>
+              </Select>
+              <Checkbox
+                isSelected={editForm.is_bidirectional}
+                onValueChange={(val) => setEditForm({ ...editForm, is_bidirectional: val })}
+              >
+                Two-way road (bidirectional)
+              </Checkbox>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button color="danger" variant="flat" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button color="primary" onClick={handleSaveEdit}>
+              Save Changes
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </AdminLayout>
   );
 }

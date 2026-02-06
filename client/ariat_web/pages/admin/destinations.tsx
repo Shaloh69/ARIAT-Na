@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import AdminLayout from '@/layouts/admin';
 import Head from 'next/head';
 import { Card, CardBody, CardHeader } from '@heroui/card';
@@ -22,10 +22,14 @@ interface Destination {
   entrance_fee_local: number;
   entrance_fee_foreign: number;
   average_visit_duration: number;
+  best_time_to_visit?: string;
   rating: number;
   review_count: number;
   is_active: boolean;
   is_featured: boolean;
+  images?: string[];
+  operating_hours?: Record<string, string> | null;
+  amenities?: string[];
 }
 
 interface Category {
@@ -40,6 +44,8 @@ export default function DestinationsPage() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDestination, setEditingDestination] = useState<Destination | null>(null);
+
+  // Form state
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -50,7 +56,14 @@ export default function DestinationsPage() {
     entrance_fee_local: '0',
     entrance_fee_foreign: '0',
     average_visit_duration: '120',
+    best_time_to_visit: '',
+    amenities: '',
   });
+  const [formImages, setFormImages] = useState<string[]>([]);
+  const [formVideos, setFormVideos] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchDestinations();
@@ -82,6 +95,8 @@ export default function DestinationsPage() {
     }
   };
 
+  const isVideoUrl = (url: string) => /\.(mp4|webm|mov|avi)$/i.test(url);
+
   const handleOpenModal = (destination?: Destination) => {
     if (destination) {
       setEditingDestination(destination);
@@ -95,7 +110,12 @@ export default function DestinationsPage() {
         entrance_fee_local: destination.entrance_fee_local.toString(),
         entrance_fee_foreign: destination.entrance_fee_foreign.toString(),
         average_visit_duration: destination.average_visit_duration.toString(),
+        best_time_to_visit: destination.best_time_to_visit || '',
+        amenities: destination.amenities?.join(', ') || '',
       });
+      const existingMedia = destination.images || [];
+      setFormVideos(existingMedia.filter(isVideoUrl));
+      setFormImages(existingMedia.filter((u) => !isVideoUrl(u)));
     } else {
       setEditingDestination(null);
       setFormData({
@@ -108,7 +128,11 @@ export default function DestinationsPage() {
         entrance_fee_local: '0',
         entrance_fee_foreign: '0',
         average_visit_duration: '120',
+        best_time_to_visit: '',
+        amenities: '',
       });
+      setFormImages([]);
+      setFormVideos([]);
     }
     setIsModalOpen(true);
   };
@@ -118,19 +142,138 @@ export default function DestinationsPage() {
     setEditingDestination(null);
   };
 
-  const handleSubmit = async () => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith('image/')) {
+        toast.error(`"${file.name}" is not an image`);
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`"${file.name}" exceeds 5MB limit`);
+        return;
+      }
+    }
+
     try {
+      setUploading(true);
+      const uploadData = new FormData();
+      for (const file of Array.from(files)) {
+        uploadData.append('files', file);
+      }
+      uploadData.append('folder', 'destinations');
+
+      const response = await apiClient.post<any>(
+        API_ENDPOINTS.UPLOAD_IMAGES,
+        uploadData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+
+      if (response.success && response.data) {
+        const urls = Array.isArray(response.data)
+          ? response.data.map((r: any) => r.url)
+          : [response.data.url];
+        setFormImages((prev) => [...prev, ...urls]);
+        toast.success(`${urls.length} image(s) uploaded`);
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to upload images');
+    } finally {
+      setUploading(false);
+      if (imageInputRef.current) imageInputRef.current.value = '';
+    }
+  };
+
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('video/')) {
+      toast.error('Please select a video file');
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('Video must be less than 50MB');
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const uploadData = new FormData();
+      uploadData.append('file', file);
+      uploadData.append('folder', 'destinations');
+
+      const response = await apiClient.post<any>(
+        API_ENDPOINTS.UPLOAD_VIDEO,
+        uploadData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+
+      if (response.success && response.data) {
+        setFormVideos((prev) => [...prev, response.data.url]);
+        toast.success('Video uploaded');
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to upload video');
+    } finally {
+      setUploading(false);
+      if (videoInputRef.current) videoInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveImage = async (url: string) => {
+    try {
+      await apiClient.delete(API_ENDPOINTS.UPLOAD_DELETE, { data: { url } });
+    } catch {
+      // Still remove from form even if server delete fails
+    }
+    setFormImages((prev) => prev.filter((u) => u !== url));
+  };
+
+  const handleRemoveVideo = async (url: string) => {
+    try {
+      await apiClient.delete(API_ENDPOINTS.UPLOAD_DELETE, { data: { url } });
+    } catch {
+      // Still remove from form
+    }
+    setFormVideos((prev) => prev.filter((u) => u !== url));
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.name.trim()) {
+      toast.error('Name is required');
+      return;
+    }
+    if (!formData.category_id) {
+      toast.error('Category is required');
+      return;
+    }
+
+    try {
+      const allMedia = [...formImages, ...formVideos];
+      const amenitiesList = formData.amenities
+        .split(',')
+        .map((a) => a.trim())
+        .filter(Boolean);
+
       const payload = {
-        ...formData,
+        name: formData.name,
+        description: formData.description,
+        category_id: formData.category_id,
         latitude: parseFloat(formData.latitude),
         longitude: parseFloat(formData.longitude),
+        address: formData.address || undefined,
         entrance_fee_local: parseFloat(formData.entrance_fee_local),
         entrance_fee_foreign: parseFloat(formData.entrance_fee_foreign),
         average_visit_duration: parseInt(formData.average_visit_duration),
+        best_time_to_visit: formData.best_time_to_visit || undefined,
+        images: allMedia.length > 0 ? allMedia : undefined,
+        amenities: amenitiesList.length > 0 ? amenitiesList : undefined,
       };
 
       if (editingDestination) {
-        // Update
         const response = await apiClient.put(
           `${API_ENDPOINTS.DESTINATIONS}/${editingDestination.id}`,
           payload
@@ -141,7 +284,6 @@ export default function DestinationsPage() {
           handleCloseModal();
         }
       } else {
-        // Create
         const response = await apiClient.post(API_ENDPOINTS.DESTINATIONS, payload);
         if (response.success) {
           toast.success('Destination created successfully');
@@ -224,6 +366,16 @@ export default function DestinationsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {destinations.map((destination) => (
               <Card key={destination.id} className="hover:shadow-lg transition-shadow">
+                {/* Thumbnail */}
+                {destination.images && destination.images.filter((u) => !isVideoUrl(u)).length > 0 && (
+                  <div className="h-40 overflow-hidden rounded-t-xl">
+                    <img
+                      src={destination.images.filter((u) => !isVideoUrl(u))[0]}
+                      alt={destination.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
                 <CardHeader className="flex-col items-start gap-2 pb-0">
                   <div className="flex items-start justify-between w-full">
                     <h3 className="font-semibold text-lg">{destination.name}</h3>
@@ -274,6 +426,16 @@ export default function DestinationsPage() {
                         {destination.rating.toFixed(1)} ({destination.review_count} reviews)
                       </span>
                     </div>
+                    {destination.images && destination.images.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-gray-600 dark:text-gray-400">
+                          {destination.images.length} media file(s)
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2 mt-4">
                     <Button size="sm" color="primary" variant="flat" onClick={() => handleOpenModal(destination)}>
@@ -299,89 +461,245 @@ export default function DestinationsPage() {
       </div>
 
       {/* Add/Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} size="2xl" scrollBehavior="inside">
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} size="3xl" scrollBehavior="inside">
         <ModalContent>
           <ModalHeader>{editingDestination ? 'Edit Destination' : 'Add Destination'}</ModalHeader>
           <ModalBody>
-            <div className="space-y-4">
-              <Input
-                label="Name"
-                placeholder="Enter destination name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                isRequired
-              />
-              <Textarea
-                label="Description"
-                placeholder="Enter description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                minRows={3}
-              />
-              <Select
-                label="Category"
-                placeholder="Select a category"
-                selectedKeys={formData.category_id ? [formData.category_id] : []}
-                onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                isRequired
-              >
-                {categories.map((category) => (
-                  <SelectItem key={category.id}>{category.name}</SelectItem>
-                ))}
-              </Select>
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  label="Latitude"
-                  type="number"
-                  step="0.000001"
-                  placeholder="10.3157"
-                  value={formData.latitude}
-                  onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
-                  isRequired
-                />
-                <Input
-                  label="Longitude"
-                  type="number"
-                  step="0.000001"
-                  placeholder="123.8854"
-                  value={formData.longitude}
-                  onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
-                  isRequired
-                />
+            <div className="space-y-6">
+              {/* Basic Info */}
+              <div>
+                <h4 className="font-medium mb-3">Basic Information</h4>
+                <div className="space-y-4">
+                  <Input
+                    label="Name"
+                    placeholder="Enter destination name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    isRequired
+                  />
+                  <Textarea
+                    label="Description"
+                    placeholder="Write a complete description of this destination. Include history, things to do, what makes it special, tips for visitors..."
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    minRows={5}
+                    maxRows={12}
+                  />
+                  <Select
+                    label="Category"
+                    placeholder="Select a category"
+                    selectedKeys={formData.category_id ? [formData.category_id] : []}
+                    onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+                    isRequired
+                  >
+                    {categories.map((category) => (
+                      <SelectItem key={category.id}>{category.name}</SelectItem>
+                    ))}
+                  </Select>
+                </div>
               </div>
-              <Input
-                label="Address"
-                placeholder="Enter address"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              />
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  label="Entrance Fee (Local)"
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={formData.entrance_fee_local}
-                  onChange={(e) => setFormData({ ...formData, entrance_fee_local: e.target.value })}
-                  startContent={<span className="text-gray-500">₱</span>}
-                />
-                <Input
-                  label="Entrance Fee (Foreign)"
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={formData.entrance_fee_foreign}
-                  onChange={(e) => setFormData({ ...formData, entrance_fee_foreign: e.target.value })}
-                  startContent={<span className="text-gray-500">$</span>}
-                />
+
+              {/* Images */}
+              <div>
+                <h4 className="font-medium mb-3">Images</h4>
+                <div className="space-y-3">
+                  {formImages.length > 0 && (
+                    <div className="grid grid-cols-3 gap-3">
+                      {formImages.map((url, idx) => (
+                        <div key={idx} className="relative group rounded-lg overflow-hidden h-32">
+                          <img src={url} alt={`Image ${idx + 1}`} className="w-full h-full object-cover" />
+                          <button
+                            onClick={() => handleRemoveImage(url)}
+                            className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            X
+                          </button>
+                          {idx === 0 && (
+                            <span className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-2 py-0.5 rounded">
+                              Cover
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div>
+                    <label>
+                      <Button
+                        as="span"
+                        size="sm"
+                        color="primary"
+                        variant="flat"
+                        isLoading={uploading}
+                        className="cursor-pointer"
+                      >
+                        <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Upload Images
+                      </Button>
+                      <input
+                        ref={imageInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={handleImageUpload}
+                        disabled={uploading}
+                      />
+                    </label>
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                      JPG, PNG, GIF. Max 5MB each. First image is the cover photo.
+                    </p>
+                  </div>
+                </div>
               </div>
-              <Input
-                label="Average Visit Duration (minutes)"
-                type="number"
-                placeholder="120"
-                value={formData.average_visit_duration}
-                onChange={(e) => setFormData({ ...formData, average_visit_duration: e.target.value })}
-              />
+
+              {/* Videos */}
+              <div>
+                <h4 className="font-medium mb-3">Videos</h4>
+                <div className="space-y-3">
+                  {formVideos.length > 0 && (
+                    <div className="space-y-2">
+                      {formVideos.map((url, idx) => (
+                        <div key={idx} className="flex items-center gap-3 p-2 rounded-lg" style={{ background: 'var(--bg-3)' }}>
+                          <svg className="h-5 w-5 flex-shrink-0" style={{ color: 'var(--text-muted)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                          <span className="text-sm truncate flex-1">{url.split('/').pop()}</span>
+                          <Button size="sm" color="danger" variant="flat" onClick={() => handleRemoveVideo(url)}>
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div>
+                    <label>
+                      <Button
+                        as="span"
+                        size="sm"
+                        color="primary"
+                        variant="flat"
+                        isLoading={uploading}
+                        className="cursor-pointer"
+                      >
+                        <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Upload Video
+                      </Button>
+                      <input
+                        ref={videoInputRef}
+                        type="file"
+                        accept="video/*"
+                        className="hidden"
+                        onChange={handleVideoUpload}
+                        disabled={uploading}
+                      />
+                    </label>
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                      MP4, WebM, MOV. Max 50MB.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Location */}
+              <div>
+                <h4 className="font-medium mb-3">Location</h4>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input
+                      label="Latitude"
+                      type="number"
+                      step="0.000001"
+                      placeholder="10.3157"
+                      value={formData.latitude}
+                      onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                      isRequired
+                    />
+                    <Input
+                      label="Longitude"
+                      type="number"
+                      step="0.000001"
+                      placeholder="123.8854"
+                      value={formData.longitude}
+                      onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                      isRequired
+                    />
+                  </div>
+                  <Input
+                    label="Address"
+                    placeholder="Full address of the destination"
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Fees & Visiting Info */}
+              <div>
+                <h4 className="font-medium mb-3">Fees & Visiting Info</h4>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input
+                      label="Entrance Fee (Local)"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={formData.entrance_fee_local}
+                      onChange={(e) => setFormData({ ...formData, entrance_fee_local: e.target.value })}
+                      startContent={<span className="text-gray-500">₱</span>}
+                    />
+                    <Input
+                      label="Entrance Fee (Foreign)"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={formData.entrance_fee_foreign}
+                      onChange={(e) => setFormData({ ...formData, entrance_fee_foreign: e.target.value })}
+                      startContent={<span className="text-gray-500">$</span>}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input
+                      label="Average Visit Duration (minutes)"
+                      type="number"
+                      placeholder="120"
+                      value={formData.average_visit_duration}
+                      onChange={(e) => setFormData({ ...formData, average_visit_duration: e.target.value })}
+                    />
+                    <Input
+                      label="Best Time to Visit"
+                      placeholder="e.g. Morning, 6AM-10AM, Dry season"
+                      value={formData.best_time_to_visit}
+                      onChange={(e) => setFormData({ ...formData, best_time_to_visit: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Amenities */}
+              <div>
+                <h4 className="font-medium mb-3">Amenities</h4>
+                <Textarea
+                  label="Amenities"
+                  placeholder="Comma-separated: Parking, Restroom, Restaurant, WiFi, Gift Shop, Tour Guide..."
+                  value={formData.amenities}
+                  onChange={(e) => setFormData({ ...formData, amenities: e.target.value })}
+                  minRows={2}
+                />
+                {formData.amenities && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {formData.amenities.split(',').map((a) => a.trim()).filter(Boolean).map((amenity, idx) => (
+                      <Chip key={idx} size="sm" variant="flat" color="primary">
+                        {amenity}
+                      </Chip>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </ModalBody>
           <ModalFooter>

@@ -30,6 +30,8 @@ interface MapManagerProps {
   geojsonData?: GeoJSONFeatureCollection;
   onSavePoint: (point: NewPoint) => Promise<void>;
   onSaveRoad: (road: NewRoad) => Promise<void>;
+  onDeletePoint?: (id: string) => Promise<void>;
+  onUpdatePoint?: (id: string, data: { name: string }) => Promise<void>;
 }
 
 interface NewPoint {
@@ -172,13 +174,13 @@ function RoadPolyline({ positions, color, weight = 4, opacity = 0.7, isBidirecti
 // Snap threshold in degrees (~55 meters at Cebu's latitude)
 const SNAP_THRESHOLD = 0.0005;
 
-export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: MapManagerProps) {
+export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDeletePoint, onUpdatePoint }: MapManagerProps) {
   const [mode, setMode] = useState<'view' | 'add_point' | 'add_road'>('view');
   const [pointType, setPointType] = useState<NewPoint['point_type']>('intersection');
   const [roadType, setRoadType] = useState<NewRoad['road_type']>('local_road');
   const [isBidirectional, setIsBidirectional] = useState(true);
 
-  const [markers, setMarkers] = useState<Array<{ position: [number, number]; name: string; type: string }>>([]);
+  const [markers, setMarkers] = useState<Array<{ id?: string; position: [number, number]; name: string; type: string }>>([]);
   const [roadPoints, setRoadPoints] = useState<[number, number][]>([]);
   const [snappedIndices, setSnappedIndices] = useState<Set<number>>(new Set());
 
@@ -194,6 +196,7 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
   useEffect(() => {
     if (geojsonData?.features) {
       const existingMarkers = geojsonData.features.map((feature) => ({
+        id: feature.properties.id,
         position: [feature.geometry.coordinates[1], feature.geometry.coordinates[0]] as [number, number],
         name: feature.properties.name,
         type: feature.properties.point_type || 'intersection',
@@ -478,11 +481,49 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
 
         {/* Existing markers */}
         {markers.map((marker, index) => (
-          <Marker key={index} position={marker.position}>
+          <Marker key={marker.id || index} position={marker.position}>
             <Popup>
-              <div>
-                <p className="font-semibold">{marker.name}</p>
-                <p className="text-xs text-gray-500">{marker.type}</p>
+              <div style={{ minWidth: '160px' }}>
+                <p className="font-semibold text-sm">{marker.name}</p>
+                <p className="text-xs text-gray-500 mb-2">{marker.type.replace('_', ' ')}</p>
+                <p className="text-xs text-gray-400 mb-2">
+                  {marker.position[0].toFixed(6)}, {marker.position[1].toFixed(6)}
+                </p>
+                {marker.id && mode === 'view' && (
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    {onUpdatePoint && (
+                      <button
+                        onClick={() => {
+                          const newName = prompt('Edit name:', marker.name);
+                          if (newName && newName !== marker.name && marker.id) {
+                            onUpdatePoint(marker.id, { name: newName }).then(() => {
+                              setMarkers((prev) => prev.map((m) =>
+                                m.id === marker.id ? { ...m, name: newName } : m
+                              ));
+                            });
+                          }
+                        }}
+                        style={{ padding: '2px 8px', fontSize: '11px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {onDeletePoint && (
+                      <button
+                        onClick={() => {
+                          if (confirm(`Delete "${marker.name}"?`) && marker.id) {
+                            onDeletePoint(marker.id).then(() => {
+                              setMarkers((prev) => prev.filter((m) => m.id !== marker.id));
+                            });
+                          }
+                        }}
+                        style={{ padding: '2px 8px', fontSize: '11px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </Popup>
           </Marker>

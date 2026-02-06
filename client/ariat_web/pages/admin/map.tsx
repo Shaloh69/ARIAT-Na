@@ -121,6 +121,36 @@ export default function MapPage() {
     }
   };
 
+  const handleDeletePoint = async (id: string) => {
+    try {
+      const response = await apiClient.delete(`${API_ENDPOINTS.INTERSECTIONS}/${id}`);
+      if (response.success) {
+        await refetch();
+        toast.success('Point deleted');
+      } else {
+        throw new Error(response.error || 'Failed to delete point');
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete point');
+      throw error;
+    }
+  };
+
+  const handleUpdatePoint = async (id: string, data: { name: string }) => {
+    try {
+      const response = await apiClient.put(`${API_ENDPOINTS.INTERSECTIONS}/${id}`, data);
+      if (response.success) {
+        await refetch();
+        toast.success('Point updated');
+      } else {
+        throw new Error(response.error || 'Failed to update point');
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update point');
+      throw error;
+    }
+  };
+
   return (
     <AdminLayout>
       <Head>
@@ -143,6 +173,8 @@ export default function MapPage() {
               geojsonData={geojsonData}
               onSavePoint={handleSavePoint}
               onSaveRoad={handleSaveRoad}
+              onDeletePoint={handleDeletePoint}
+              onUpdatePoint={handleUpdatePoint}
             />
           </CardBody>
         </Card>

@@ -149,7 +149,7 @@ export default function SettingsPage() {
     try {
       setImageUploading(true);
       const formData = new FormData();
-      formData.append('image', file);
+      formData.append('file', file);
 
       const response = await apiClient.post<{ profile_image_url: string }>(
         API_ENDPOINTS.ADMIN_PROFILE_IMAGE,
