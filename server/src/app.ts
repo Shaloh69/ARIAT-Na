@@ -116,28 +116,30 @@ const httpServer = http.createServer(app);
 initializeWebSocket(httpServer);
 
 /**
- * Ensure the default admin user exists in the database.
+ * Ensure the default admin user exists in the database with the correct password.
  * This runs on every server startup so login always works
  * even if db:seed was not run after db:init.
+ * If the admin exists but still has the default password flag,
+ * the password hash is refreshed to match the current config.
  */
 const ensureAdminExists = async (): Promise<void> => {
   try {
-    const [admins]: any = await pool.execute(
-      'SELECT id FROM admins WHERE email = ?',
-      [config.admin.email]
+    const hashedPassword = await hashPassword(config.admin.password);
+
+    const [result]: any = await pool.execute(
+      `INSERT INTO admins (id, email, password_hash, is_default_password, full_name, profile_image_url, role, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         password_hash = IF(is_default_password = TRUE, VALUES(password_hash), password_hash),
+         updated_at = CURRENT_TIMESTAMP`,
+      [uuidv4(), config.admin.email, hashedPassword, true, 'System Administrator', null, 'super_admin', true]
     );
 
-    if (admins.length === 0) {
-      const adminId = uuidv4();
-      const hashedPassword = await hashPassword(config.admin.password);
-
-      await pool.execute(
-        `INSERT INTO admins (id, email, password_hash, is_default_password, full_name, profile_image_url, role, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [adminId, config.admin.email, hashedPassword, true, 'System Administrator', null, 'super_admin', true]
-      );
-
+    if (result.affectedRows === 1) {
       logger.info(`Default admin created: ${config.admin.email}`);
+    } else if (result.affectedRows === 2) {
+      // MySQL reports 2 affected rows when ON DUPLICATE KEY UPDATE changes a row
+      logger.info(`Default admin password refreshed: ${config.admin.email}`);
     } else {
       logger.info(`Default admin already exists: ${config.admin.email}`);
     }
