@@ -28,16 +28,16 @@
 
   /* ===== Whites / Surfaces ===== */
   --white: #ffffff;
-  --bg-0: rgba(255, 255, 255, 0.08); /* main surface overlay */
-  --bg-1: rgba(255, 255, 255, 0.08); /* cards */
-  --bg-2: rgba(255, 255, 255, 0.12); /* raised cards/panels */
-  --bg-3: rgba(255, 255, 255, 0.15); /* inputs / subtle */
+  --bg-0: transparent; /* main surface overlay - FULLY TRANSPARENT */
+  --bg-1: transparent; /* cards - FULLY TRANSPARENT */
+  --bg-2: transparent; /* raised cards/panels - FULLY TRANSPARENT */
+  --bg-3: transparent; /* inputs / subtle - FULLY TRANSPARENT */
 
   /* ===== Text ===== */
-  --text-strong: #1e293b;
-  --text: #334155;
-  --text-muted: #475569;
-  --text-faint: #64748b;
+  --text-strong: #ffffff;
+  --text: #f1f5f9;
+  --text-muted: #cbd5e1;
+  --text-faint: #94a3b8;
 
   /* ===== Borders / Dividers ===== */
   --border: rgba(255, 255, 255, 0.20);
@@ -142,14 +142,14 @@ body {
 }
 
 .glass-sidebar {
-  background: rgba(255, 255, 255, 0.10) !important;
+  background: transparent !important;
   border-right: 1px solid var(--border) !important;
   backdrop-filter: blur(22px) !important;
   -webkit-backdrop-filter: blur(22px) !important;
 }
 
 .glass-topbar {
-  background: rgba(255, 255, 255, 0.08) !important;
+  background: transparent !important;
   border-bottom: 1px solid var(--border) !important;
   backdrop-filter: blur(20px) !important;
   -webkit-backdrop-filter: blur(20px) !important;
@@ -186,7 +186,7 @@ body {
 }
 
 .glass-btn-secondary {
-  background: rgba(255, 255, 255, 0.12) !important;
+  background: transparent !important;
   color: var(--text-strong) !important;
   border: 1px solid var(--border) !important;
   border-radius: 14px !important;
@@ -293,7 +293,7 @@ body {
 /* HeroUI Buttons - Secondary/Default */
 [data-slot="base"][class*="heroui-button"][data-color="default"],
 [data-slot="base"][class*="heroui-button"][data-variant="flat"] {
-  background: rgba(255, 255, 255, 0.12) !important;
+  background: transparent !important;
   color: var(--text-strong) !important;
   border: 1px solid var(--border) !important;
   border-radius: 14px !important;
@@ -379,7 +379,7 @@ body {
 /* HeroUI default-100 backgrounds */
 .bg-default-100,
 .bg-primary\/10 {
-  background: rgba(255, 255, 255, 0.08) !important;
+  background: transparent !important;
   backdrop-filter: blur(10px) !important;
   -webkit-backdrop-filter: blur(10px) !important;
 }
@@ -402,7 +402,7 @@ body {
 /* Divider/Border elements in listings */
 .border-gray-200.dark\:border-gray-800 {
   border-color: var(--border) !important;
-  background: rgba(255, 255, 255, 0.08) !important;
+  background: transparent !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
 }
@@ -415,18 +415,18 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
+  background: transparent;
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.20);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 10px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.25);
   background-clip: content-box;
 }
