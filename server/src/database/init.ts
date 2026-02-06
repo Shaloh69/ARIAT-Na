@@ -29,7 +29,7 @@ export const initDatabase = async (): Promise<void> => {
     await connection.query(`USE ${config.database.name}`);
 
     // Read and execute schema file
-    const schemaPath = path.join(__dirname, 'schema.sql');
+    const schemaPath = path.join(__dirname, 'schema_v3.sql');
     const schema = fs.readFileSync(schemaPath, 'utf-8');
 
     console.log('📝 Creating tables...');

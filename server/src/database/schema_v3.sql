@@ -321,4 +321,5 @@ CREATE TABLE IF NOT EXISTS schema_version (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO schema_version (version, description) VALUES
-(3, 'Added media_files table for Supabase Storage tracking and optimized for Aiven MySQL');
+(3, 'Added media_files table for Supabase Storage tracking and optimized for Aiven MySQL')
+ON DUPLICATE KEY UPDATE description = VALUES(description), applied_at = CURRENT_TIMESTAMP;
