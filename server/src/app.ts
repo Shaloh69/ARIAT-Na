@@ -124,7 +124,19 @@ initializeWebSocket(httpServer);
  */
 const ensureAdminExists = async (): Promise<void> => {
   try {
+    logger.info(`[STARTUP DEBUG] Admin config email: "${config.admin.email}"`);
+    logger.info(`[STARTUP DEBUG] Admin config password length: ${config.admin.password.length}`);
+
+    // Check if admins table exists and what's in it
+    const [existingAdmins]: any = await pool.execute(
+      'SELECT id, email, is_active, is_default_password FROM admins'
+    );
+    logger.info(`[STARTUP DEBUG] Existing admins in DB: ${existingAdmins.length}`, {
+      admins: existingAdmins.map((a: any) => ({ email: a.email, is_active: a.is_active })),
+    });
+
     const hashedPassword = await hashPassword(config.admin.password);
+    logger.info(`[STARTUP DEBUG] Generated hash prefix: ${hashedPassword.substring(0, 7)}`);
 
     const [result]: any = await pool.execute(
       `INSERT INTO admins (id, email, password_hash, is_default_password, full_name, profile_image_url, role, is_active)
@@ -135,10 +147,20 @@ const ensureAdminExists = async (): Promise<void> => {
       [uuidv4(), config.admin.email, hashedPassword, true, 'System Administrator', null, 'super_admin', true]
     );
 
+    logger.info(`[STARTUP DEBUG] Upsert result: affectedRows=${result.affectedRows}`);
+
+    // Verify the admin was actually written
+    const [verifyAdmins]: any = await pool.execute(
+      'SELECT id, email, is_active, is_default_password FROM admins WHERE email = ?',
+      [config.admin.email]
+    );
+    logger.info(`[STARTUP DEBUG] Verification query for "${config.admin.email}": found ${verifyAdmins.length}`, {
+      admin: verifyAdmins[0] || null,
+    });
+
     if (result.affectedRows === 1) {
       logger.info(`Default admin created: ${config.admin.email}`);
     } else if (result.affectedRows === 2) {
-      // MySQL reports 2 affected rows when ON DUPLICATE KEY UPDATE changes a row
       logger.info(`Default admin password refreshed: ${config.admin.email}`);
     } else {
       logger.info(`Default admin already exists: ${config.admin.email}`);

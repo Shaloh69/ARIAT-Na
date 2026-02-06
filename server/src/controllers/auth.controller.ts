@@ -10,6 +10,7 @@ import {
   revokeRefreshToken,
   revokeAllUserTokens,
 } from '../utils/auth';
+import { logger } from '../utils/logger';
 
 // =====================================================
 // USER AUTHENTICATION (Flutter App)
@@ -188,11 +189,39 @@ export const loginAdmin = async (
 ): Promise<void> => {
   const { email, password } = req.body;
 
+  // Debug: log the login attempt details
+  logger.info('[LOGIN DEBUG] Login attempt', {
+    emailReceived: email,
+    emailType: typeof email,
+    emailLength: email?.length,
+    hasPassword: !!password,
+    passwordLength: password?.length,
+  });
+
+  // Debug: check how many admins exist
+  const [allAdmins]: any = await pool.execute(
+    'SELECT id, email, is_active, is_default_password FROM admins'
+  );
+  logger.info('[LOGIN DEBUG] All admins in DB', {
+    count: allAdmins.length,
+    admins: allAdmins.map((a: any) => ({
+      id: a.id,
+      email: a.email,
+      is_active: a.is_active,
+      is_default_password: a.is_default_password,
+    })),
+  });
+
   // Find admin
   const [admins]: any = await pool.execute(
     'SELECT * FROM admins WHERE email = ?',
     [email]
   );
+
+  logger.info('[LOGIN DEBUG] Query result', {
+    found: admins.length,
+    queryEmail: email,
+  });
 
   if (admins.length === 0) {
     throw new AppError('Invalid email or password', 401);
@@ -207,6 +236,12 @@ export const loginAdmin = async (
 
   // Verify password
   const isPasswordValid = await comparePassword(password, admin.password_hash);
+
+  logger.info('[LOGIN DEBUG] Password check', {
+    isPasswordValid,
+    hashLength: admin.password_hash?.length,
+    hashPrefix: admin.password_hash?.substring(0, 7),
+  });
 
   if (!isPasswordValid) {
     throw new AppError('Invalid email or password', 401);
