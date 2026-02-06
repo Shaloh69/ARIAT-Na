@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardBody } from "@heroui/card";
@@ -6,6 +6,7 @@ import AdminLayout from '@/layouts/admin';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/lib/constants';
 import type { GeoJSONFeatureCollection } from '@/types/api';
+import type { RouteResult, NewDestination, CategoryOption } from '@/components/MapManager';
 import { toast } from '@/lib/toast';
 import Head from 'next/head';
 
@@ -23,6 +24,8 @@ const MapManager = dynamic(() => import('@/components/MapManager'), {
 });
 
 export default function MapPage() {
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+
   // Fetch GeoJSON data
   const { data: geojsonData, isLoading, refetch } = useQuery<GeoJSONFeatureCollection>({
     queryKey: ['geojson'],
@@ -35,15 +38,26 @@ export default function MapPage() {
     },
   });
 
+  // Fetch categories for destination creation
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await apiClient.get<CategoryOption[]>(API_ENDPOINTS.CATEGORIES);
+        if (response.success && response.data) {
+          setCategories(response.data);
+        }
+      } catch {
+        // Categories not critical - destination creation will show warning
+      }
+    };
+    fetchCategories();
+  }, []);
+
   const handleSavePoint = async (point: any) => {
     try {
-      console.log('Saving point:', point);
-
-      // Call the backend API to save the intersection point
       const response = await apiClient.post(API_ENDPOINTS.INTERSECTIONS, point);
 
       if (response.success) {
-        // Refetch data to show the new point
         await refetch();
         toast.success(`${point.point_type.replace('_', ' ')} added successfully!`);
       } else {
@@ -58,24 +72,20 @@ export default function MapPage() {
 
   const handleSaveRoad = async (road: any) => {
     try {
-      console.log('Saving road:', road);
-
-      // Need to find start and end intersections
-      // For now, we'll get all intersections and find the nearest ones
+      // Find start and end intersections
       const allIntersections = await apiClient.get<any[]>(API_ENDPOINTS.INTERSECTIONS);
 
       if (allIntersections.success && allIntersections.data && Array.isArray(allIntersections.data)) {
         const intersections: any[] = allIntersections.data;
 
-        // Find nearest intersection to start point
         const startPoint = road.path[0];
         const endPoint = road.path[road.path.length - 1];
 
-        const findNearest = (point: [number, number], intersections: any[]) => {
+        const findNearest = (point: [number, number], ints: any[]) => {
           let minDist = Infinity;
           let nearest = null;
 
-          for (const int of intersections) {
+          for (const int of ints) {
             const dist = Math.sqrt(
               Math.pow(int.latitude - point[0], 2) + Math.pow(int.longitude - point[1], 2)
             );
@@ -95,10 +105,9 @@ export default function MapPage() {
           return;
         }
 
-        // Call the backend API to save the road
         const roadData = {
           name: road.name,
-          description: road.description,
+          description: road.description || undefined,
           start_intersection_id: startIntersection.id,
           end_intersection_id: endIntersection.id,
           road_type: road.road_type,
@@ -117,6 +126,52 @@ export default function MapPage() {
     } catch (error: any) {
       console.error('Error saving road:', error);
       toast.error(error.message || 'Failed to save road');
+      throw error;
+    }
+  };
+
+  const handleSaveDestination = async (dest: NewDestination) => {
+    try {
+      const response = await apiClient.post(API_ENDPOINTS.DESTINATIONS, {
+        ...dest,
+        images: dest.images ? JSON.stringify(dest.images) : undefined,
+        amenities: dest.amenities ? JSON.stringify(dest.amenities) : undefined,
+      });
+
+      if (response.success) {
+        toast.success('Destination created successfully!');
+      } else {
+        throw new Error(response.error || 'Failed to create destination');
+      }
+    } catch (error: any) {
+      console.error('Error saving destination:', error);
+      toast.error(error.message || 'Failed to create destination');
+      throw error;
+    }
+  };
+
+  const handleCalculateRoute = async (
+    startLat: number,
+    startLon: number,
+    endLat: number,
+    endLon: number,
+    optimizeFor: string
+  ): Promise<RouteResult | null> => {
+    try {
+      const response = await apiClient.post<RouteResult>(`${API_ENDPOINTS.ROUTES}/calculate-gps`, {
+        start_lat: startLat,
+        start_lon: startLon,
+        end_lat: endLat,
+        end_lon: endLon,
+        optimize_for: optimizeFor,
+      });
+
+      if (response.success && response.data) {
+        return response.data;
+      }
+      return null;
+    } catch (error: any) {
+      console.error('Error calculating route:', error);
       throw error;
     }
   };
@@ -171,8 +226,11 @@ export default function MapPage() {
           <CardBody className="p-0 overflow-hidden">
             <MapManager
               geojsonData={geojsonData}
+              categories={categories}
               onSavePoint={handleSavePoint}
               onSaveRoad={handleSaveRoad}
+              onSaveDestination={handleSaveDestination}
+              onCalculateRoute={handleCalculateRoute}
               onDeletePoint={handleDeletePoint}
               onUpdatePoint={handleUpdatePoint}
             />
@@ -184,13 +242,12 @@ export default function MapPage() {
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         <Card>
           <CardBody>
-            <h3 className="font-semibold mb-2">Adding Points</h3>
+            <h3 className="font-semibold mb-2">Adding Points & Destinations</h3>
             <ol className="text-sm space-y-1 text-gray-600 dark:text-gray-400">
-              <li>1. Click "Add Point" button</li>
-              <li>2. Select point type (Tourist Spot, Bus Terminal, etc.)</li>
-              <li>3. Click on map to place point</li>
-              <li>4. Enter name and address</li>
-              <li>5. Save</li>
+              <li>1. Select "Point" or "Dest." mode</li>
+              <li>2. For points: choose type, click map, enter name</li>
+              <li>3. For destinations: click map, fill in details</li>
+              <li>4. Save to create the entry</li>
             </ol>
           </CardBody>
         </Card>
@@ -199,25 +256,23 @@ export default function MapPage() {
           <CardBody>
             <h3 className="font-semibold mb-2">Drawing Roads</h3>
             <ol className="text-sm space-y-1 text-gray-600 dark:text-gray-400">
-              <li>1. Click "Add Road" button</li>
-              <li>2. Select road type (Highway, Main Road, Local)</li>
+              <li>1. Select "Road" mode</li>
+              <li>2. Choose road type</li>
               <li>3. Click points along the road path</li>
-              <li>4. Click "Finish Road"</li>
-              <li>5. Enter road name and save</li>
+              <li>4. Click "Finish Road" and enter name</li>
             </ol>
           </CardBody>
         </Card>
 
         <Card>
           <CardBody>
-            <h3 className="font-semibold mb-2">Point Types</h3>
-            <ul className="text-sm space-y-1 text-gray-600 dark:text-gray-400">
-              <li>• <strong>Tourist Spot</strong>: Destinations</li>
-              <li>• <strong>Bus Terminal</strong>: Major hubs</li>
-              <li>• <strong>Bus Stop</strong>: Transit points</li>
-              <li>• <strong>Pier</strong>: Ferry terminals</li>
-              <li>• <strong>Intersection</strong>: Road junctions</li>
-            </ul>
+            <h3 className="font-semibold mb-2">Testing Routes</h3>
+            <ol className="text-sm space-y-1 text-gray-600 dark:text-gray-400">
+              <li>1. Select "Route" mode</li>
+              <li>2. Choose optimization (distance/time)</li>
+              <li>3. Click start point on map</li>
+              <li>4. Click destination — route auto-calculates</li>
+            </ol>
           </CardBody>
         </Card>
       </div>

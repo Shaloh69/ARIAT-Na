@@ -5,11 +5,11 @@ import 'leaflet-polylinedecorator';
 import { Button } from '@heroui/button';
 import { Card, CardBody } from '@heroui/card';
 import { Select, SelectItem } from '@heroui/select';
-import { Input } from '@heroui/input';
+import { Input, Textarea } from '@heroui/input';
 import { Checkbox } from '@heroui/checkbox';
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@heroui/modal';
 import { toast } from '@/lib/toast';
-import type { GeoJSONFeatureCollection, GeoJSONPoint } from '@/types/api';
+import type { GeoJSONFeatureCollection } from '@/types/api';
 
 // Fix Leaflet default icon issue with Next.js webpack
 import 'leaflet/dist/leaflet.css';
@@ -26,12 +26,55 @@ L.Icon.Default.mergeOptions({
   iconAnchor: [12, 41],
 });
 
+// Route calculation result type
+export interface RouteResult {
+  path: Array<{
+    id: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+  }>;
+  roads: Array<{
+    id: string;
+    name: string;
+    distance: number;
+    estimated_time: number;
+    is_bidirectional: boolean;
+  }>;
+  totalDistance: number;
+  estimatedTime: number;
+  steps: Array<{
+    instruction: string;
+    roadName: string;
+    distance: number;
+    time: number;
+    from: string;
+    to: string;
+  }>;
+  virtualConnections?: Array<{
+    type: 'start' | 'end';
+    from: { lat: number; lon: number; name?: string };
+    to: { lat: number; lon: number; name: string };
+    distance: number;
+    isVirtual: true;
+  }>;
+}
+
+export interface CategoryOption {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 interface MapManagerProps {
   geojsonData?: GeoJSONFeatureCollection;
+  categories?: CategoryOption[];
   onSavePoint: (point: NewPoint) => Promise<void>;
   onSaveRoad: (road: NewRoad) => Promise<void>;
+  onSaveDestination?: (dest: NewDestination) => Promise<void>;
   onDeletePoint?: (id: string) => Promise<void>;
   onUpdatePoint?: (id: string, data: { name: string }) => Promise<void>;
+  onCalculateRoute?: (startLat: number, startLon: number, endLat: number, endLon: number, optimizeFor: string) => Promise<RouteResult | null>;
 }
 
 interface NewPoint {
@@ -51,6 +94,23 @@ interface NewRoad {
   is_bidirectional: boolean;
 }
 
+export interface NewDestination {
+  name: string;
+  description?: string;
+  category_id: string;
+  latitude: number;
+  longitude: number;
+  address?: string;
+  entrance_fee_local?: number;
+  entrance_fee_foreign?: number;
+  average_visit_duration?: number;
+  best_time_to_visit?: string;
+  amenities?: string[];
+  images?: string[];
+}
+
+type MapMode = 'view' | 'add_point' | 'add_road' | 'add_destination' | 'test_route';
+
 // Map Click Handler Component
 function MapClickHandler({ onMapClick, mode }: { onMapClick: (latlng: L.LatLng) => void; mode: string }) {
   useMapEvents({
@@ -68,7 +128,7 @@ function CenterMapButton() {
   const map = useMap();
 
   const centerMap = () => {
-    map.setView([10.3157, 123.8854], 13); // Cebu City center
+    map.setView([10.3157, 123.8854], 13);
   };
 
   return (
@@ -103,17 +163,10 @@ function RoadPolyline({ positions, color, weight = 4, opacity = 0.7, isBidirecti
   useEffect(() => {
     if (!map || positions.length < 2) return;
 
-    // Create the base polyline
-    const polyline = L.polyline(positions, {
-      color,
-      weight,
-      opacity,
-    }).addTo(map);
+    const polyline = L.polyline(positions, { color, weight, opacity }).addTo(map);
 
-    // Define arrow patterns based on direction
     const arrowPattern = isBidirectional
       ? [
-          // Two-way arrows
           {
             offset: '25%',
             repeat: '50%',
@@ -134,7 +187,6 @@ function RoadPolyline({ positions, color, weight = 4, opacity = 0.7, isBidirecti
           },
         ]
       : [
-          // One-way arrow
           {
             offset: '50%',
             repeat: 0,
@@ -146,14 +198,12 @@ function RoadPolyline({ positions, color, weight = 4, opacity = 0.7, isBidirecti
           },
         ];
 
-    // Create decorator with arrows
     const decorator = (L as any).polylineDecorator(polyline, {
       patterns: arrowPattern,
     }).addTo(map);
 
     decoratorRef.current = decorator;
 
-    // Cleanup — guard against already-removed layers to prevent _leaflet_events error
     return () => {
       try {
         if (decoratorRef.current && map.hasLayer(decoratorRef.current)) {
@@ -174,8 +224,17 @@ function RoadPolyline({ positions, color, weight = 4, opacity = 0.7, isBidirecti
 // Snap threshold in degrees (~55 meters at Cebu's latitude)
 const SNAP_THRESHOLD = 0.0005;
 
-export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDeletePoint, onUpdatePoint }: MapManagerProps) {
-  const [mode, setMode] = useState<'view' | 'add_point' | 'add_road'>('view');
+export default function MapManager({
+  geojsonData,
+  categories,
+  onSavePoint,
+  onSaveRoad,
+  onSaveDestination,
+  onDeletePoint,
+  onUpdatePoint,
+  onCalculateRoute,
+}: MapManagerProps) {
+  const [mode, setMode] = useState<MapMode>('view');
   const [pointType, setPointType] = useState<NewPoint['point_type']>('intersection');
   const [roadType, setRoadType] = useState<NewRoad['road_type']>('local_road');
   const [isBidirectional, setIsBidirectional] = useState(true);
@@ -184,13 +243,35 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDel
   const [roadPoints, setRoadPoints] = useState<[number, number][]>([]);
   const [snappedIndices, setSnappedIndices] = useState<Set<number>>(new Set());
 
+  // Point modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newPointName, setNewPointName] = useState('');
   const [newPointAddress, setNewPointAddress] = useState('');
   const [pendingPoint, setPendingPoint] = useState<{ lat: number; lng: number } | null>(null);
 
+  // Road modal state
   const [isRoadModalOpen, setIsRoadModalOpen] = useState(false);
   const [roadName, setRoadName] = useState('');
+
+  // Destination modal state
+  const [isDestModalOpen, setIsDestModalOpen] = useState(false);
+  const [destForm, setDestForm] = useState({
+    name: '',
+    description: '',
+    category_id: '',
+    address: '',
+    entrance_fee_local: '0',
+    entrance_fee_foreign: '0',
+    best_time_to_visit: '',
+    amenities: '',
+  });
+
+  // Route testing state
+  const [routeStart, setRouteStart] = useState<[number, number] | null>(null);
+  const [routeEnd, setRouteEnd] = useState<[number, number] | null>(null);
+  const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeOptimizeFor, setRouteOptimizeFor] = useState<'distance' | 'time'>('distance');
 
   // Load existing points from GeoJSON
   useEffect(() => {
@@ -225,7 +306,7 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDel
     return null;
   };
 
-  const handleMapClick = (latlng: L.LatLng) => {
+  const handleMapClick = async (latlng: L.LatLng) => {
     if (mode === 'add_point') {
       setPendingPoint({ lat: latlng.lat, lng: latlng.lng });
       setIsModalOpen(true);
@@ -239,7 +320,51 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDel
         setRoadPoints([...roadPoints, [latlng.lat, latlng.lng]]);
         toast.info(`Road point added (${roadPoints.length + 1})`);
       }
+    } else if (mode === 'add_destination') {
+      setPendingPoint({ lat: latlng.lat, lng: latlng.lng });
+      setDestForm({ name: '', description: '', category_id: '', address: '', entrance_fee_local: '0', entrance_fee_foreign: '0', best_time_to_visit: '', amenities: '' });
+      setIsDestModalOpen(true);
+    } else if (mode === 'test_route') {
+      if (!routeStart) {
+        setRouteStart([latlng.lat, latlng.lng]);
+        setRouteEnd(null);
+        setRouteResult(null);
+        toast.info('Start point set. Click to set destination.');
+      } else if (!routeEnd) {
+        const end: [number, number] = [latlng.lat, latlng.lng];
+        setRouteEnd(end);
+        if (onCalculateRoute) {
+          setRouteLoading(true);
+          try {
+            const result = await onCalculateRoute(routeStart[0], routeStart[1], end[0], end[1], routeOptimizeFor);
+            setRouteResult(result);
+            if (result) {
+              toast.success(`Route found: ${result.totalDistance.toFixed(2)} km, ~${result.estimatedTime} min`);
+            } else {
+              toast.warning('No route found between these points');
+            }
+          } catch {
+            toast.error('Failed to calculate route');
+          } finally {
+            setRouteLoading(false);
+          }
+        } else {
+          toast.error('Route calculation not available');
+        }
+      } else {
+        // Reset for new route
+        setRouteStart([latlng.lat, latlng.lng]);
+        setRouteEnd(null);
+        setRouteResult(null);
+        toast.info('New start point set. Click to set destination.');
+      }
     }
+  };
+
+  const clearRoute = () => {
+    setRouteStart(null);
+    setRouteEnd(null);
+    setRouteResult(null);
   };
 
   const handleSavePoint = async () => {
@@ -257,7 +382,6 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDel
         address: newPointAddress || undefined,
       });
 
-      // Add to local markers
       setMarkers([
         ...markers,
         {
@@ -267,7 +391,6 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDel
         },
       ]);
 
-      toast.success('Point added successfully!');
       setIsModalOpen(false);
       setNewPointName('');
       setNewPointAddress('');
@@ -292,14 +415,13 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDel
     try {
       await onSaveRoad({
         name: roadName,
-        start_intersection_id: 'temp_start', // In real app, select from existing intersections
+        start_intersection_id: 'temp_start',
         end_intersection_id: 'temp_end',
         road_type: roadType,
         path: roadPoints,
         is_bidirectional: isBidirectional,
       });
 
-      toast.success('Road saved successfully!');
       setIsRoadModalOpen(false);
       setRoadName('');
       setRoadPoints([]);
@@ -308,6 +430,46 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDel
       setMode('view');
     } catch (error) {
       toast.error('Failed to save road');
+    }
+  };
+
+  const handleSaveDestination = async () => {
+    if (!pendingPoint) return;
+    if (!destForm.name.trim()) {
+      toast.error('Destination name is required');
+      return;
+    }
+    if (!destForm.category_id) {
+      toast.error('Please select a category');
+      return;
+    }
+    if (!onSaveDestination) {
+      toast.error('Destination saving not available');
+      return;
+    }
+
+    try {
+      await onSaveDestination({
+        name: destForm.name.trim(),
+        description: destForm.description.trim() || undefined,
+        category_id: destForm.category_id,
+        latitude: pendingPoint.lat,
+        longitude: pendingPoint.lng,
+        address: destForm.address.trim() || undefined,
+        entrance_fee_local: parseFloat(destForm.entrance_fee_local) || 0,
+        entrance_fee_foreign: parseFloat(destForm.entrance_fee_foreign) || 0,
+        best_time_to_visit: destForm.best_time_to_visit.trim() || undefined,
+        amenities: destForm.amenities.trim()
+          ? destForm.amenities.split(',').map((a) => a.trim()).filter(Boolean)
+          : undefined,
+      });
+
+      setIsDestModalOpen(false);
+      setPendingPoint(null);
+      setMode('view');
+      toast.success('Destination created successfully!');
+    } catch (error) {
+      toast.error('Failed to create destination');
     }
   };
 
@@ -326,6 +488,15 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDel
     setIsRoadModalOpen(true);
   };
 
+  const switchMode = (newMode: MapMode) => {
+    if (newMode !== 'test_route') clearRoute();
+    if (newMode !== 'add_road') {
+      setRoadPoints([]);
+      setSnappedIndices(new Set());
+    }
+    setMode(newMode);
+  };
+
   const getMarkerColor = (type: string) => {
     const colors: Record<string, string> = {
       tourist_spot: 'bg-red-500',
@@ -337,60 +508,62 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDel
     return colors[type] || 'bg-gray-500';
   };
 
+  // Route positions for polyline
+  const routePositions: [number, number][] = routeResult
+    ? routeResult.path.map((p) => [p.latitude, p.longitude] as [number, number])
+    : [];
+
   return (
     <div className="relative h-full w-full">
-      {/* Control Panel — solid white bg with dark text so it's readable over the map */}
-      <Card className="absolute top-4 left-4 z-[1000] w-80 map-control-panel">
+      {/* Control Panel */}
+      <Card className="absolute top-4 left-4 z-[1000] w-80 map-control-panel" style={{ maxHeight: 'calc(100vh - 16rem)', overflowY: 'auto' }}>
         <CardBody>
-          <h3 className="font-semibold mb-4 text-black">Map Controls</h3>
+          <h3 style={{ fontWeight: 600, marginBottom: '1rem', color: '#111827' }}>Map Controls</h3>
 
-          {/* Mode Selection */}
           <div className="space-y-3">
+            {/* Mode Selection */}
             <div>
-              <label className="text-sm font-medium mb-2 block text-gray-800">Mode</label>
+              <label style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem', display: 'block', color: '#374151' }}>Mode</label>
               <div className="grid grid-cols-3 gap-2">
-                <Button
-                  size="sm"
-                  color={mode === 'view' ? 'primary' : 'default'}
-                  variant={mode === 'view' ? 'solid' : 'flat'}
-                  onClick={() => setMode('view')}
-                >
+                <Button size="sm" color={mode === 'view' ? 'primary' : 'default'} variant={mode === 'view' ? 'solid' : 'flat'} onClick={() => switchMode('view')}>
                   View
                 </Button>
-                <Button
-                  size="sm"
-                  color={mode === 'add_point' ? 'primary' : 'default'}
-                  variant={mode === 'add_point' ? 'solid' : 'flat'}
-                  onClick={() => setMode('add_point')}
-                >
-                  Add Point
+                <Button size="sm" color={mode === 'add_point' ? 'primary' : 'default'} variant={mode === 'add_point' ? 'solid' : 'flat'} onClick={() => switchMode('add_point')}>
+                  Point
                 </Button>
-                <Button
-                  size="sm"
-                  color={mode === 'add_road' ? 'primary' : 'default'}
-                  variant={mode === 'add_road' ? 'solid' : 'flat'}
-                  onClick={() => setMode('add_road')}
-                >
-                  Add Road
+                <Button size="sm" color={mode === 'add_road' ? 'primary' : 'default'} variant={mode === 'add_road' ? 'solid' : 'flat'} onClick={() => switchMode('add_road')}>
+                  Road
+                </Button>
+                <Button size="sm" color={mode === 'add_destination' ? 'primary' : 'default'} variant={mode === 'add_destination' ? 'solid' : 'flat'} onClick={() => switchMode('add_destination')}>
+                  Dest.
+                </Button>
+                <Button size="sm" color={mode === 'test_route' ? 'primary' : 'default'} variant={mode === 'test_route' ? 'solid' : 'flat'} onClick={() => switchMode('test_route')}>
+                  Route
                 </Button>
               </div>
             </div>
 
+            {/* Add Point Controls */}
             {mode === 'add_point' && (
-              <Select
-                label="Point Type"
-                selectedKeys={[pointType]}
-                onChange={(e) => setPointType(e.target.value as NewPoint['point_type'])}
-                size="sm"
-              >
-                <SelectItem key="tourist_spot">Tourist Spot</SelectItem>
-                <SelectItem key="bus_terminal">Bus Terminal</SelectItem>
-                <SelectItem key="bus_stop">Bus Stop</SelectItem>
-                <SelectItem key="pier">Pier</SelectItem>
-                <SelectItem key="intersection">Intersection</SelectItem>
-              </Select>
+              <>
+                <Select
+                  label="Point Type"
+                  selectedKeys={[pointType]}
+                  onChange={(e) => setPointType(e.target.value as NewPoint['point_type'])}
+                  size="sm"
+                  popoverProps={{ className: 'map-select-popover' }}
+                >
+                  <SelectItem key="tourist_spot">Tourist Spot</SelectItem>
+                  <SelectItem key="bus_terminal">Bus Terminal</SelectItem>
+                  <SelectItem key="bus_stop">Bus Stop</SelectItem>
+                  <SelectItem key="pier">Pier</SelectItem>
+                  <SelectItem key="intersection">Intersection</SelectItem>
+                </Select>
+                <p style={{ fontSize: '0.75rem', color: '#6b7280', fontStyle: 'italic' }}>Click on the map to place a point</p>
+              </>
             )}
 
+            {/* Add Road Controls */}
             {mode === 'add_road' && (
               <>
                 <Select
@@ -398,31 +571,26 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDel
                   selectedKeys={[roadType]}
                   onChange={(e) => setRoadType(e.target.value as NewRoad['road_type'])}
                   size="sm"
+                  popoverProps={{ className: 'map-select-popover' }}
                 >
                   <SelectItem key="highway">Highway</SelectItem>
                   <SelectItem key="main_road">Main Road</SelectItem>
                   <SelectItem key="local_road">Local Road</SelectItem>
                 </Select>
 
-                <Checkbox
-                  isSelected={isBidirectional}
-                  onValueChange={setIsBidirectional}
-                  size="sm"
-                >
-                  Two-way road (bidirectional)
+                <Checkbox isSelected={isBidirectional} onValueChange={setIsBidirectional} size="sm">
+                  <span style={{ color: '#374151' }}>Two-way road (bidirectional)</span>
                 </Checkbox>
 
-                <div className="text-sm text-gray-700 space-y-1">
+                <div style={{ fontSize: '0.875rem', color: '#374151' }} className="space-y-1">
                   <p>Points added: {roadPoints.length}</p>
                   <p>Direction: {isBidirectional ? '↔ Two-way' : '→ One-way'}</p>
                   {snappedIndices.size > 0 && (
-                    <p className="text-green-700">
+                    <p style={{ color: '#16a34a' }}>
                       Snapped: {snappedIndices.size} point{snappedIndices.size > 1 ? 's' : ''}
                     </p>
                   )}
-                  <p className="text-xs text-gray-500 italic">
-                    Click near an intersection to snap
-                  </p>
+                  <p style={{ fontSize: '0.75rem', color: '#6b7280', fontStyle: 'italic' }}>Click near an intersection to snap</p>
                 </div>
 
                 <div className="flex gap-2">
@@ -436,10 +604,101 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDel
               </>
             )}
 
+            {/* Add Destination Controls */}
+            {mode === 'add_destination' && (
+              <div style={{ fontSize: '0.875rem', color: '#374151' }} className="space-y-1">
+                <p>Click on the map to place a new destination.</p>
+                <p>A form will appear for you to enter details.</p>
+                <p style={{ fontSize: '0.75rem', color: '#6b7280', fontStyle: 'italic' }}>
+                  Categories available: {categories?.length || 0}
+                </p>
+              </div>
+            )}
+
+            {/* Route Testing Controls */}
+            {mode === 'test_route' && (
+              <>
+                <Select
+                  label="Optimize For"
+                  selectedKeys={[routeOptimizeFor]}
+                  onChange={(e) => setRouteOptimizeFor(e.target.value as 'distance' | 'time')}
+                  size="sm"
+                  popoverProps={{ className: 'map-select-popover' }}
+                >
+                  <SelectItem key="distance">Shortest Distance</SelectItem>
+                  <SelectItem key="time">Fastest Time</SelectItem>
+                </Select>
+
+                <div style={{ fontSize: '0.875rem', color: '#374151' }} className="space-y-1">
+                  {!routeStart ? (
+                    <p>Click on the map to set <strong>start point</strong></p>
+                  ) : !routeEnd ? (
+                    <>
+                      <p style={{ color: '#16a34a' }}>Start: {routeStart[0].toFixed(6)}, {routeStart[1].toFixed(6)}</p>
+                      <p>Click on the map to set <strong>destination</strong></p>
+                    </>
+                  ) : routeLoading ? (
+                    <>
+                      <p style={{ color: '#16a34a' }}>Start: {routeStart[0].toFixed(6)}, {routeStart[1].toFixed(6)}</p>
+                      <p style={{ color: '#dc2626' }}>End: {routeEnd[0].toFixed(6)}, {routeEnd[1].toFixed(6)}</p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{ borderColor: '#2563eb' }}></div>
+                        <p style={{ color: '#2563eb' }}>Calculating route...</p>
+                      </div>
+                    </>
+                  ) : routeResult ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-2 p-2 rounded" style={{ background: 'rgba(34, 197, 94, 0.1)' }}>
+                        <div>
+                          <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>Distance</p>
+                          <p style={{ fontWeight: 700, color: '#111827' }}>{routeResult.totalDistance.toFixed(2)} km</p>
+                        </div>
+                        <div>
+                          <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>Time</p>
+                          <p style={{ fontWeight: 700, color: '#111827' }}>{routeResult.estimatedTime} min</p>
+                        </div>
+                      </div>
+                      {routeResult.steps.length > 0 && (
+                        <div className="pt-2">
+                          <p style={{ fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.25rem', color: '#374151' }}>
+                            Directions ({routeResult.steps.length} steps)
+                          </p>
+                          <div className="max-h-32 overflow-y-auto space-y-1">
+                            {routeResult.steps.map((step, idx) => (
+                              <div key={idx} className="p-1.5 rounded" style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.04)', color: '#374151' }}>
+                                <span style={{ fontWeight: 500, color: '#2563eb' }}>{idx + 1}.</span>{' '}
+                                {step.instruction}
+                                <span style={{ color: '#6b7280' }}> ({step.distance.toFixed(2)}km)</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p style={{ color: '#16a34a' }}>Start: {routeStart[0].toFixed(6)}, {routeStart[1].toFixed(6)}</p>
+                      <p style={{ color: '#dc2626' }}>End: {routeEnd[0].toFixed(6)}, {routeEnd[1].toFixed(6)}</p>
+                      <p style={{ color: '#dc2626', fontWeight: 500 }}>No route found</p>
+                    </>
+                  )}
+                  {routeEnd && (
+                    <p style={{ fontSize: '0.75rem', color: '#6b7280', fontStyle: 'italic' }}>Click to start a new route</p>
+                  )}
+                </div>
+
+                {(routeStart || routeResult) && (
+                  <Button size="sm" color="danger" variant="flat" onClick={clearRoute} className="w-full">
+                    Clear Route
+                  </Button>
+                )}
+              </>
+            )}
+
             {/* Legend */}
-            <div className="pt-3 border-t border-gray-200">
-              <p className="text-sm font-medium mb-2 text-black">Legend</p>
-              <div className="space-y-1 text-xs text-gray-800">
+            <div className="pt-3" style={{ borderTop: '1px solid rgba(0,0,0,0.1)' }}>
+              <p style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem', color: '#111827' }}>Legend</p>
+              <div className="space-y-1" style={{ fontSize: '0.75rem', color: '#374151' }}>
                 {[
                   { type: 'tourist_spot', label: 'Tourist Spot' },
                   { type: 'bus_terminal', label: 'Bus Terminal' },
@@ -458,14 +717,14 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDel
         </CardBody>
       </Card>
 
-      {/* Map — bounded to the Cebu region */}
+      {/* Map */}
       <MapContainer
-        center={[10.3157, 123.8854]} // Cebu City center
+        center={[10.3157, 123.8854]}
         zoom={13}
         minZoom={9}
         maxBounds={[
-          [9.35, 123.15],  // Southwest corner (south Cebu)
-          [11.35, 124.65], // Northeast corner (north Cebu + Camotes)
+          [9.35, 123.15],
+          [11.35, 124.65],
         ]}
         maxBoundsViscosity={1.0}
         style={{ height: '100%', width: '100%' }}
@@ -531,16 +790,10 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDel
 
         {/* Road in progress */}
         {roadPoints.length > 0 && (
-          <RoadPolyline
-            positions={roadPoints}
-            color="blue"
-            weight={4}
-            opacity={0.7}
-            isBidirectional={isBidirectional}
-          />
+          <RoadPolyline positions={roadPoints} color="blue" weight={4} opacity={0.7} isBidirectional={isBidirectional} />
         )}
 
-        {/* Road point indicators — green = snapped to intersection, orange = free point */}
+        {/* Road point indicators */}
         {mode === 'add_road' && roadPoints.map((pt, idx) => (
           <CircleMarker
             key={`road-pt-${idx}`}
@@ -562,6 +815,59 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDel
             </Popup>
           </CircleMarker>
         ))}
+
+        {/* Route testing: start marker */}
+        {mode === 'test_route' && routeStart && (
+          <CircleMarker
+            center={routeStart}
+            radius={10}
+            pathOptions={{ color: '#16a34a', fillColor: '#22c55e', fillOpacity: 0.9, weight: 3 }}
+          >
+            <Popup><span style={{ color: '#111', fontWeight: 600 }}>Start Point</span></Popup>
+          </CircleMarker>
+        )}
+
+        {/* Route testing: end marker */}
+        {mode === 'test_route' && routeEnd && (
+          <CircleMarker
+            center={routeEnd}
+            radius={10}
+            pathOptions={{ color: '#dc2626', fillColor: '#ef4444', fillOpacity: 0.9, weight: 3 }}
+          >
+            <Popup><span style={{ color: '#111', fontWeight: 600 }}>Destination</span></Popup>
+          </CircleMarker>
+        )}
+
+        {/* Route testing: route polyline */}
+        {mode === 'test_route' && routePositions.length >= 2 && (
+          <Polyline
+            positions={routePositions}
+            pathOptions={{ color: '#7c3aed', weight: 5, opacity: 0.8, dashArray: '10, 6' }}
+          />
+        )}
+
+        {/* Route testing: virtual connection lines (walking) */}
+        {mode === 'test_route' && routeResult?.virtualConnections?.map((vc, idx) => (
+          <Polyline
+            key={`vc-${idx}`}
+            positions={[
+              [vc.from.lat, vc.from.lon],
+              [vc.to.lat, vc.to.lon],
+            ]}
+            pathOptions={{ color: '#f59e0b', weight: 3, opacity: 0.7, dashArray: '5, 8' }}
+          />
+        ))}
+
+        {/* Destination placement marker */}
+        {mode === 'add_destination' && pendingPoint && (
+          <CircleMarker
+            center={[pendingPoint.lat, pendingPoint.lng]}
+            radius={12}
+            pathOptions={{ color: '#e11d48', fillColor: '#f43f5e', fillOpacity: 0.9, weight: 3 }}
+          >
+            <Popup><span style={{ color: '#111', fontWeight: 600 }}>New Destination</span></Popup>
+          </CircleMarker>
+        )}
       </MapContainer>
 
       {/* Add Point Modal */}
@@ -628,6 +934,98 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad, onDel
             </Button>
             <Button color="success" onClick={handleSaveRoad}>
               Save Road
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Add Destination Modal */}
+      <Modal isOpen={isDestModalOpen} onClose={() => setIsDestModalOpen(false)} size="2xl">
+        <ModalContent>
+          <ModalHeader>Create New Destination</ModalHeader>
+          <ModalBody>
+            <div className="space-y-4">
+              <Input
+                label="Destination Name"
+                placeholder="Enter destination name"
+                value={destForm.name}
+                onChange={(e) => setDestForm({ ...destForm, name: e.target.value })}
+                isRequired
+              />
+
+              {categories && categories.length > 0 ? (
+                <Select
+                  label="Category"
+                  selectedKeys={destForm.category_id ? [destForm.category_id] : []}
+                  onChange={(e) => setDestForm({ ...destForm, category_id: e.target.value })}
+                  isRequired
+                >
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id}>{cat.name}</SelectItem>
+                  ))}
+                </Select>
+              ) : (
+                <p className="text-sm text-amber-500">No categories available. Please create categories first.</p>
+              )}
+
+              <Textarea
+                label="Description"
+                placeholder="Describe this destination..."
+                value={destForm.description}
+                onChange={(e) => setDestForm({ ...destForm, description: e.target.value })}
+                minRows={3}
+                maxRows={8}
+              />
+
+              <Input
+                label="Address"
+                placeholder="Enter address (optional)"
+                value={destForm.address}
+                onChange={(e) => setDestForm({ ...destForm, address: e.target.value })}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Local Fee (PHP)"
+                  type="number"
+                  value={destForm.entrance_fee_local}
+                  onChange={(e) => setDestForm({ ...destForm, entrance_fee_local: e.target.value })}
+                />
+                <Input
+                  label="Foreign Fee (PHP)"
+                  type="number"
+                  value={destForm.entrance_fee_foreign}
+                  onChange={(e) => setDestForm({ ...destForm, entrance_fee_foreign: e.target.value })}
+                />
+              </div>
+
+              <Input
+                label="Best Time to Visit"
+                placeholder="e.g. Morning, 6AM-10AM"
+                value={destForm.best_time_to_visit}
+                onChange={(e) => setDestForm({ ...destForm, best_time_to_visit: e.target.value })}
+              />
+
+              <Input
+                label="Amenities"
+                placeholder="Comma-separated: Parking, WiFi, Restroom"
+                value={destForm.amenities}
+                onChange={(e) => setDestForm({ ...destForm, amenities: e.target.value })}
+              />
+
+              {pendingPoint && (
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  <p>Location: {pendingPoint.lat.toFixed(6)}, {pendingPoint.lng.toFixed(6)}</p>
+                </div>
+              )}
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button color="danger" variant="flat" onClick={() => setIsDestModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button color="primary" onClick={handleSaveDestination}>
+              Create Destination
             </Button>
           </ModalFooter>
         </ModalContent>

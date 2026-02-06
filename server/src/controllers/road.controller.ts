@@ -112,6 +112,7 @@ export const createRoad = async (
     end_intersection_id,
     road_type = 'local_road',
     path,
+    is_bidirectional = true,
   } = req.body;
 
   // Validate that path has at least 2 points
@@ -137,9 +138,9 @@ export const createRoad = async (
   const sql = `
     INSERT INTO roads (
       id, name, description, start_intersection_id, end_intersection_id,
-      road_type, distance, estimated_time, path, is_active
+      road_type, distance, estimated_time, path, is_active, is_bidirectional
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   await pool.execute(sql, [
@@ -153,6 +154,7 @@ export const createRoad = async (
     estimated_time,
     JSON.stringify(path),
     true,
+    is_bidirectional,
   ]);
 
   const [roads]: any = await pool.execute('SELECT * FROM roads WHERE id = ?', [roadId]);

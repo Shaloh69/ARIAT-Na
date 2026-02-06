@@ -338,11 +338,11 @@ export default function DestinationsPage() {
               Manage tourist destinations ({destinations.length} total)
             </p>
           </div>
-          <Button color="primary" onClick={() => handleOpenModal()}>
+          <Button color="primary" onClick={() => (window.location.href = '/admin/map')}>
             <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Add Destination
+            Add Destination on Map
           </Button>
         </div>
 
@@ -359,7 +359,10 @@ export default function DestinationsPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
               </svg>
               <p className="text-gray-600 dark:text-gray-400 mb-2">No destinations yet</p>
-              <p className="text-sm text-gray-500">Click "Add Destination" to create your first destination</p>
+              <p className="text-sm text-gray-500 mb-4">Use the Map Manager to create destinations</p>
+              <Button color="primary" size="sm" onClick={() => (window.location.href = '/admin/map')}>
+                Go to Map Manager
+              </Button>
             </CardBody>
           </Card>
         ) : (

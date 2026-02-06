@@ -316,24 +316,27 @@ body {
   background: rgba(220, 38, 38, 0.2) !important;
 }
 
-/* HeroUI Modal */
+/* ===== HeroUI Modal — solid frosted glass, NOT transparent ===== */
+
 [data-slot="wrapper"][class*="heroui-modal"] {
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  background: rgba(0, 0, 0, 0.5) !important;
 }
 
 [data-slot="base"][class*="heroui-modal"] {
-  background: var(--bg-1) !important;
-  border: 1px solid var(--border) !important;
-  box-shadow: var(--shadow) !important;
-  backdrop-filter: blur(24px) !important;
-  -webkit-backdrop-filter: blur(24px) !important;
+  background: rgba(15, 23, 42, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4) !important;
+  backdrop-filter: blur(40px) saturate(1.5) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(1.5) !important;
   border-radius: 20px !important;
 }
 
 [data-slot="header"][class*="heroui-modal"] {
   background: transparent !important;
-  border-bottom: 1px solid var(--border) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
 }
 
 [data-slot="body"][class*="heroui-modal"] {
@@ -342,7 +345,7 @@ body {
 
 [data-slot="footer"][class*="heroui-modal"] {
   background: transparent !important;
-  border-top: 1px solid var(--border) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
 }
 
 /* HeroUI Chip/Badge */
@@ -413,20 +416,97 @@ body {
 
 /* ===== Map Control Panel - override glass theme for readability ===== */
 
+.map-control-panel {
+  --text-strong: #111827;
+  --text: #1f2937;
+  --text-muted: #4b5563;
+  --text-faint: #6b7280;
+  --border: rgba(0, 0, 0, 0.15);
+  --bg-0: rgba(255, 255, 255, 0.97);
+  --bg-1: rgba(255, 255, 255, 0.97);
+  --bg-2: rgba(248, 249, 250, 0.97);
+  --bg-3: rgba(243, 244, 246, 0.9);
+}
+
 .map-control-panel,
 .map-control-panel [data-slot="base"],
 .map-control-panel [data-slot="body"] {
-  background: rgba(255, 255, 255, 0.95) !important;
+  background: rgba(255, 255, 255, 0.97) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
-  color: #1a1a2e !important;
+  color: #1f2937 !important;
 }
 
+/* Default/flat buttons in map panel */
 .map-control-panel [data-slot="base"][class*="heroui-button"][data-color="default"],
 .map-control-panel [data-slot="base"][class*="heroui-button"][data-variant="flat"] {
   color: #374151 !important;
   border-color: #d1d5db !important;
   background: rgba(243, 244, 246, 0.8) !important;
+}
+
+/* Select trigger inside map panel */
+.map-control-panel [data-slot="trigger"],
+.map-control-panel [data-slot="trigger"] * {
+  background: rgba(243, 244, 246, 0.9) !important;
+  border-color: #d1d5db !important;
+  color: #1f2937 !important;
+}
+
+.map-control-panel [data-slot="value"],
+.map-control-panel [data-slot="label"],
+.map-control-panel [data-slot="selectorIcon"],
+.map-control-panel [data-slot="helper-wrapper"],
+.map-control-panel [data-slot="description"] {
+  color: #374151 !important;
+}
+
+/* Input fields inside map panel */
+.map-control-panel [data-slot="input"],
+.map-control-panel [data-slot="input-wrapper"] {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: #d1d5db !important;
+  color: #1f2937 !important;
+}
+
+.map-control-panel [data-slot="inner-wrapper"] input,
+.map-control-panel input {
+  color: #1f2937 !important;
+}
+
+/* Checkbox labels inside map panel */
+.map-control-panel [data-slot="label"] {
+  color: #374151 !important;
+}
+
+/* Select popover (rendered in portal outside .map-control-panel DOM) */
+.map-select-popover,
+.map-select-popover [data-slot="listbox-wrapper"],
+.map-select-popover [data-slot="base"] {
+  background: rgba(255, 255, 255, 0.98) !important;
+  color: #1f2937 !important;
+  border: 1px solid #d1d5db !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+
+.map-select-popover [role="option"],
+.map-select-popover [data-slot="title"],
+.map-select-popover [data-slot="wrapper"],
+.map-select-popover li,
+.map-select-popover li span {
+  color: #1f2937 !important;
+}
+
+.map-select-popover [role="option"]:hover,
+.map-select-popover [role="option"][data-hover="true"] {
+  background: rgba(243, 244, 246, 0.9) !important;
+}
+
+.map-select-popover [role="option"][data-selected="true"],
+.map-select-popover [role="option"][aria-selected="true"] {
+  background: rgba(244, 63, 94, 0.1) !important;
+  color: #e11d48 !important;
 }
 
 /* ===== Custom Scrollbar ===== */
