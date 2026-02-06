@@ -7,7 +7,7 @@ import { Input, Textarea } from '@heroui/input';
 import { Select, SelectItem } from '@heroui/select';
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@heroui/modal';
 import { Chip } from '@heroui/chip';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/lib/constants';
 

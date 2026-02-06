@@ -8,7 +8,7 @@ import { Select, SelectItem } from '@heroui/select';
 import { Input } from '@heroui/input';
 import { Checkbox } from '@heroui/checkbox';
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@heroui/modal';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import type { GeoJSONFeatureCollection, GeoJSONPoint } from '@/types/api';
 
 // Fix Leaflet default icon issue

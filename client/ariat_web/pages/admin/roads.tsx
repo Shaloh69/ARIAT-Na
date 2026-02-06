@@ -4,7 +4,7 @@ import Head from 'next/head';
 import { Card, CardBody, CardHeader } from '@heroui/card';
 import { Button } from '@heroui/button';
 import { Chip } from '@heroui/chip';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/lib/constants';
 

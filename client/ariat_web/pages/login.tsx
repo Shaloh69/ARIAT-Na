@@ -4,7 +4,7 @@ import { Button } from '@heroui/button';
 import { Input } from '@heroui/input';
 import { Card, CardBody, CardHeader } from '@heroui/card';
 import { useAuthStore } from '@/lib/store/auth-store';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import Head from 'next/head';
 import AnimatedBackground from '@/components/animated-background';
 

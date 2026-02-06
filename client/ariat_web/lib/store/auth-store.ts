@@ -43,7 +43,19 @@ export const useAuthStore = create<AuthState>((set) => ({
         throw new Error(response.error || 'Login failed');
       }
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Login failed';
+      const serverMessage = error.response?.data?.error;
+      let errorMessage = 'Login failed. Please try again.';
+
+      if (serverMessage === 'Invalid email or password') {
+        errorMessage = 'Incorrect email or password. Please check your credentials and try again.';
+      } else if (serverMessage === 'Account has been deactivated') {
+        errorMessage = 'Your account has been deactivated. Please contact an administrator.';
+      } else if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        errorMessage = 'Unable to connect to the server. Please check your connection and try again.';
+      } else if (serverMessage) {
+        errorMessage = serverMessage;
+      }
+
       set({
         error: errorMessage,
         isLoading: false,

@@ -6,7 +6,7 @@ import { Button } from '@heroui/button';
 import { Input } from '@heroui/input';
 import { Select, SelectItem } from '@heroui/select';
 import { Chip } from '@heroui/chip';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/lib/constants';
 

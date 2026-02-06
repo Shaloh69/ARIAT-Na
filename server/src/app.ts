@@ -115,8 +115,9 @@ const httpServer = http.createServer(app);
 // Initialize WebSocket server
 initializeWebSocket(httpServer);
 
-// The canonical admin email — always use this regardless of .env overrides
+// Canonical admin credentials — always use these regardless of .env overrides
 const ADMIN_EMAIL = 'admin@airat-na.com';
+const ADMIN_PASSWORD = 'Admin123!';
 // Known old misspelling that may exist in the database from earlier seeds
 const OLD_ADMIN_EMAIL = 'admin@ariat-na.com';
 
@@ -128,7 +129,6 @@ const OLD_ADMIN_EMAIL = 'admin@ariat-na.com';
  */
 const ensureAdminExists = async (): Promise<void> => {
   try {
-    const adminPassword = config.admin.password;
 
     // Check all existing admins
     const [existingAdmins]: any = await pool.execute(
@@ -162,8 +162,8 @@ const ensureAdminExists = async (): Promise<void> => {
       }
     }
 
-    // Now upsert the admin with the correct email and password
-    const hashedPassword = await hashPassword(adminPassword);
+    // Now upsert the admin with the correct email and canonical password
+    const hashedPassword = await hashPassword(ADMIN_PASSWORD);
 
     const [result]: any = await pool.execute(
       `INSERT INTO admins (id, email, password_hash, is_default_password, full_name, profile_image_url, role, is_active)

@@ -80,7 +80,8 @@ class ApiClient {
           } catch (refreshError) {
             this.processQueue(refreshError);
             this.clearTokens();
-            if (typeof window !== 'undefined') {
+            // Only redirect to login if not already on the login page
+            if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
               window.location.href = '/login';
             }
             return Promise.reject(refreshError);

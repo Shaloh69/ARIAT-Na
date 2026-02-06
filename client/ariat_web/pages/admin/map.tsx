@@ -6,8 +6,7 @@ import AdminLayout from '@/layouts/admin';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/lib/constants';
 import type { GeoJSONFeatureCollection } from '@/types/api';
-// Split imports - heroui uses individual packages
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import Head from 'next/head';
 
 // Dynamic import to avoid SSR issues with Leaflet
