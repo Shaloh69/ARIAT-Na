@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet-polylinedecorator';
 import { Button } from '@heroui/button';
@@ -169,6 +169,9 @@ function RoadPolyline({ positions, color, weight = 4, opacity = 0.7, isBidirecti
   return null;
 }
 
+// Snap threshold in degrees (~55 meters at Cebu's latitude)
+const SNAP_THRESHOLD = 0.0005;
+
 export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: MapManagerProps) {
   const [mode, setMode] = useState<'view' | 'add_point' | 'add_road'>('view');
   const [pointType, setPointType] = useState<NewPoint['point_type']>('intersection');
@@ -177,6 +180,7 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
 
   const [markers, setMarkers] = useState<Array<{ position: [number, number]; name: string; type: string }>>([]);
   const [roadPoints, setRoadPoints] = useState<[number, number][]>([]);
+  const [snappedIndices, setSnappedIndices] = useState<Set<number>>(new Set());
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newPointName, setNewPointName] = useState('');
@@ -198,13 +202,40 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
     }
   }, [geojsonData]);
 
+  const findNearestMarker = (lat: number, lng: number) => {
+    let minDist = Infinity;
+    let nearest: { position: [number, number]; name: string; type: string } | null = null;
+
+    for (const marker of markers) {
+      const dlat = marker.position[0] - lat;
+      const dlng = marker.position[1] - lng;
+      const dist = Math.sqrt(dlat * dlat + dlng * dlng);
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = marker;
+      }
+    }
+
+    if (nearest && minDist <= SNAP_THRESHOLD) {
+      return nearest;
+    }
+    return null;
+  };
+
   const handleMapClick = (latlng: L.LatLng) => {
     if (mode === 'add_point') {
       setPendingPoint({ lat: latlng.lat, lng: latlng.lng });
       setIsModalOpen(true);
     } else if (mode === 'add_road') {
-      setRoadPoints([...roadPoints, [latlng.lat, latlng.lng]]);
-      toast.info(`Road point added (${roadPoints.length + 1})`);
+      const snapped = findNearestMarker(latlng.lat, latlng.lng);
+      if (snapped) {
+        setRoadPoints([...roadPoints, snapped.position]);
+        setSnappedIndices((prev) => new Set(prev).add(roadPoints.length));
+        toast.success(`Snapped to "${snapped.name}"`);
+      } else {
+        setRoadPoints([...roadPoints, [latlng.lat, latlng.lng]]);
+        toast.info(`Road point added (${roadPoints.length + 1})`);
+      }
     }
   };
 
@@ -269,6 +300,7 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
       setIsRoadModalOpen(false);
       setRoadName('');
       setRoadPoints([]);
+      setSnappedIndices(new Set());
       setIsBidirectional(true);
       setMode('view');
     } catch (error) {
@@ -278,6 +310,7 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
 
   const cancelRoad = () => {
     setRoadPoints([]);
+    setSnappedIndices(new Set());
     setMode('view');
     toast.info('Road creation cancelled');
   };
@@ -376,10 +409,17 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
                   Two-way road (bidirectional)
                 </Checkbox>
 
-                <div className="text-sm text-gray-700">
-                  Points added: {roadPoints.length}
-                  <br />
-                  Direction: {isBidirectional ? '↔ Two-way' : '→ One-way'}
+                <div className="text-sm text-gray-700 space-y-1">
+                  <p>Points added: {roadPoints.length}</p>
+                  <p>Direction: {isBidirectional ? '↔ Two-way' : '→ One-way'}</p>
+                  {snappedIndices.size > 0 && (
+                    <p className="text-green-700">
+                      Snapped: {snappedIndices.size} point{snappedIndices.size > 1 ? 's' : ''}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-500 italic">
+                    Click near an intersection to snap
+                  </p>
                 </div>
 
                 <div className="flex gap-2">
@@ -458,6 +498,29 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
             isBidirectional={isBidirectional}
           />
         )}
+
+        {/* Road point indicators — green = snapped to intersection, orange = free point */}
+        {mode === 'add_road' && roadPoints.map((pt, idx) => (
+          <CircleMarker
+            key={`road-pt-${idx}`}
+            center={pt}
+            radius={snappedIndices.has(idx) ? 7 : 5}
+            pathOptions={{
+              color: snappedIndices.has(idx) ? '#16a34a' : '#f59e0b',
+              fillColor: snappedIndices.has(idx) ? '#16a34a' : '#f59e0b',
+              fillOpacity: 0.8,
+              weight: 2,
+            }}
+          >
+            <Popup>
+              <span className="text-xs">
+                {snappedIndices.has(idx) ? 'Snapped to intersection' : 'Free point'}
+                {idx === 0 && ' (start)'}
+                {idx === roadPoints.length - 1 && idx > 0 && ' (end)'}
+              </span>
+            </Popup>
+          </CircleMarker>
+        ))}
       </MapContainer>
 
       {/* Add Point Modal */}
