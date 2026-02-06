@@ -17,6 +17,8 @@ import categoryRoutes from './routes/category.routes';
 import intersectionRoutes from './routes/intersection.routes';
 import roadRoutes from './routes/road.routes';
 import routeRoutes from './routes/route.routes';
+import uploadRoutes from './routes/upload.routes';
+import adminProfileRoutes from './routes/admin-profile.routes';
 
 // Create Express application
 const app: Application = express();
@@ -86,6 +88,8 @@ app.use(`${apiPrefix}/categories`, categoryRoutes);
 app.use(`${apiPrefix}/intersections`, intersectionRoutes);
 app.use(`${apiPrefix}/roads`, roadRoutes);
 app.use(`${apiPrefix}/routes`, routeRoutes);
+app.use(`${apiPrefix}/upload`, uploadRoutes);
+app.use(`${apiPrefix}/admin`, adminProfileRoutes);
 
 // =====================================================
 // ERROR HANDLING

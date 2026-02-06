@@ -230,7 +230,9 @@ export const loginAdmin = async (
     id: admin.id,
     email: admin.email,
     full_name: admin.full_name,
+    profile_image_url: admin.profile_image_url,
     role: admin.role,
+    is_default_password: admin.is_default_password || false,
     created_at: admin.created_at,
   };
 
@@ -257,7 +259,7 @@ export const getCurrentAdmin = async (
   }
 
   const [admins]: any = await pool.execute(
-    'SELECT id, email, full_name, role, created_at FROM admins WHERE id = ?',
+    'SELECT id, email, full_name, profile_image_url, role, is_default_password, created_at FROM admins WHERE id = ?',
     [req.user.id]
   );
 

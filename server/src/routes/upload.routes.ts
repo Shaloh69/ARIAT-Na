@@ -13,7 +13,7 @@ import {
   validateFileType,
   validateFileSize,
 } from '../services/upload.service';
-import { authMiddleware } from '../middleware/auth.middleware';
+import { authenticateAdmin } from '../middleware/auth.middleware';
 
 const router = Router();
 
@@ -24,7 +24,7 @@ const router = Router();
  */
 router.post(
   '/image',
-  authMiddleware,
+  authenticateAdmin,
   uploadSingleImage,
   handleMulterError,
   async (req: Request, res: Response) => {
@@ -65,14 +65,14 @@ router.post(
         contentType: req.file.mimetype,
       });
 
-      res.status(200).json({
+      return res.status(200).json({
         success: true,
         message: 'Image uploaded successfully',
         data: result,
       });
     } catch (error: any) {
       console.error('Image upload error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: error.message || 'Failed to upload image',
       });
@@ -87,7 +87,7 @@ router.post(
  */
 router.post(
   '/images',
-  authMiddleware,
+  authenticateAdmin,
   uploadMultipleImages,
   handleMulterError,
   async (req: Request, res: Response) => {
@@ -124,14 +124,14 @@ router.post(
       // Upload all files
       const results = await uploadMultipleFiles(req.files, { folder });
 
-      res.status(200).json({
+      return res.status(200).json({
         success: true,
         message: `${results.length} images uploaded successfully`,
         data: results,
       });
     } catch (error: any) {
       console.error('Multiple images upload error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: error.message || 'Failed to upload images',
       });
@@ -146,7 +146,7 @@ router.post(
  */
 router.post(
   '/video',
-  authMiddleware,
+  authenticateAdmin,
   uploadSingleVideo,
   handleMulterError,
   async (req: Request, res: Response) => {
@@ -187,14 +187,14 @@ router.post(
         contentType: req.file.mimetype,
       });
 
-      res.status(200).json({
+      return res.status(200).json({
         success: true,
         message: 'Video uploaded successfully',
         data: result,
       });
     } catch (error: any) {
       console.error('Video upload error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: error.message || 'Failed to upload video',
       });
@@ -209,7 +209,7 @@ router.post(
  */
 router.delete(
   '/',
-  authMiddleware,
+  authenticateAdmin,
   async (req: Request, res: Response) => {
     try {
       const { url } = req.body;
@@ -223,13 +223,13 @@ router.delete(
 
       await deleteFileByUrl(url);
 
-      res.status(200).json({
+      return res.status(200).json({
         success: true,
         message: 'File deleted successfully',
       });
     } catch (error: any) {
       console.error('File deletion error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: error.message || 'Failed to delete file',
       });

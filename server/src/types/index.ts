@@ -34,7 +34,9 @@ export interface Admin {
   id: string;
   email: string;
   password_hash: string;
+  is_default_password: boolean;
   full_name: string;
+  profile_image_url?: string;
   role: 'super_admin' | 'admin' | 'moderator';
   is_active: boolean;
   created_at: Date;
@@ -46,7 +48,9 @@ export interface AdminResponse {
   id: string;
   email: string;
   full_name: string;
+  profile_image_url?: string;
   role: string;
+  is_default_password: boolean;
   created_at: Date;
 }
 

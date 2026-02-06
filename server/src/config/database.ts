@@ -14,6 +14,10 @@ const sslConfig = process.env.DB_SSL_CA
       ),
       rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
     }
+  : process.env.DB_HOST?.includes('aivencloud.com')
+  ? {
+      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+    }
   : undefined;
 
 // Database connection pool configuration

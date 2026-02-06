@@ -44,8 +44,8 @@ const seedAdmin = async (): Promise<void> => {
   const hashedPassword = await bcrypt.hash(config.admin.password, 10);
 
   const sql = `
-    INSERT INTO admins (id, email, password_hash, full_name, role, is_active)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO admins (id, email, password_hash, is_default_password, full_name, profile_image_url, role, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP
   `;
 
@@ -53,7 +53,9 @@ const seedAdmin = async (): Promise<void> => {
     adminId,
     config.admin.email,
     hashedPassword,
+    true, // is_default_password
     'System Administrator',
+    null, // profile_image_url
     'super_admin',
     true,
   ]);
