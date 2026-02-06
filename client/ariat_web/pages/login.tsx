@@ -83,7 +83,7 @@ export default function LoginPage() {
               <Input
                 type="email"
                 label="Email"
-                placeholder="admin@ariat-na.com"
+                placeholder="admin@airat-na.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 isRequired
@@ -124,7 +124,7 @@ export default function LoginPage() {
 
               <div className="mt-2 rounded-lg bg-default-100 p-3 text-xs">
                 <p className="font-semibold mb-1">Demo Credentials:</p>
-                <p>Email: admin@ariat-na.com</p>
+                <p>Email: admin@airat-na.com</p>
                 <p>Password: Admin123!</p>
               </div>
             </form>

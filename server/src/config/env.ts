@@ -26,7 +26,7 @@ export const config = {
 
   // Admin
   admin: {
-    email: process.env.ADMIN_EMAIL || 'admin@ariat-na.com',
+    email: process.env.ADMIN_EMAIL || 'admin@airat-na.com',
     password: process.env.ADMIN_PASSWORD || 'Admin123!',
   },
 

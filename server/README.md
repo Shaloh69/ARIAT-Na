@@ -129,7 +129,7 @@ The system includes the following tables:
 
 ### Default Admin Credentials
 ```
-Email: admin@ariat-na.com
+Email: admin@airat-na.com
 Password: Admin123!
 ```
 **⚠️ Change these credentials immediately in production!**
@@ -310,7 +310,7 @@ JWT_SECRET=your-secret-key
 JWT_EXPIRES_IN=7d
 
 # Admin
-ADMIN_EMAIL=admin@ariat-na.com
+ADMIN_EMAIL=admin@airat-na.com
 ADMIN_PASSWORD=Admin123!
 
 # CORS

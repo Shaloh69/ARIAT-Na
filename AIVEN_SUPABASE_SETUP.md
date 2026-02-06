@@ -47,7 +47,7 @@ Complete guide for deploying your ARIAT-NA travel planning system to production 
    - **Hobbyist** (Free - 1GB storage, limited connections)
    - **Startup-4** ($29/month - 4GB storage, recommended for production)
    - **Business-4** ($89/month - High availability)
-6. Service name: `ariat-na-mysql`
+6. Service name: `airat-na-mysql`
 7. Click **"Create Service"** (takes 5-10 minutes)
 
 ### Step 3: Get Connection Details
@@ -55,7 +55,7 @@ Complete guide for deploying your ARIAT-NA travel planning system to production 
 Once service is running, go to **Overview** tab:
 
 ```
-Host: ariat-na-mysql-yourproject.aivencloud.com
+Host: airat-na-mysql-yourproject.aivencloud.com
 Port: 25060
 User: avnadmin
 Password: [auto-generated]
@@ -82,7 +82,7 @@ Edit `/home/user/ARIAT-Na/server/.env`:
 
 ```bash
 # Aiven MySQL Configuration
-DB_HOST=ariat-na-mysql-yourproject.aivencloud.com
+DB_HOST=airat-na-mysql-yourproject.aivencloud.com
 DB_PORT=25060
 DB_USER=avnadmin
 DB_PASSWORD=your_aiven_password_here
@@ -139,7 +139,7 @@ export const pool = mysql.createPool(poolConfig);
 cd /home/user/ARIAT-Na/server
 
 # Connect to Aiven MySQL using SSL
-mysql --host=ariat-na-mysql-yourproject.aivencloud.com \
+mysql --host=airat-na-mysql-yourproject.aivencloud.com \
       --port=25060 \
       --user=avnadmin \
       --password=your_password \
@@ -202,7 +202,7 @@ Complete the Aiven MySQL setup above first.
 2. Sign up with GitHub (free tier: 500MB database, 1GB storage)
 3. Click **"New Project"**
 4. Fill in:
-   - **Name**: `ariat-na`
+   - **Name**: `airat-na`
    - **Database Password**: Strong password (save this!)
    - **Region**: Choose closest to your users
    - **Plan**: Free (upgrade to Pro $25/month for production)
@@ -411,7 +411,7 @@ curl http://localhost:5000/api/v1/destinations
 ```bash
 # Update .env for production
 NODE_ENV=production
-DB_HOST=ariat-na-mysql-yourproject.aivencloud.com
+DB_HOST=airat-na-mysql-yourproject.aivencloud.com
 # ... all other production values
 
 # Build frontend

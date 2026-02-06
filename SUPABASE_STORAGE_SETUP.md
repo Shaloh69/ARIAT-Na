@@ -26,7 +26,7 @@ Use Supabase Storage to upload and serve images/videos for tourist destinations 
 3. Click **"New Project"**
 4. Fill in:
    - **Organization**: Create new or select existing
-   - **Project Name**: `ariat-na-storage`
+   - **Project Name**: `airat-na-storage`
    - **Database Password**: (You won't need this for storage only)
    - **Region**: Choose closest to your users (e.g., Southeast Asia)
    - **Pricing Plan**: Free (1GB storage)
