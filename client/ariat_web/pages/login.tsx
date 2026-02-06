@@ -6,6 +6,7 @@ import { Card, CardBody, CardHeader } from '@heroui/card';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { toast } from 'sonner';
 import Head from 'next/head';
+import AnimatedBackground from '@/components/animated-background';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -50,7 +51,8 @@ export default function LoginPage() {
         <title>Admin Login - ARIAT-NA</title>
       </Head>
 
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 px-4">
+      <AnimatedBackground />
+      <div className="flex min-h-screen items-center justify-center px-4">
         <Card className="w-full max-w-md">
           <CardHeader className="flex flex-col gap-3 px-6 pt-6">
             <div className="flex items-center justify-center">

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import AnimatedBackground from '@/components/animated-background';
 
 export default function IndexPage() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export default function IndexPage() {
       <Head>
         <title>ARIAT-NA Admin Console</title>
       </Head>
+      <AnimatedBackground />
       <div className="flex h-screen items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
