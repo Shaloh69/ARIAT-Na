@@ -1,7 +1,9 @@
 -- ARIAT-NA Database Schema v2
 -- MySQL Database for Travel Planning System
 -- Version 2: Added roads table and point_type enum for intersections
-
+DROP DATABASE IF EXISTS defaultdb;
+CREATE DATABASE defaultdb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE defaultdb;
 -- Drop existing tables if they exist (for development)
 DROP TABLE IF EXISTS roads;
 DROP TABLE IF EXISTS itinerary_destinations;
