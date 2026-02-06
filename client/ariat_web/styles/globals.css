@@ -28,20 +28,20 @@
 
   /* ===== Whites / Surfaces ===== */
   --white: #ffffff;
-  --bg-0: rgba(255, 255, 255, 0.65); /* main surface overlay */
-  --bg-1: rgba(248, 250, 252, 0.55); /* cards */
-  --bg-2: rgba(241, 245, 249, 0.45); /* raised cards/panels */
-  --bg-3: rgba(255, 255, 255, 0.25); /* inputs / subtle */
+  --bg-0: rgba(255, 255, 255, 0.08); /* main surface overlay */
+  --bg-1: rgba(255, 255, 255, 0.08); /* cards */
+  --bg-2: rgba(255, 255, 255, 0.12); /* raised cards/panels */
+  --bg-3: rgba(255, 255, 255, 0.15); /* inputs / subtle */
 
   /* ===== Text ===== */
-  --text-strong: #0f172a;
+  --text-strong: #1e293b;
   --text: #334155;
-  --text-muted: #64748b;
-  --text-faint: #94a3b8;
+  --text-muted: #475569;
+  --text-faint: #64748b;
 
   /* ===== Borders / Dividers ===== */
-  --border: rgba(148, 163, 184, 0.35);
-  --border-strong: rgba(100, 116, 139, 0.45);
+  --border: rgba(255, 255, 255, 0.20);
+  --border-strong: rgba(255, 255, 255, 0.30);
 
   /* ===== Accents ===== */
   --blue-600: #2563eb;
@@ -82,13 +82,14 @@ body {
   pointer-events: none;
 
   background:
-    radial-gradient(circle at 20% 30%, rgba(244, 63, 94, 0.28), transparent 45%),
-    radial-gradient(circle at 75% 35%, rgba(37, 99, 235, 0.18), transparent 50%),
-    radial-gradient(circle at 55% 80%, rgba(147, 51, 234, 0.16), transparent 55%),
-    radial-gradient(circle at 30% 85%, rgba(8, 145, 178, 0.14), transparent 55%),
-    linear-gradient(180deg, rgba(255,255,255,0.90), rgba(255,255,255,0.70));
+    radial-gradient(circle at 20% 30%, rgba(244, 63, 94, 0.45), transparent 40%),
+    radial-gradient(circle at 75% 35%, rgba(37, 99, 235, 0.35), transparent 45%),
+    radial-gradient(circle at 55% 80%, rgba(147, 51, 234, 0.32), transparent 50%),
+    radial-gradient(circle at 30% 85%, rgba(8, 145, 178, 0.28), transparent 50%),
+    radial-gradient(circle at 90% 70%, rgba(251, 113, 133, 0.25), transparent 50%),
+    linear-gradient(135deg, rgba(255, 240, 245, 0.4), rgba(240, 248, 255, 0.4));
 
-  filter: blur(10px);
+  filter: blur(80px);
   transform: translateZ(0);
   animation: meshMove 22s ease-in-out infinite alternate;
   opacity: 1;
@@ -107,16 +108,16 @@ body {
 
 @keyframes meshMove {
   0% {
-    transform: scale(1) translate(0px, 0px);
-    filter: blur(12px);
+    transform: scale(1) translate(0px, 0px) rotate(0deg);
+    filter: blur(70px);
   }
   50% {
-    transform: scale(1.05) translate(-20px, 15px);
-    filter: blur(16px);
+    transform: scale(1.1) translate(-40px, 30px) rotate(5deg);
+    filter: blur(90px);
   }
   100% {
-    transform: scale(1.08) translate(25px, -10px);
-    filter: blur(14px);
+    transform: scale(1.15) translate(50px, -20px) rotate(-3deg);
+    filter: blur(80px);
   }
 }
 
@@ -141,14 +142,14 @@ body {
 }
 
 .glass-sidebar {
-  background: rgba(255, 255, 255, 0.45) !important;
+  background: rgba(255, 255, 255, 0.10) !important;
   border-right: 1px solid var(--border) !important;
   backdrop-filter: blur(22px) !important;
   -webkit-backdrop-filter: blur(22px) !important;
 }
 
 .glass-topbar {
-  background: rgba(255, 255, 255, 0.40) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
   border-bottom: 1px solid var(--border) !important;
   backdrop-filter: blur(20px) !important;
   -webkit-backdrop-filter: blur(20px) !important;
@@ -185,7 +186,7 @@ body {
 }
 
 .glass-btn-secondary {
-  background: rgba(255, 255, 255, 0.35) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
   color: var(--text-strong) !important;
   border: 1px solid var(--border) !important;
   border-radius: 14px !important;
@@ -292,7 +293,7 @@ body {
 /* HeroUI Buttons - Secondary/Default */
 [data-slot="base"][class*="heroui-button"][data-color="default"],
 [data-slot="base"][class*="heroui-button"][data-variant="flat"] {
-  background: rgba(255, 255, 255, 0.35) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
   color: var(--text-strong) !important;
   border: 1px solid var(--border) !important;
   border-radius: 14px !important;
@@ -375,6 +376,14 @@ body {
   background: var(--red-600) !important;
 }
 
+/* HeroUI default-100 backgrounds */
+.bg-default-100,
+.bg-primary\/10 {
+  background: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+
 /* Text color utilities */
 .text-gray-600,
 .dark\:text-gray-400 {
@@ -393,7 +402,7 @@ body {
 /* Divider/Border elements in listings */
 .border-gray-200.dark\:border-gray-800 {
   border-color: var(--border) !important;
-  background: rgba(255, 255, 255, 0.25) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
 }
@@ -406,18 +415,18 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(241, 245, 249, 0.3);
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.5);
+  background: rgba(255, 255, 255, 0.20);
   border-radius: 10px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.7);
+  background: rgba(255, 255, 255, 0.35);
   background-clip: content-box;
 }
