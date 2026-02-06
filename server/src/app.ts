@@ -115,28 +115,55 @@ const httpServer = http.createServer(app);
 // Initialize WebSocket server
 initializeWebSocket(httpServer);
 
+// The canonical admin email — always use this regardless of .env overrides
+const ADMIN_EMAIL = 'admin@airat-na.com';
+// Known old misspelling that may exist in the database from earlier seeds
+const OLD_ADMIN_EMAIL = 'admin@ariat-na.com';
+
 /**
  * Ensure the default admin user exists in the database with the correct password.
  * This runs on every server startup so login always works
  * even if db:seed was not run after db:init.
- * If the admin exists but still has the default password flag,
- * the password hash is refreshed to match the current config.
+ * Also migrates the old misspelled email (ariat → airat) if found.
  */
 const ensureAdminExists = async (): Promise<void> => {
   try {
-    logger.info(`[STARTUP DEBUG] Admin config email: "${config.admin.email}"`);
-    logger.info(`[STARTUP DEBUG] Admin config password length: ${config.admin.password.length}`);
+    const adminPassword = config.admin.password;
 
-    // Check if admins table exists and what's in it
+    // Check all existing admins
     const [existingAdmins]: any = await pool.execute(
       'SELECT id, email, is_active, is_default_password FROM admins'
     );
-    logger.info(`[STARTUP DEBUG] Existing admins in DB: ${existingAdmins.length}`, {
+    logger.info(`[STARTUP] Existing admins: ${existingAdmins.length}`, {
       admins: existingAdmins.map((a: any) => ({ email: a.email, is_active: a.is_active })),
     });
 
-    const hashedPassword = await hashPassword(config.admin.password);
-    logger.info(`[STARTUP DEBUG] Generated hash prefix: ${hashedPassword.substring(0, 7)}`);
+    // Migrate old misspelled email if it exists
+    const [oldAdmins]: any = await pool.execute(
+      'SELECT id FROM admins WHERE email = ?',
+      [OLD_ADMIN_EMAIL]
+    );
+    if (oldAdmins.length > 0) {
+      // Check if the new email already exists (avoid duplicate)
+      const [newAdmins]: any = await pool.execute(
+        'SELECT id FROM admins WHERE email = ?',
+        [ADMIN_EMAIL]
+      );
+      if (newAdmins.length === 0) {
+        await pool.execute(
+          'UPDATE admins SET email = ?, updated_at = CURRENT_TIMESTAMP WHERE email = ?',
+          [ADMIN_EMAIL, OLD_ADMIN_EMAIL]
+        );
+        logger.info(`[STARTUP] Migrated admin email: ${OLD_ADMIN_EMAIL} → ${ADMIN_EMAIL}`);
+      } else {
+        // Both exist — remove the old one
+        await pool.execute('DELETE FROM admins WHERE email = ?', [OLD_ADMIN_EMAIL]);
+        logger.info(`[STARTUP] Removed duplicate old admin: ${OLD_ADMIN_EMAIL}`);
+      }
+    }
+
+    // Now upsert the admin with the correct email and password
+    const hashedPassword = await hashPassword(adminPassword);
 
     const [result]: any = await pool.execute(
       `INSERT INTO admins (id, email, password_hash, is_default_password, full_name, profile_image_url, role, is_active)
@@ -144,29 +171,18 @@ const ensureAdminExists = async (): Promise<void> => {
        ON DUPLICATE KEY UPDATE
          password_hash = IF(is_default_password = TRUE, VALUES(password_hash), password_hash),
          updated_at = CURRENT_TIMESTAMP`,
-      [uuidv4(), config.admin.email, hashedPassword, true, 'System Administrator', null, 'super_admin', true]
+      [uuidv4(), ADMIN_EMAIL, hashedPassword, true, 'System Administrator', null, 'super_admin', true]
     );
-
-    logger.info(`[STARTUP DEBUG] Upsert result: affectedRows=${result.affectedRows}`);
-
-    // Verify the admin was actually written
-    const [verifyAdmins]: any = await pool.execute(
-      'SELECT id, email, is_active, is_default_password FROM admins WHERE email = ?',
-      [config.admin.email]
-    );
-    logger.info(`[STARTUP DEBUG] Verification query for "${config.admin.email}": found ${verifyAdmins.length}`, {
-      admin: verifyAdmins[0] || null,
-    });
 
     if (result.affectedRows === 1) {
-      logger.info(`Default admin created: ${config.admin.email}`);
+      logger.info(`[STARTUP] Default admin created: ${ADMIN_EMAIL}`);
     } else if (result.affectedRows === 2) {
-      logger.info(`Default admin password refreshed: ${config.admin.email}`);
+      logger.info(`[STARTUP] Default admin password refreshed: ${ADMIN_EMAIL}`);
     } else {
-      logger.info(`Default admin already exists: ${config.admin.email}`);
+      logger.info(`[STARTUP] Default admin verified: ${ADMIN_EMAIL}`);
     }
   } catch (error) {
-    logger.error('Failed to ensure admin exists:', error);
+    logger.error('[STARTUP] Failed to ensure admin exists:', error);
   }
 };
 
