@@ -415,10 +415,16 @@ export default function MapManager({ geojsonData, onSavePoint, onSaveRoad }: Map
         </CardBody>
       </Card>
 
-      {/* Map */}
+      {/* Map — bounded to the Cebu region */}
       <MapContainer
-        center={[10.3157, 123.8854]} // Cebu City
+        center={[10.3157, 123.8854]} // Cebu City center
         zoom={13}
+        minZoom={9}
+        maxBounds={[
+          [9.35, 123.15],  // Southwest corner (south Cebu)
+          [11.35, 124.65], // Northeast corner (north Cebu + Camotes)
+        ]}
+        maxBoundsViscosity={1.0}
         style={{ height: '100%', width: '100%' }}
         className="z-0"
       >
