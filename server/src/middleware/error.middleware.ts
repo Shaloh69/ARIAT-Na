@@ -56,11 +56,29 @@ export const errorHandler = (
     return;
   }
 
+  // Handle FK constraint violations
+  if ((err as any).code === 'ER_NO_REFERENCED_ROW_2' || (err as any).code === 'ER_NO_REFERENCED_ROW') {
+    res.status(400).json({
+      success: false,
+      error: 'Referenced record not found. Please ensure all related records exist (e.g., category, intersection).',
+    });
+    return;
+  }
+
   // Handle validation errors from MySQL
   if ((err as any).code === 'ER_BAD_FIELD_ERROR') {
     res.status(400).json({
       success: false,
       error: 'Invalid field in request',
+    });
+    return;
+  }
+
+  // Handle data too long for column
+  if ((err as any).code === 'ER_DATA_TOO_LONG') {
+    res.status(400).json({
+      success: false,
+      error: 'Data too long for one or more fields. Please shorten your input.',
     });
     return;
   }

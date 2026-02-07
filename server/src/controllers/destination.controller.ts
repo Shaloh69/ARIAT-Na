@@ -212,24 +212,31 @@ export const createDestination = async (
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
-  await pool.execute(sql, [
-    destinationId,
-    String(name).trim(),
-    description || null,
-    category_id,
-    latitude,
-    longitude,
-    address || null,
-    images ? JSON.stringify(images) : null,
-    operating_hours ? JSON.stringify(operating_hours) : null,
-    entrance_fee_local,
-    entrance_fee_foreign,
-    average_visit_duration,
-    best_time_to_visit || null,
-    amenities ? JSON.stringify(amenities) : null,
-    true,
-    is_featured,
-  ]);
+  try {
+    await pool.execute(sql, [
+      destinationId,
+      String(name).trim(),
+      description || null,
+      category_id,
+      Number(latitude),
+      Number(longitude),
+      address || null,
+      images ? JSON.stringify(images) : null,
+      operating_hours ? JSON.stringify(operating_hours) : null,
+      Number(entrance_fee_local) || 0,
+      Number(entrance_fee_foreign) || 0,
+      Number(average_visit_duration) || 120,
+      best_time_to_visit || null,
+      amenities ? JSON.stringify(amenities) : null,
+      true,
+      is_featured,
+    ]);
+  } catch (dbError: any) {
+    if (dbError.code === 'ER_NO_REFERENCED_ROW_2') {
+      throw new AppError('Invalid category — the selected category does not exist', 400);
+    }
+    throw dbError;
+  }
 
   // Fetch created destination
   const [destinations]: any = await pool.execute(

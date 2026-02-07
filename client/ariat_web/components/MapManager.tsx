@@ -523,6 +523,9 @@ export default function MapManager({
   };
 
   const cancelRoad = () => {
+    if (roadPoints.length > 0) {
+      if (!confirm('Are you sure? All drawn road points will be discarded.')) return;
+    }
     setRoadPoints([]);
     setSnappedIndices(new Set());
     setMode('view');
@@ -536,6 +539,42 @@ export default function MapManager({
     }
     setRoadName(getDefaultRoadName());
     setIsRoadModalOpen(true);
+  };
+
+  // Modal cancel handlers — discard unsaved work with confirmation
+  const handleCancelPoint = () => {
+    if (newPointName.trim() || newPointAddress.trim()) {
+      if (!confirm('Discard this point? The placed marker will be removed.')) return;
+    }
+    setIsModalOpen(false);
+    setNewPointName('');
+    setNewPointAddress('');
+    setPendingPoint(null);
+    toast.info('Point discarded');
+  };
+
+  const handleCancelRoad = () => {
+    if (!confirm('Discard this road? All drawn points will be lost.')) return;
+    setIsRoadModalOpen(false);
+    setRoadName('');
+    setRoadPoints([]);
+    setSnappedIndices(new Set());
+    toast.info('Road discarded');
+  };
+
+  const handleCancelDest = () => {
+    const hasData = destForm.name.trim() || destForm.description.trim() || destForm.address.trim();
+    if (hasData) {
+      if (!confirm('Discard this destination? All entered data will be lost.')) return;
+    }
+    setIsDestModalOpen(false);
+    setPendingPoint(null);
+    setDestForm({
+      name: '', description: '', category_id: '', address: '',
+      entrance_fee_local: '0', entrance_fee_foreign: '0',
+      best_time_to_visit: '', amenities: '',
+    });
+    toast.info('Destination discarded');
   };
 
   const switchMode = (newMode: MapMode) => {
@@ -983,7 +1022,7 @@ export default function MapManager({
       </MapContainer>
 
       {/* Add Point Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} classNames={modalClassNames}>
+      <Modal isOpen={isModalOpen} onClose={handleCancelPoint} classNames={modalClassNames} isDismissable={false}>
         <ModalContent>
           <ModalHeader>Add New {pointType.replace('_', ' ').toUpperCase()}</ModalHeader>
           <ModalBody>
@@ -1010,8 +1049,8 @@ export default function MapManager({
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button color="danger" variant="flat" onClick={() => setIsModalOpen(false)}>
-              Cancel
+            <Button color="danger" variant="flat" onClick={handleCancelPoint}>
+              Discard
             </Button>
             <Button color="primary" onClick={handleSavePoint}>
               Save Point
@@ -1021,7 +1060,7 @@ export default function MapManager({
       </Modal>
 
       {/* Add Road Modal */}
-      <Modal isOpen={isRoadModalOpen} onClose={() => setIsRoadModalOpen(false)} classNames={modalClassNames}>
+      <Modal isOpen={isRoadModalOpen} onClose={handleCancelRoad} classNames={modalClassNames} isDismissable={false}>
         <ModalContent>
           <ModalHeader>Save Road</ModalHeader>
           <ModalBody>
@@ -1038,11 +1077,12 @@ export default function MapManager({
                 <p>Total Points: <span className="font-medium">{roadPoints.length}</span></p>
                 <p>Direction: <span className="font-medium">{isBidirectional ? '↔ Two-way' : '→ One-way'}</span></p>
               </div>
+              <p className="text-xs text-amber-400">Closing this modal will discard the drawn road.</p>
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button color="danger" variant="flat" onClick={() => setIsRoadModalOpen(false)}>
-              Cancel
+            <Button color="danger" variant="flat" onClick={handleCancelRoad}>
+              Discard Road
             </Button>
             <Button color="success" onClick={handleSaveRoad}>
               Save Road
@@ -1052,7 +1092,7 @@ export default function MapManager({
       </Modal>
 
       {/* Add Destination Modal */}
-      <Modal isOpen={isDestModalOpen} onClose={() => setIsDestModalOpen(false)} size="2xl" classNames={modalClassNames}>
+      <Modal isOpen={isDestModalOpen} onClose={handleCancelDest} size="2xl" classNames={modalClassNames} isDismissable={false}>
         <ModalContent>
           <ModalHeader>Create New Destination</ModalHeader>
           <ModalBody>
@@ -1133,8 +1173,8 @@ export default function MapManager({
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button color="danger" variant="flat" onClick={() => setIsDestModalOpen(false)}>
-              Cancel
+            <Button color="danger" variant="flat" onClick={handleCancelDest}>
+              Discard
             </Button>
             <Button color="primary" onClick={handleSaveDestination}>
               Create Destination
