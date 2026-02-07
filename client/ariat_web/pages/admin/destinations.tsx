@@ -8,6 +8,7 @@ import { Select, SelectItem } from '@heroui/select';
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@heroui/modal';
 import { Chip } from '@heroui/chip';
 import { toast } from '@/lib/toast';
+import { modalClassNames } from '@/lib/modal-styles';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/lib/constants';
 
@@ -464,7 +465,7 @@ export default function DestinationsPage() {
       </div>
 
       {/* Add/Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} size="3xl" scrollBehavior="inside">
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} size="3xl" scrollBehavior="inside" classNames={modalClassNames}>
         <ModalContent>
           <ModalHeader>{editingDestination ? 'Edit Destination' : 'Add Destination'}</ModalHeader>
           <ModalBody>

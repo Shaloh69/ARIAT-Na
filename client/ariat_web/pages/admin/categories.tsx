@@ -8,6 +8,7 @@ import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@herou
 import { Chip } from '@heroui/chip';
 import { Switch } from '@heroui/switch';
 import { toast } from '@/lib/toast';
+import { modalClassNames } from '@/lib/modal-styles';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/lib/constants';
 
@@ -262,7 +263,7 @@ export default function CategoriesPage() {
       </div>
 
       {/* Add/Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} size="2xl">
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} size="2xl" classNames={modalClassNames}>
         <ModalContent>
           <ModalHeader>{editingCategory ? 'Edit Category' : 'Add Category'}</ModalHeader>
           <ModalBody>

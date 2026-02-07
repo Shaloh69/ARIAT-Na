@@ -9,6 +9,7 @@ import { Input, Textarea } from '@heroui/input';
 import { Checkbox } from '@heroui/checkbox';
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@heroui/modal';
 import { toast } from '@/lib/toast';
+import { modalClassNames } from '@/lib/modal-styles';
 import type { GeoJSONFeatureCollection } from '@/types/api';
 
 // Fix Leaflet default icon issue with Next.js webpack
@@ -329,9 +330,34 @@ export default function MapManager({
     return null;
   };
 
+  const getDefaultPointName = () => {
+    const typeLabels: Record<string, string> = {
+      tourist_spot: 'Tourist Spot',
+      bus_terminal: 'Bus Terminal',
+      bus_stop: 'Bus Stop',
+      pier: 'Pier',
+      intersection: 'Intersection',
+    };
+    const label = typeLabels[pointType] || 'Point';
+    const count = markers.filter((m) => m.type === pointType).length;
+    return `${label} ${count + 1}`;
+  };
+
+  const getDefaultRoadName = () => {
+    const count = savedRoads.length;
+    const typeLabels: Record<string, string> = {
+      highway: 'Highway',
+      main_road: 'Main Road',
+      local_road: 'Local Road',
+    };
+    const label = typeLabels[roadType] || 'Road';
+    return `${label} ${count + 1}`;
+  };
+
   const handleMapClick = async (latlng: L.LatLng) => {
     if (mode === 'add_point') {
       setPendingPoint({ lat: latlng.lat, lng: latlng.lng });
+      setNewPointName(getDefaultPointName());
       setIsModalOpen(true);
     } else if (mode === 'add_road') {
       const snapped = findNearestMarker(latlng.lat, latlng.lng);
@@ -508,6 +534,7 @@ export default function MapManager({
       toast.error('A road needs at least 2 points');
       return;
     }
+    setRoadName(getDefaultRoadName());
     setIsRoadModalOpen(true);
   };
 
@@ -956,7 +983,7 @@ export default function MapManager({
       </MapContainer>
 
       {/* Add Point Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} classNames={modalClassNames}>
         <ModalContent>
           <ModalHeader>Add New {pointType.replace('_', ' ').toUpperCase()}</ModalHeader>
           <ModalBody>
@@ -994,7 +1021,7 @@ export default function MapManager({
       </Modal>
 
       {/* Add Road Modal */}
-      <Modal isOpen={isRoadModalOpen} onClose={() => setIsRoadModalOpen(false)}>
+      <Modal isOpen={isRoadModalOpen} onClose={() => setIsRoadModalOpen(false)} classNames={modalClassNames}>
         <ModalContent>
           <ModalHeader>Save Road</ModalHeader>
           <ModalBody>
@@ -1025,7 +1052,7 @@ export default function MapManager({
       </Modal>
 
       {/* Add Destination Modal */}
-      <Modal isOpen={isDestModalOpen} onClose={() => setIsDestModalOpen(false)} size="2xl">
+      <Modal isOpen={isDestModalOpen} onClose={() => setIsDestModalOpen(false)} size="2xl" classNames={modalClassNames}>
         <ModalContent>
           <ModalHeader>Create New Destination</ModalHeader>
           <ModalBody>

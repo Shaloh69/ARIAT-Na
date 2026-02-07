@@ -316,60 +316,17 @@ body {
   background: rgba(220, 38, 38, 0.2) !important;
 }
 
-/* ===== HeroUI Modal — solid frosted glass, NOT transparent ===== */
+/* ===== HeroUI Modal — solid frosted glass via classNames prop ===== */
+/* Note: Primary styling is via classNames={modalClassNames} on each Modal.
+   These CSS rules serve as fallback reinforcement. */
 
 /* Modal backdrop overlay */
-[data-slot="wrapper"][data-overlay="true"],
-[data-slot="wrapper"][class*="heroui-modal"],
 [data-slot="backdrop"] {
   backdrop-filter: blur(20px) !important;
   -webkit-backdrop-filter: blur(20px) !important;
-  background: rgba(0, 0, 0, 0.55) !important;
 }
 
-/* Modal dialog panel */
-[role="dialog"][data-slot="base"],
-[data-slot="base"][class*="heroui-modal"],
-section[role="dialog"] {
-  background: rgba(15, 23, 42, 0.92) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5) !important;
-  backdrop-filter: blur(40px) saturate(1.5) !important;
-  -webkit-backdrop-filter: blur(40px) saturate(1.5) !important;
-  border-radius: 20px !important;
-}
-
-/* Modal header */
-[role="dialog"] [data-slot="header"],
-[data-slot="header"][class*="heroui-modal"] {
-  background: transparent !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
-  color: #ffffff !important;
-}
-
-/* Modal header text */
-[role="dialog"] [data-slot="header"] h2,
-[role="dialog"] [data-slot="header"] h3,
-[role="dialog"] [data-slot="header"] span {
-  color: #ffffff !important;
-}
-
-/* Modal body */
-[role="dialog"] [data-slot="body"],
-[data-slot="body"][class*="heroui-modal"] {
-  background: transparent !important;
-  color: #e2e8f0 !important;
-}
-
-/* Modal body text and labels */
-[role="dialog"] [data-slot="body"] label,
-[role="dialog"] [data-slot="body"] p,
-[role="dialog"] [data-slot="body"] span,
-[role="dialog"] [data-slot="body"] h4 {
-  color: #e2e8f0 !important;
-}
-
-/* Modal inputs */
+/* Modal inputs — override the global transparent input styles */
 [role="dialog"] [data-slot="input-wrapper"],
 [role="dialog"] [data-slot="input"] {
   background: rgba(255, 255, 255, 0.08) !important;
@@ -388,7 +345,7 @@ section[role="dialog"] {
   color: rgba(148, 163, 184, 0.7) !important;
 }
 
-/* Modal select trigger */
+/* Modal select trigger — override global transparent styles */
 [role="dialog"] [data-slot="trigger"] {
   background: rgba(255, 255, 255, 0.08) !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
@@ -401,11 +358,12 @@ section[role="dialog"] {
   color: #e2e8f0 !important;
 }
 
-/* Modal footer */
-[role="dialog"] [data-slot="footer"],
-[data-slot="footer"][class*="heroui-modal"] {
-  background: transparent !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+/* Modal body text and labels */
+[role="dialog"] [data-slot="body"] label,
+[role="dialog"] [data-slot="body"] p,
+[role="dialog"] [data-slot="body"] span,
+[role="dialog"] [data-slot="body"] h4 {
+  color: #e2e8f0 !important;
 }
 
 /* Modal close button */

@@ -9,6 +9,7 @@ import { Checkbox } from '@heroui/checkbox';
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@heroui/modal';
 import { Chip } from '@heroui/chip';
 import { toast } from '@/lib/toast';
+import { modalClassNames } from '@/lib/modal-styles';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/lib/constants';
 
@@ -282,7 +283,7 @@ export default function RoadsPage() {
         )}
       </div>
       {/* Edit Road Modal */}
-      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} size="lg">
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} size="lg" classNames={modalClassNames}>
         <ModalContent>
           <ModalHeader>Edit Road</ModalHeader>
           <ModalBody>
