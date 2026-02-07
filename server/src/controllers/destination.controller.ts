@@ -105,7 +105,7 @@ export const getDestinations = async (
     LIMIT ? OFFSET ?
   `;
 
-  const [destinations]: any = await pool.execute(sql, [...params, Number(limit), offset]);
+  const [destinations]: any = await pool.execute(sql, [...params, String(Number(limit)), String(offset)]);
 
   const formattedDestinations = destinations.map(formatDestination);
 
