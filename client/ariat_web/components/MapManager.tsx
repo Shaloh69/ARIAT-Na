@@ -66,8 +66,30 @@ export interface CategoryOption {
   slug: string;
 }
 
+// Road GeoJSON feature from /roads/geojson endpoint
+interface RoadGeoJSONFeature {
+  type: 'Feature';
+  properties: {
+    id: string;
+    name: string;
+    road_type: string;
+    distance: number;
+    estimated_time: number;
+  };
+  geometry: {
+    type: 'LineString';
+    coordinates: [number, number][]; // [lng, lat]
+  };
+}
+
+interface RoadsGeoJSON {
+  type: 'FeatureCollection';
+  features: RoadGeoJSONFeature[];
+}
+
 interface MapManagerProps {
   geojsonData?: GeoJSONFeatureCollection;
+  roadsGeojsonData?: RoadsGeoJSON;
   categories?: CategoryOption[];
   onSavePoint: (point: NewPoint) => Promise<void>;
   onSaveRoad: (road: NewRoad) => Promise<void>;
@@ -226,6 +248,7 @@ const SNAP_THRESHOLD = 0.0005;
 
 export default function MapManager({
   geojsonData,
+  roadsGeojsonData,
   categories,
   onSavePoint,
   onSaveRoad,
@@ -508,6 +531,27 @@ export default function MapManager({
     return colors[type] || 'bg-gray-500';
   };
 
+  const getRoadColor = (roadType: string) => {
+    const colors: Record<string, string> = {
+      highway: '#dc2626',     // red
+      main_road: '#2563eb',   // blue
+      local_road: '#16a34a',  // green
+    };
+    return colors[roadType] || '#6b7280';
+  };
+
+  // Parse saved roads from GeoJSON — coordinates are [lng, lat], convert to [lat, lng]
+  const savedRoads = (roadsGeojsonData?.features || []).map((feature) => ({
+    id: feature.properties.id,
+    name: feature.properties.name,
+    roadType: feature.properties.road_type,
+    distance: feature.properties.distance,
+    estimatedTime: feature.properties.estimated_time,
+    positions: feature.geometry.coordinates.map(
+      (coord) => [Number(coord[1]), Number(coord[0])] as [number, number]
+    ),
+  }));
+
   // Route positions for polyline
   const routePositions: [number, number][] = routeResult
     ? routeResult.path.map((p) => [p.latitude, p.longitude] as [number, number])
@@ -711,6 +755,22 @@ export default function MapManager({
                     <span>{item.label}</span>
                   </div>
                 ))}
+                {savedRoads.length > 0 && (
+                  <>
+                    <div style={{ borderTop: '1px solid rgba(0,0,0,0.08)', margin: '6px 0' }} />
+                    <p style={{ fontSize: '0.7rem', color: '#6b7280', marginBottom: '2px' }}>Roads ({savedRoads.length})</p>
+                    {[
+                      { type: 'highway', label: 'Highway', color: '#dc2626' },
+                      { type: 'main_road', label: 'Main Road', color: '#2563eb' },
+                      { type: 'local_road', label: 'Local Road', color: '#16a34a' },
+                    ].map((item) => (
+                      <div key={item.type} className="flex items-center gap-2">
+                        <div style={{ width: '16px', height: '3px', background: item.color, borderRadius: '2px' }} />
+                        <span>{item.label}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -786,6 +846,31 @@ export default function MapManager({
               </div>
             </Popup>
           </Marker>
+        ))}
+
+        {/* Saved roads from server */}
+        {savedRoads.map((road) => (
+          <Polyline
+            key={`saved-road-${road.id}`}
+            positions={road.positions}
+            pathOptions={{
+              color: getRoadColor(road.roadType),
+              weight: 3,
+              opacity: 0.7,
+            }}
+          >
+            <Popup>
+              <div style={{ minWidth: '140px' }}>
+                <p style={{ fontWeight: 600, fontSize: '13px', margin: '0 0 4px' }}>{road.name}</p>
+                <p style={{ fontSize: '11px', color: '#6b7280', margin: '0 0 2px' }}>
+                  Type: {road.roadType.replace('_', ' ')}
+                </p>
+                <p style={{ fontSize: '11px', color: '#6b7280', margin: 0 }}>
+                  {road.distance} km &middot; ~{road.estimatedTime} min
+                </p>
+              </div>
+            </Popup>
+          </Polyline>
         ))}
 
         {/* Road in progress */}

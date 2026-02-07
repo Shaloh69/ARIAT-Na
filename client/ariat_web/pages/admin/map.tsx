@@ -26,14 +26,22 @@ const MapManager = dynamic(() => import('@/components/MapManager'), {
 export default function MapPage() {
   const [categories, setCategories] = useState<CategoryOption[]>([]);
 
-  // Fetch GeoJSON data
+  // Fetch intersection GeoJSON data
   const { data: geojsonData, isLoading, refetch } = useQuery<GeoJSONFeatureCollection>({
     queryKey: ['geojson'],
     queryFn: async () => {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1'}${API_ENDPOINTS.INTERSECTIONS_GEOJSON}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch GeoJSON');
-      }
+      if (!response.ok) throw new Error('Failed to fetch GeoJSON');
+      return response.json();
+    },
+  });
+
+  // Fetch road GeoJSON data
+  const { data: roadsGeojsonData, refetch: refetchRoads } = useQuery({
+    queryKey: ['roads-geojson'],
+    queryFn: async () => {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1'}${API_ENDPOINTS.ROADS_GEOJSON}`);
+      if (!response.ok) throw new Error('Failed to fetch roads GeoJSON');
       return response.json();
     },
   });
@@ -75,53 +83,64 @@ export default function MapPage() {
       // Find start and end intersections
       const allIntersections = await apiClient.get<any[]>(API_ENDPOINTS.INTERSECTIONS);
 
-      if (allIntersections.success && allIntersections.data && Array.isArray(allIntersections.data)) {
-        const intersections: any[] = allIntersections.data;
+      if (!allIntersections.success || !allIntersections.data || !Array.isArray(allIntersections.data)) {
+        toast.error('Could not load intersections. Please try again.');
+        return;
+      }
 
-        const startPoint = road.path[0];
-        const endPoint = road.path[road.path.length - 1];
+      const intersections: any[] = allIntersections.data;
 
-        const findNearest = (point: [number, number], ints: any[]) => {
-          let minDist = Infinity;
-          let nearest = null;
+      if (intersections.length === 0) {
+        toast.error('No intersections found. Please add intersection points first.');
+        return;
+      }
 
-          for (const int of ints) {
-            const dist = Math.sqrt(
-              Math.pow(int.latitude - point[0], 2) + Math.pow(int.longitude - point[1], 2)
-            );
-            if (dist < minDist) {
-              minDist = dist;
-              nearest = int;
-            }
+      const startPoint = road.path[0];
+      const endPoint = road.path[road.path.length - 1];
+
+      const findNearest = (point: [number, number], ints: any[]) => {
+        let minDist = Infinity;
+        let nearest = null;
+
+        for (const int of ints) {
+          const lat = Number(int.latitude);
+          const lng = Number(int.longitude);
+          const dist = Math.sqrt(
+            Math.pow(lat - point[0], 2) + Math.pow(lng - point[1], 2)
+          );
+          if (dist < minDist) {
+            minDist = dist;
+            nearest = int;
           }
-          return nearest;
-        };
-
-        const startIntersection = findNearest(startPoint, intersections);
-        const endIntersection = findNearest(endPoint, intersections);
-
-        if (!startIntersection || !endIntersection) {
-          toast.error('Could not find nearby intersections. Please add intersection points first.');
-          return;
         }
+        return nearest;
+      };
 
-        const roadData = {
-          name: road.name,
-          description: road.description || undefined,
-          start_intersection_id: startIntersection.id,
-          end_intersection_id: endIntersection.id,
-          road_type: road.road_type,
-          path: road.path,
-          is_bidirectional: road.is_bidirectional,
-        };
+      const startIntersection = findNearest(startPoint, intersections);
+      const endIntersection = findNearest(endPoint, intersections);
 
-        const response = await apiClient.post(API_ENDPOINTS.ROADS, roadData);
+      if (!startIntersection || !endIntersection) {
+        toast.error('Could not find nearby intersections. Please add intersection points first.');
+        return;
+      }
 
-        if (response.success) {
-          toast.success('Road saved successfully!');
-        } else {
-          throw new Error(response.error || 'Failed to save road');
-        }
+      const roadData = {
+        name: road.name,
+        description: road.description || undefined,
+        start_intersection_id: startIntersection.id,
+        end_intersection_id: endIntersection.id,
+        road_type: road.road_type,
+        path: road.path,
+        is_bidirectional: road.is_bidirectional,
+      };
+
+      const response = await apiClient.post(API_ENDPOINTS.ROADS, roadData);
+
+      if (response.success) {
+        await refetchRoads();
+        toast.success('Road saved successfully!');
+      } else {
+        throw new Error(response.error || 'Failed to save road');
       }
     } catch (error: any) {
       const msg = error?.response?.data?.message || error.message || 'Failed to save road';
@@ -229,6 +248,7 @@ export default function MapPage() {
           <CardBody className="p-0 overflow-hidden">
             <MapManager
               geojsonData={geojsonData}
+              roadsGeojsonData={roadsGeojsonData}
               categories={categories}
               onSavePoint={handleSavePoint}
               onSaveRoad={handleSaveRoad}
