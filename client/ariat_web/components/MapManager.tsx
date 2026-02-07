@@ -362,7 +362,7 @@ export default function MapManager({
             const result = await onCalculateRoute(routeStart[0], routeStart[1], end[0], end[1], routeOptimizeFor);
             setRouteResult(result);
             if (result) {
-              toast.success(`Route found: ${result.totalDistance.toFixed(2)} km, ~${result.estimatedTime} min`);
+              toast.success(`Route found: ${Number(result.totalDistance).toFixed(2)} km, ~${result.estimatedTime} min`);
             } else {
               toast.warning('No route found between these points');
             }
@@ -695,7 +695,7 @@ export default function MapManager({
                       <div className="grid grid-cols-2 gap-2 p-2 rounded" style={{ background: 'rgba(34, 197, 94, 0.1)' }}>
                         <div>
                           <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>Distance</p>
-                          <p style={{ fontWeight: 700, color: '#111827' }}>{routeResult.totalDistance.toFixed(2)} km</p>
+                          <p style={{ fontWeight: 700, color: '#111827' }}>{Number(routeResult.totalDistance).toFixed(2)} km</p>
                         </div>
                         <div>
                           <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>Time</p>
@@ -712,7 +712,7 @@ export default function MapManager({
                               <div key={idx} className="p-1.5 rounded" style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.04)', color: '#374151' }}>
                                 <span style={{ fontWeight: 500, color: '#2563eb' }}>{idx + 1}.</span>{' '}
                                 {step.instruction}
-                                <span style={{ color: '#6b7280' }}> ({step.distance.toFixed(2)}km)</span>
+                                <span style={{ color: '#6b7280' }}> ({Number(step.distance).toFixed(2)}km)</span>
                               </div>
                             ))}
                           </div>

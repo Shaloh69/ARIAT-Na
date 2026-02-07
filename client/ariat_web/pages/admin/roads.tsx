@@ -251,7 +251,7 @@ export default function RoadsPage() {
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Distance</p>
-                        <p className="text-sm font-medium">{road.distance.toFixed(2)} km</p>
+                        <p className="text-sm font-medium">{Number(road.distance).toFixed(2)} km</p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Estimated Time</p>

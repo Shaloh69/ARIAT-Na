@@ -219,7 +219,7 @@ export default function RouteTestPage() {
                   <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Total Distance</p>
-                      <p className="text-2xl font-bold">{result.totalDistance.toFixed(2)} km</p>
+                      <p className="text-2xl font-bold">{Number(result.totalDistance).toFixed(2)} km</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Estimated Time</p>
@@ -236,7 +236,7 @@ export default function RouteTestPage() {
                       {result.virtualConnections.map((vc, idx) => (
                         <div key={idx} className="text-xs text-blue-800 dark:text-blue-300">
                           {vc.type === 'start' ? '🚶 Walk to' : '🚶 Walk from'} {vc.to.name} (
-                          {vc.distance.toFixed(2)} km)
+                          {Number(vc.distance).toFixed(2)} km)
                         </div>
                       ))}
                     </div>
@@ -261,7 +261,7 @@ export default function RouteTestPage() {
                             </p>
                             <div className="flex gap-4 mt-2">
                               <Chip size="sm" variant="flat">
-                                {step.distance.toFixed(2)} km
+                                {Number(step.distance).toFixed(2)} km
                               </Chip>
                               <Chip size="sm" variant="flat">
                                 {step.time} min
