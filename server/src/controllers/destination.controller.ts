@@ -4,6 +4,36 @@ import { AuthRequest, AppError, Destination } from '../types';
 import { pool } from '../config/database';
 
 /**
+ * Safely parse a MySQL JSON column value.
+ * MySQL JSON columns may return already-parsed objects via mysql2 driver,
+ * or strings that still need parsing. This handles both cases.
+ */
+function safeJsonParse(value: any, fallback: any = null): any {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'object') return value; // Already parsed by mysql2
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
+/**
+ * Format a destination row from DB, safely handling JSON columns.
+ */
+function formatDestination(dest: any) {
+  return {
+    ...dest,
+    images: safeJsonParse(dest.images, []),
+    operating_hours: safeJsonParse(dest.operating_hours, null),
+    amenities: safeJsonParse(dest.amenities, []),
+  };
+}
+
+/**
  * Get all destinations (with filters and pagination)
  * GET /api/v1/destinations
  */
@@ -77,13 +107,7 @@ export const getDestinations = async (
 
   const [destinations]: any = await pool.execute(sql, [...params, Number(limit), offset]);
 
-  // Parse JSON fields
-  const formattedDestinations = destinations.map((dest: any) => ({
-    ...dest,
-    images: dest.images ? JSON.parse(dest.images) : [],
-    operating_hours: dest.operating_hours ? JSON.parse(dest.operating_hours) : null,
-    amenities: dest.amenities ? JSON.parse(dest.amenities) : [],
-  }));
+  const formattedDestinations = destinations.map(formatDestination);
 
   res.json({
     success: true,
@@ -125,17 +149,9 @@ export const getDestinationById = async (
 
   const destination = destinations[0];
 
-  // Parse JSON fields
-  const formattedDestination = {
-    ...destination,
-    images: destination.images ? JSON.parse(destination.images) : [],
-    operating_hours: destination.operating_hours ? JSON.parse(destination.operating_hours) : null,
-    amenities: destination.amenities ? JSON.parse(destination.amenities) : [],
-  };
-
   res.json({
     success: true,
-    data: formattedDestination,
+    data: formatDestination(destination),
   });
 };
 
@@ -154,15 +170,35 @@ export const createDestination = async (
     latitude,
     longitude,
     address,
-    images,
     operating_hours,
     entrance_fee_local = 0,
     entrance_fee_foreign = 0,
     average_visit_duration = 120,
     best_time_to_visit,
-    amenities,
     is_featured = false,
   } = req.body;
+
+  // Validate required fields
+  if (!name || !String(name).trim()) {
+    throw new AppError('Destination name is required', 400);
+  }
+  if (!category_id) {
+    throw new AppError('Category ID is required', 400);
+  }
+  if (latitude === undefined || longitude === undefined) {
+    throw new AppError('Latitude and longitude are required', 400);
+  }
+
+  // Handle images/amenities — could arrive as string or array
+  let images = req.body.images;
+  if (typeof images === 'string') {
+    try { images = JSON.parse(images); } catch { images = null; }
+  }
+
+  let amenities = req.body.amenities;
+  if (typeof amenities === 'string') {
+    try { amenities = JSON.parse(amenities); } catch { amenities = null; }
+  }
 
   const destinationId = uuidv4();
 
@@ -178,7 +214,7 @@ export const createDestination = async (
 
   await pool.execute(sql, [
     destinationId,
-    name,
+    String(name).trim(),
     description || null,
     category_id,
     latitude,
@@ -201,17 +237,10 @@ export const createDestination = async (
     [destinationId]
   );
 
-  const destination = destinations[0];
-
   res.status(201).json({
     success: true,
     message: 'Destination created successfully',
-    data: {
-      ...destination,
-      images: destination.images ? JSON.parse(destination.images) : [],
-      operating_hours: destination.operating_hours ? JSON.parse(destination.operating_hours) : null,
-      amenities: destination.amenities ? JSON.parse(destination.amenities) : [],
-    },
+    data: formatDestination(destinations[0]),
   });
 };
 
@@ -262,8 +291,13 @@ export const updateDestination = async (
       updateFields.push(`${key} = ?`);
       updateValues.push(updates[key]);
     } else if (jsonFields.includes(key)) {
+      // Handle values that may already be strings or arrays
+      let val = updates[key];
+      if (typeof val === 'string') {
+        try { val = JSON.parse(val); } catch { /* keep as-is */ }
+      }
       updateFields.push(`${key} = ?`);
-      updateValues.push(JSON.stringify(updates[key]));
+      updateValues.push(val ? JSON.stringify(val) : null);
     }
   });
 
@@ -290,12 +324,7 @@ export const updateDestination = async (
   res.json({
     success: true,
     message: 'Destination updated successfully',
-    data: {
-      ...destination,
-      images: destination.images ? JSON.parse(destination.images) : [],
-      operating_hours: destination.operating_hours ? JSON.parse(destination.operating_hours) : null,
-      amenities: destination.amenities ? JSON.parse(destination.amenities) : [],
-    },
+    data: formatDestination(destination),
   });
 };
 
@@ -346,16 +375,9 @@ export const getFeaturedDestinations = async (
 
   const [destinations]: any = await pool.execute(sql, [true, true]);
 
-  const formattedDestinations = destinations.map((dest: any) => ({
-    ...dest,
-    images: dest.images ? JSON.parse(dest.images) : [],
-    operating_hours: dest.operating_hours ? JSON.parse(dest.operating_hours) : null,
-    amenities: dest.amenities ? JSON.parse(dest.amenities) : [],
-  }));
-
   res.json({
     success: true,
-    data: formattedDestinations,
+    data: destinations.map(formatDestination),
   });
 };
 
@@ -383,15 +405,8 @@ export const getPopularDestinations = async (
 
   const [destinations]: any = await pool.execute(sql, [true, Number(limit)]);
 
-  const formattedDestinations = destinations.map((dest: any) => ({
-    ...dest,
-    images: dest.images ? JSON.parse(dest.images) : [],
-    operating_hours: dest.operating_hours ? JSON.parse(dest.operating_hours) : null,
-    amenities: dest.amenities ? JSON.parse(dest.amenities) : [],
-  }));
-
   res.json({
     success: true,
-    data: formattedDestinations,
+    data: destinations.map(formatDestination),
   });
 };

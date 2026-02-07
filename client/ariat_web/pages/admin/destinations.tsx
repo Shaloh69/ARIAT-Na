@@ -227,7 +227,7 @@ export default function DestinationsPage() {
     try {
       await apiClient.delete(API_ENDPOINTS.UPLOAD_DELETE, { data: { url } });
     } catch {
-      // Still remove from form even if server delete fails
+      toast.warning('Could not delete file from server, but removed from form');
     }
     setFormImages((prev) => prev.filter((u) => u !== url));
   };
@@ -236,7 +236,7 @@ export default function DestinationsPage() {
     try {
       await apiClient.delete(API_ENDPOINTS.UPLOAD_DELETE, { data: { url } });
     } catch {
-      // Still remove from form
+      toast.warning('Could not delete file from server, but removed from form');
     }
     setFormVideos((prev) => prev.filter((u) => u !== url));
   };

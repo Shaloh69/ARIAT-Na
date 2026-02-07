@@ -47,7 +47,7 @@ export default function MapPage() {
           setCategories(response.data);
         }
       } catch {
-        // Categories not critical - destination creation will show warning
+        toast.warning('Could not load categories — destination creation may be limited');
       }
     };
     fetchCategories();
@@ -64,8 +64,8 @@ export default function MapPage() {
         throw new Error(response.error || 'Failed to save point');
       }
     } catch (error: any) {
-      console.error('Error saving point:', error);
-      toast.error(error.message || 'Failed to save point');
+      const msg = error?.response?.data?.message || error.message || 'Failed to save point';
+      toast.error(msg);
       throw error;
     }
   };
@@ -124,8 +124,8 @@ export default function MapPage() {
         }
       }
     } catch (error: any) {
-      console.error('Error saving road:', error);
-      toast.error(error.message || 'Failed to save road');
+      const msg = error?.response?.data?.message || error.message || 'Failed to save road';
+      toast.error(msg);
       throw error;
     }
   };
@@ -134,8 +134,8 @@ export default function MapPage() {
     try {
       const response = await apiClient.post(API_ENDPOINTS.DESTINATIONS, {
         ...dest,
-        images: dest.images ? JSON.stringify(dest.images) : undefined,
-        amenities: dest.amenities ? JSON.stringify(dest.amenities) : undefined,
+        images: dest.images || undefined,
+        amenities: dest.amenities || undefined,
       });
 
       if (response.success) {
@@ -144,8 +144,8 @@ export default function MapPage() {
         throw new Error(response.error || 'Failed to create destination');
       }
     } catch (error: any) {
-      console.error('Error saving destination:', error);
-      toast.error(error.message || 'Failed to create destination');
+      const msg = error?.response?.data?.message || error.message || 'Failed to create destination';
+      toast.error(msg);
       throw error;
     }
   };
@@ -171,7 +171,8 @@ export default function MapPage() {
       }
       return null;
     } catch (error: any) {
-      console.error('Error calculating route:', error);
+      const msg = error?.response?.data?.message || error.message || 'Failed to calculate route';
+      toast.error(msg);
       throw error;
     }
   };
@@ -186,7 +187,8 @@ export default function MapPage() {
         throw new Error(response.error || 'Failed to delete point');
       }
     } catch (error: any) {
-      toast.error(error.message || 'Failed to delete point');
+      const msg = error?.response?.data?.message || error.message || 'Failed to delete point';
+      toast.error(msg);
       throw error;
     }
   };
@@ -201,7 +203,8 @@ export default function MapPage() {
         throw new Error(response.error || 'Failed to update point');
       }
     } catch (error: any) {
-      toast.error(error.message || 'Failed to update point');
+      const msg = error?.response?.data?.message || error.message || 'Failed to update point';
+      toast.error(msg);
       throw error;
     }
   };

@@ -5,6 +5,34 @@ import { AuthRequest, AppError } from '../types';
 import { pool } from '../config/database';
 
 /**
+ * Safely parse a MySQL JSON column value.
+ * MySQL JSON columns may return already-parsed objects via mysql2 driver,
+ * or strings that still need parsing. This handles both cases.
+ */
+function safeJsonParse(value: any, fallback: any = null): any {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'object') return value; // Already parsed by mysql2
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
+/**
+ * Ensure a value is a proper array for path data.
+ * Handles strings, already-parsed arrays, and edge cases.
+ */
+function ensurePathArray(value: any): [number, number][] {
+  const parsed = safeJsonParse(value, []);
+  if (Array.isArray(parsed)) return parsed;
+  return [];
+}
+
+/**
  * Get all roads
  * GET /api/v1/roads
  */
@@ -43,10 +71,9 @@ export const getRoads = async (
 
   const [roads]: any = await pool.execute(sql, params);
 
-  // Parse JSON path field
   const formattedRoads = roads.map((road: any) => ({
     ...road,
-    path: road.path ? JSON.parse(road.path) : [],
+    path: ensurePathArray(road.path),
   }));
 
   res.json({
@@ -92,7 +119,7 @@ export const getRoadById = async (
     success: true,
     data: {
       ...road,
-      path: road.path ? JSON.parse(road.path) : [],
+      path: ensurePathArray(road.path),
     },
   });
 };
@@ -111,13 +138,38 @@ export const createRoad = async (
     start_intersection_id,
     end_intersection_id,
     road_type = 'local_road',
-    path,
     is_bidirectional = true,
   } = req.body;
 
-  // Validate that path has at least 2 points
-  if (!path || path.length < 2) {
+  // Validate required fields
+  if (!name || !name.trim()) {
+    throw new AppError('Road name is required', 400);
+  }
+  if (!start_intersection_id) {
+    throw new AppError('Start intersection ID is required', 400);
+  }
+  if (!end_intersection_id) {
+    throw new AppError('End intersection ID is required', 400);
+  }
+
+  // Handle path - could arrive as string or array
+  let path = req.body.path;
+  if (typeof path === 'string') {
+    try {
+      path = JSON.parse(path);
+    } catch {
+      throw new AppError('Invalid path format — must be a JSON array of [lat, lng] pairs', 400);
+    }
+  }
+
+  if (!Array.isArray(path) || path.length < 2) {
     throw new AppError('Road path must have at least 2 points', 400);
+  }
+
+  // Validate road_type
+  const validRoadTypes = ['highway', 'main_road', 'local_road'];
+  if (!validRoadTypes.includes(road_type)) {
+    throw new AppError(`Invalid road type. Must be one of: ${validRoadTypes.join(', ')}`, 400);
   }
 
   // Calculate distance using turf.js
@@ -145,7 +197,7 @@ export const createRoad = async (
 
   await pool.execute(sql, [
     roadId,
-    name,
+    name.trim(),
     description || null,
     start_intersection_id,
     end_intersection_id,
@@ -164,7 +216,7 @@ export const createRoad = async (
     message: 'Road created successfully',
     data: {
       ...roads[0],
-      path: JSON.parse(roads[0].path),
+      path: ensurePathArray(roads[0].path),
     },
   });
 };
@@ -203,12 +255,19 @@ export const updateRoad = async (
     if (allowedFields.includes(key)) {
       updateFields.push(`${key} = ?`);
       updateValues.push(updates[key]);
-    } else if (key === 'path' && Array.isArray(updates.path)) {
+    } else if (key === 'path') {
+      // Handle path — could arrive as string or array
+      let pathData = updates.path;
+      if (typeof pathData === 'string') {
+        try { pathData = JSON.parse(pathData); } catch { return; }
+      }
+      if (!Array.isArray(pathData) || pathData.length < 2) return;
+
       updateFields.push('path = ?');
-      updateValues.push(JSON.stringify(updates.path));
+      updateValues.push(JSON.stringify(pathData));
 
       // Recalculate distance and time if path changes
-      const line = turf.lineString(updates.path.map((p: [number, number]) => [p[1], p[0]]));
+      const line = turf.lineString(pathData.map((p: [number, number]) => [p[1], p[0]]));
       const distance = turf.length(line, { units: 'kilometers' });
 
       const roadType = updates.road_type || 'local_road';
@@ -244,7 +303,7 @@ export const updateRoad = async (
     message: 'Road updated successfully',
     data: {
       ...roads[0],
-      path: JSON.parse(roads[0].path),
+      path: ensurePathArray(roads[0].path),
     },
   });
 };
@@ -293,7 +352,7 @@ export const getRoadsGeoJSON = async (
     },
     geometry: {
       type: 'LineString',
-      coordinates: JSON.parse(road.path).map((p: [number, number]) => [p[1], p[0]]), // [lng, lat]
+      coordinates: ensurePathArray(road.path).map((p: [number, number]) => [p[1], p[0]]), // [lng, lat]
     },
     id: index + 1,
   }));
