@@ -12,6 +12,7 @@ export const API_ENDPOINTS = {
   DESTINATIONS: '/destinations',
   DESTINATIONS_FEATURED: '/destinations/featured',
   DESTINATIONS_POPULAR: '/destinations/popular',
+  DESTINATIONS_GEOJSON: '/destinations/geojson',
 
   // Categories
   CATEGORIES: '/categories',

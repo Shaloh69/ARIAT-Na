@@ -389,6 +389,56 @@ export const getFeaturedDestinations = async (
 };
 
 /**
+ * Get destinations as GeoJSON (for map display)
+ * GET /api/v1/destinations/geojson
+ */
+export const getDestinationsGeoJSON = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  const sql = `
+    SELECT
+      d.id, d.name, d.latitude, d.longitude, d.address,
+      d.images, d.is_featured,
+      c.name as category_name, c.slug as category_slug
+    FROM destinations d
+    LEFT JOIN categories c ON d.category_id = c.id
+    WHERE d.is_active = ?
+    ORDER BY d.popularity_score DESC, d.rating DESC
+  `;
+
+  const [destinations]: any = await pool.execute(sql, [true]);
+
+  const features = destinations.map((dest: any, index: number) => {
+    const images = safeJsonParse(dest.images, []);
+    return {
+      type: 'Feature',
+      properties: {
+        id: dest.id,
+        name: dest.name,
+        address: dest.address,
+        image: Array.isArray(images) && images.length > 0 ? images[0] : null,
+        is_featured: dest.is_featured,
+        category_name: dest.category_name,
+        category_slug: dest.category_slug,
+      },
+      geometry: {
+        type: 'Point',
+        coordinates: [Number(dest.longitude), Number(dest.latitude)],
+      },
+      id: index + 1,
+    };
+  });
+
+  const geojson = {
+    type: 'FeatureCollection',
+    features,
+  };
+
+  res.json(geojson);
+};
+
+/**
  * Get popular destinations
  * GET /api/v1/destinations/popular
  */

@@ -6,7 +6,7 @@ import AdminLayout from '@/layouts/admin';
 import { apiClient } from '@/lib/api';
 import { API_ENDPOINTS } from '@/lib/constants';
 import type { GeoJSONFeatureCollection } from '@/types/api';
-import type { RouteResult, NewDestination, CategoryOption } from '@/components/MapManager';
+import type { RouteResult, NewDestination, CategoryOption, DestinationsGeoJSON } from '@/components/MapManager';
 import { toast } from '@/lib/toast';
 import Head from 'next/head';
 
@@ -42,6 +42,16 @@ export default function MapPage() {
     queryFn: async () => {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1'}${API_ENDPOINTS.ROADS_GEOJSON}`);
       if (!response.ok) throw new Error('Failed to fetch roads GeoJSON');
+      return response.json();
+    },
+  });
+
+  // Fetch destinations GeoJSON data for map display
+  const { data: destinationsGeojsonData, refetch: refetchDestinations } = useQuery<DestinationsGeoJSON>({
+    queryKey: ['destinations-geojson'],
+    queryFn: async () => {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1'}${API_ENDPOINTS.DESTINATIONS_GEOJSON}`);
+      if (!response.ok) throw new Error('Failed to fetch destinations GeoJSON');
       return response.json();
     },
   });
@@ -158,6 +168,7 @@ export default function MapPage() {
       });
 
       if (response.success) {
+        await refetchDestinations();
         toast.success('Destination created successfully!');
       } else {
         throw new Error(response.error || 'Failed to create destination');
@@ -249,6 +260,7 @@ export default function MapPage() {
             <MapManager
               geojsonData={geojsonData}
               roadsGeojsonData={roadsGeojsonData}
+              destinationsGeojsonData={destinationsGeojsonData}
               categories={categories}
               onSavePoint={handleSavePoint}
               onSaveRoad={handleSaveRoad}

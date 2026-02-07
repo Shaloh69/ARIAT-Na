@@ -626,6 +626,23 @@ body {
   color: #e11d48 !important;
 }
 
+/* ===== Destination Marker Styles (Leaflet DivIcon) ===== */
+
+.destination-marker-zoomed,
+.destination-marker-pin {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.destination-marker-zoomed img {
+  transition: transform 0.15s ease;
+}
+
+.destination-marker-zoomed:hover img {
+  transform: scale(1.05);
+}
+
 /* ===== Custom Scrollbar ===== */
 
 ::-webkit-scrollbar {

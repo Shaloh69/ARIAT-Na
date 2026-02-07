@@ -7,6 +7,7 @@ import {
   deleteDestination,
   getFeaturedDestinations,
   getPopularDestinations,
+  getDestinationsGeoJSON,
 } from '../controllers/destination.controller';
 import {
   createDestinationValidator,
@@ -29,6 +30,12 @@ router.get(
   validate,
   optionalAuth,
   asyncHandler(getDestinations)
+);
+
+router.get(
+  '/geojson',
+  optionalAuth,
+  asyncHandler(getDestinationsGeoJSON)
 );
 
 router.get(

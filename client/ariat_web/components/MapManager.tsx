@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet-polylinedecorator';
@@ -88,9 +88,33 @@ interface RoadsGeoJSON {
   features: RoadGeoJSONFeature[];
 }
 
+// Destination GeoJSON feature from /destinations/geojson endpoint
+interface DestinationGeoJSONFeature {
+  type: 'Feature';
+  properties: {
+    id: string;
+    name: string;
+    address?: string;
+    image?: string | null;
+    is_featured: boolean;
+    category_name?: string;
+    category_slug?: string;
+  };
+  geometry: {
+    type: 'Point';
+    coordinates: [number, number]; // [lng, lat]
+  };
+}
+
+export interface DestinationsGeoJSON {
+  type: 'FeatureCollection';
+  features: DestinationGeoJSONFeature[];
+}
+
 interface MapManagerProps {
   geojsonData?: GeoJSONFeatureCollection;
   roadsGeojsonData?: RoadsGeoJSON;
+  destinationsGeojsonData?: DestinationsGeoJSON;
   categories?: CategoryOption[];
   onSavePoint: (point: NewPoint) => Promise<void>;
   onSaveRoad: (road: NewRoad) => Promise<void>;
@@ -244,12 +268,119 @@ function RoadPolyline({ positions, color, weight = 4, opacity = 0.7, isBidirecti
   return null;
 }
 
+// Zoom-aware destination marker: shows pin at low zoom, image+name at high zoom
+const ZOOM_THRESHOLD = 15;
+
+function ZoomAwareDestinationMarker({
+  position,
+  name,
+  image,
+  categoryName,
+  address,
+  isFeatured,
+}: {
+  position: [number, number];
+  name: string;
+  image?: string | null;
+  categoryName?: string;
+  address?: string;
+  isFeatured: boolean;
+}) {
+  const map = useMap();
+  const [zoom, setZoom] = useState(map.getZoom());
+
+  useEffect(() => {
+    const onZoom = () => setZoom(map.getZoom());
+    map.on('zoomend', onZoom);
+    return () => { map.off('zoomend', onZoom); };
+  }, [map]);
+
+  const isZoomedIn = zoom >= ZOOM_THRESHOLD;
+
+  // Custom DivIcon for zoomed-in view with image and name
+  const zoomedInIcon = useMemo(() => {
+    const imgHtml = image
+      ? `<img src="${image}" alt="${name}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:2px solid ${isFeatured ? '#f59e0b' : '#e11d48'};" />`
+      : `<div style="width:60px;height:60px;border-radius:8px;border:2px solid ${isFeatured ? '#f59e0b' : '#e11d48'};background:#1e293b;display:flex;align-items:center;justify-content:center;">
+           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+         </div>`;
+
+    return L.divIcon({
+      className: 'destination-marker-zoomed',
+      html: `
+        <div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%);pointer-events:auto;">
+          ${imgHtml}
+          <div style="margin-top:4px;padding:2px 8px;background:rgba(15,23,42,0.9);border-radius:6px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;">
+            <span style="color:#fff;font-size:11px;font-weight:600;">${name}</span>
+          </div>
+          <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid rgba(15,23,42,0.9);"></div>
+        </div>
+      `,
+      iconSize: [80, 100],
+      iconAnchor: [40, 100],
+    });
+  }, [image, name, isFeatured]);
+
+  // Custom destination pin icon for zoomed-out view
+  const pinIcon = useMemo(() => {
+    return L.divIcon({
+      className: 'destination-marker-pin',
+      html: `
+        <div style="display:flex;align-items:center;justify-content:center;transform:translate(-50%,-100%);">
+          <svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14 0C6.268 0 0 6.268 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.268 21.732 0 14 0z" fill="${isFeatured ? '#f59e0b' : '#e11d48'}"/>
+            <circle cx="14" cy="14" r="7" fill="white" fill-opacity="0.9"/>
+            <circle cx="14" cy="14" r="4" fill="${isFeatured ? '#f59e0b' : '#e11d48'}"/>
+          </svg>
+        </div>
+      `,
+      iconSize: [28, 36],
+      iconAnchor: [14, 36],
+    });
+  }, [isFeatured]);
+
+  return (
+    <Marker position={position} icon={isZoomedIn ? zoomedInIcon : pinIcon}>
+      <Popup>
+        <div style={{ minWidth: '180px' }}>
+          {image && (
+            <img
+              src={image}
+              alt={name}
+              style={{
+                width: '100%',
+                height: '100px',
+                objectFit: 'cover',
+                borderRadius: '6px',
+                marginBottom: '8px',
+              }}
+            />
+          )}
+          <p style={{ fontWeight: 600, fontSize: '13px', margin: '0 0 4px', color: '#111' }}>{name}</p>
+          {categoryName && (
+            <p style={{ fontSize: '11px', color: '#6b7280', margin: '0 0 2px' }}>{categoryName}</p>
+          )}
+          {address && (
+            <p style={{ fontSize: '11px', color: '#6b7280', margin: '0 0 2px' }}>{address}</p>
+          )}
+          {isFeatured && (
+            <span style={{ fontSize: '10px', background: '#fef3c7', color: '#92400e', padding: '1px 6px', borderRadius: '4px', fontWeight: 500 }}>
+              Featured
+            </span>
+          )}
+        </div>
+      </Popup>
+    </Marker>
+  );
+}
+
 // Snap threshold in degrees (~55 meters at Cebu's latitude)
 const SNAP_THRESHOLD = 0.0005;
 
 export default function MapManager({
   geojsonData,
   roadsGeojsonData,
+  destinationsGeojsonData,
   categories,
   onSavePoint,
   onSaveRoad,
@@ -297,6 +428,9 @@ export default function MapManager({
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeOptimizeFor, setRouteOptimizeFor] = useState<'distance' | 'time'>('distance');
 
+  // Track whether any modal is open to disable the control panel
+  const isAnyModalOpen = isModalOpen || isRoadModalOpen || isDestModalOpen;
+
   // Load existing points from GeoJSON
   useEffect(() => {
     if (geojsonData?.features) {
@@ -309,6 +443,20 @@ export default function MapManager({
       setMarkers(existingMarkers);
     }
   }, [geojsonData]);
+
+  // Parse destination features
+  const destinationMarkers = useMemo(() => {
+    if (!destinationsGeojsonData?.features) return [];
+    return destinationsGeojsonData.features.map((feature) => ({
+      id: feature.properties.id,
+      position: [Number(feature.geometry.coordinates[1]), Number(feature.geometry.coordinates[0])] as [number, number],
+      name: feature.properties.name,
+      image: feature.properties.image,
+      address: feature.properties.address,
+      isFeatured: feature.properties.is_featured,
+      categoryName: feature.properties.category_name,
+    }));
+  }, [destinationsGeojsonData]);
 
   const findNearestMarker = (lat: number, lng: number) => {
     let minDist = Infinity;
@@ -586,6 +734,17 @@ export default function MapManager({
     setMode(newMode);
   };
 
+  const getCircleMarkerColor = (type: string) => {
+    const colors: Record<string, string> = {
+      tourist_spot: '#ef4444',
+      bus_terminal: '#3b82f6',
+      bus_stop: '#22c55e',
+      pier: '#a855f7',
+      intersection: '#6b7280',
+    };
+    return colors[type] || '#6b7280';
+  };
+
   const getMarkerColor = (type: string) => {
     const colors: Record<string, string> = {
       tourist_spot: 'bg-red-500',
@@ -625,8 +784,15 @@ export default function MapManager({
 
   return (
     <div className="relative h-full w-full">
-      {/* Control Panel */}
-      <Card className="absolute top-4 left-4 z-[1000] w-80 map-control-panel" style={{ maxHeight: 'calc(100vh - 16rem)', overflowY: 'auto' }}>
+      {/* Control Panel — disabled when any modal is open */}
+      <Card
+        className={`absolute top-4 left-4 z-[1000] w-80 map-control-panel transition-opacity duration-200 ${isAnyModalOpen ? 'opacity-50' : ''}`}
+        style={{
+          maxHeight: 'calc(100vh - 16rem)',
+          overflowY: 'auto',
+          pointerEvents: isAnyModalOpen ? 'none' : 'auto',
+        }}
+      >
         <CardBody>
           <h3 style={{ fontWeight: 600, marginBottom: '1rem', color: '#111827' }}>Map Controls</h3>
 
@@ -809,22 +975,58 @@ export default function MapManager({
             <div className="pt-3" style={{ borderTop: '1px solid rgba(0,0,0,0.1)' }}>
               <p style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem', color: '#111827' }}>Legend</p>
               <div className="space-y-1" style={{ fontSize: '0.75rem', color: '#374151' }}>
+                {/* Points section - circles for intersection-type points */}
+                <p style={{ fontSize: '0.7rem', color: '#6b7280', marginBottom: '2px', fontWeight: 500 }}>Points</p>
                 {[
-                  { type: 'tourist_spot', label: 'Tourist Spot' },
                   { type: 'bus_terminal', label: 'Bus Terminal' },
                   { type: 'bus_stop', label: 'Bus Stop' },
                   { type: 'pier', label: 'Pier' },
                   { type: 'intersection', label: 'Intersection' },
                 ].map((item) => (
                   <div key={item.type} className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${getMarkerColor(item.type)}`} />
+                    <div
+                      className="flex-shrink-0"
+                      style={{
+                        width: '12px',
+                        height: '12px',
+                        borderRadius: '50%',
+                        backgroundColor: getCircleMarkerColor(item.type),
+                        border: '2px solid white',
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.15)',
+                      }}
+                    />
                     <span>{item.label}</span>
                   </div>
                 ))}
+
+                {/* Destinations section - pin marker icon */}
+                <div style={{ borderTop: '1px solid rgba(0,0,0,0.08)', margin: '6px 0' }} />
+                <p style={{ fontSize: '0.7rem', color: '#6b7280', marginBottom: '2px', fontWeight: 500 }}>Destinations</p>
+                <div className="flex items-center gap-2">
+                  <svg width="14" height="18" viewBox="0 0 28 36" fill="none" className="flex-shrink-0">
+                    <path d="M14 0C6.268 0 0 6.268 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.268 21.732 0 14 0z" fill="#e11d48"/>
+                    <circle cx="14" cy="14" r="7" fill="white" fillOpacity="0.9"/>
+                    <circle cx="14" cy="14" r="4" fill="#e11d48"/>
+                  </svg>
+                  <span>Destination</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <svg width="14" height="18" viewBox="0 0 28 36" fill="none" className="flex-shrink-0">
+                    <path d="M14 0C6.268 0 0 6.268 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.268 21.732 0 14 0z" fill="#f59e0b"/>
+                    <circle cx="14" cy="14" r="7" fill="white" fillOpacity="0.9"/>
+                    <circle cx="14" cy="14" r="4" fill="#f59e0b"/>
+                  </svg>
+                  <span>Featured Destination</span>
+                </div>
+                <p style={{ fontSize: '0.65rem', color: '#9ca3af', fontStyle: 'italic', marginTop: '2px' }}>
+                  Zoom in to see images
+                </p>
+
+                {/* Roads section */}
                 {savedRoads.length > 0 && (
                   <>
                     <div style={{ borderTop: '1px solid rgba(0,0,0,0.08)', margin: '6px 0' }} />
-                    <p style={{ fontSize: '0.7rem', color: '#6b7280', marginBottom: '2px' }}>Roads ({savedRoads.length})</p>
+                    <p style={{ fontSize: '0.7rem', color: '#6b7280', marginBottom: '2px', fontWeight: 500 }}>Roads ({savedRoads.length})</p>
                     {[
                       { type: 'highway', label: 'Highway', color: '#dc2626' },
                       { type: 'main_road', label: 'Main Road', color: '#2563eb' },
@@ -864,9 +1066,19 @@ export default function MapManager({
         <MapClickHandler onMapClick={handleMapClick} mode={mode} />
         <CenterMapButton />
 
-        {/* Existing markers */}
+        {/* Existing markers — render as CircleMarker for all point types */}
         {markers.map((marker, index) => (
-          <Marker key={marker.id || index} position={marker.position}>
+          <CircleMarker
+            key={marker.id || `marker-${index}`}
+            center={marker.position}
+            radius={marker.type === 'intersection' ? 6 : 8}
+            pathOptions={{
+              color: '#fff',
+              weight: 2,
+              fillColor: getCircleMarkerColor(marker.type),
+              fillOpacity: 0.9,
+            }}
+          >
             <Popup>
               <div style={{ minWidth: '160px' }}>
                 <p className="font-semibold text-sm">{marker.name}</p>
@@ -911,7 +1123,20 @@ export default function MapManager({
                 )}
               </div>
             </Popup>
-          </Marker>
+          </CircleMarker>
+        ))}
+
+        {/* Destination markers — zoom-aware with image/name display */}
+        {destinationMarkers.map((dest) => (
+          <ZoomAwareDestinationMarker
+            key={`dest-${dest.id}`}
+            position={dest.position}
+            name={dest.name}
+            image={dest.image}
+            categoryName={dest.categoryName}
+            address={dest.address}
+            isFeatured={dest.isFeatured}
+          />
         ))}
 
         {/* Saved roads from server */}
