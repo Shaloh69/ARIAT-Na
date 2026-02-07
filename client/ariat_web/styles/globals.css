@@ -361,17 +361,35 @@ body {
   background: var(--bg-3) !important;
   border: 1px solid var(--border) !important;
   border-radius: 12px !important;
-  backdrop-filter: blur(14px) !important;
-  -webkit-backdrop-filter: blur(14px) !important;
+  backdrop-filter: blur(24px) saturate(1.4) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.4) !important;
 }
 
 [data-slot="popover"][class*="heroui"] {
-  background: var(--bg-1) !important;
-  border: 1px solid var(--border) !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
+  background: rgba(15, 23, 42, 0.88) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  backdrop-filter: blur(30px) saturate(1.5) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(1.5) !important;
   border-radius: 14px !important;
-  box-shadow: var(--shadow) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3) !important;
+  color: #f1f5f9 !important;
+}
+
+[data-slot="popover"][class*="heroui"] [role="option"],
+[data-slot="popover"][class*="heroui"] li,
+[data-slot="popover"][class*="heroui"] li span {
+  color: #f1f5f9 !important;
+}
+
+[data-slot="popover"][class*="heroui"] [role="option"]:hover,
+[data-slot="popover"][class*="heroui"] [role="option"][data-hover="true"] {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+[data-slot="popover"][class*="heroui"] [role="option"][data-selected="true"],
+[data-slot="popover"][class*="heroui"] [role="option"][aria-selected="true"] {
+  background: rgba(244, 63, 94, 0.2) !important;
+  color: #fda4af !important;
 }
 
 /* HeroUI Switch */
@@ -414,80 +432,150 @@ body {
   -webkit-backdrop-filter: blur(12px) !important;
 }
 
-/* ===== Map Control Panel - override glass theme for readability ===== */
+/* ===== Map Control Panel - SOLID opaque white, NOT transparent ===== */
 
 .map-control-panel {
-  --text-strong: #111827;
-  --text: #1f2937;
-  --text-muted: #4b5563;
-  --text-faint: #6b7280;
-  --border: rgba(0, 0, 0, 0.15);
-  --bg-0: rgba(255, 255, 255, 0.97);
-  --bg-1: rgba(255, 255, 255, 0.97);
-  --bg-2: rgba(248, 249, 250, 0.97);
-  --bg-3: rgba(243, 244, 246, 0.9);
+  --text-strong: #111827 !important;
+  --text: #1f2937 !important;
+  --text-muted: #4b5563 !important;
+  --text-faint: #6b7280 !important;
+  --border: #d1d5db !important;
+  --bg-0: #ffffff !important;
+  --bg-1: #ffffff !important;
+  --bg-2: #f8f9fa !important;
+  --bg-3: #f3f4f6 !important;
 }
 
+/* Panel card base — fully opaque solid white */
 .map-control-panel,
-.map-control-panel [data-slot="base"],
+.map-control-panel[data-slot="base"],
+.map-control-panel [data-slot="base"] {
+  background: #ffffff !important;
+  backdrop-filter: blur(30px) saturate(1.8) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(1.8) !important;
+  color: #1f2937 !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Card body inside map panel */
 .map-control-panel [data-slot="body"] {
-  background: rgba(255, 255, 255, 0.97) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
+  background: #ffffff !important;
   color: #1f2937 !important;
 }
 
-/* Default/flat buttons in map panel */
+/* ALL text inside map panel */
+.map-control-panel * {
+  color: #374151;
+}
+
+.map-control-panel h3,
+.map-control-panel h4,
+.map-control-panel strong {
+  color: #111827 !important;
+}
+
+.map-control-panel p,
+.map-control-panel span,
+.map-control-panel label {
+  color: #374151 !important;
+}
+
+/* ---- Buttons in map panel ---- */
+
+/* Default / flat buttons — solid light gray */
 .map-control-panel [data-slot="base"][class*="heroui-button"][data-color="default"],
-.map-control-panel [data-slot="base"][class*="heroui-button"][data-variant="flat"] {
+.map-control-panel [data-slot="base"][class*="heroui-button"][data-variant="flat"][data-color="default"] {
   color: #374151 !important;
-  border-color: #d1d5db !important;
-  background: rgba(243, 244, 246, 0.8) !important;
+  border: 1px solid #d1d5db !important;
+  background: #f3f4f6 !important;
+  backdrop-filter: none !important;
 }
 
-/* Select trigger inside map panel */
-.map-control-panel [data-slot="trigger"],
-.map-control-panel [data-slot="trigger"] * {
-  background: rgba(243, 244, 246, 0.9) !important;
-  border-color: #d1d5db !important;
-  color: #1f2937 !important;
+.map-control-panel [data-slot="base"][class*="heroui-button"][data-color="default"]:hover {
+  background: #e5e7eb !important;
 }
 
+/* Success buttons */
+.map-control-panel [data-slot="base"][class*="heroui-button"][data-color="success"] {
+  background: #16a34a !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+
+/* Danger flat buttons */
+.map-control-panel [data-slot="base"][class*="heroui-button"][data-color="danger"][data-variant="flat"] {
+  background: #fef2f2 !important;
+  color: #dc2626 !important;
+  border: 1px solid #fecaca !important;
+}
+
+/* ---- Select / Dropdown inside map panel ---- */
+
+/* Select trigger — solid background */
+.map-control-panel [data-slot="trigger"] {
+  background: #f3f4f6 !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 12px !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.map-control-panel [data-slot="trigger"] *,
 .map-control-panel [data-slot="value"],
-.map-control-panel [data-slot="label"],
 .map-control-panel [data-slot="selectorIcon"],
-.map-control-panel [data-slot="helper-wrapper"],
-.map-control-panel [data-slot="description"] {
-  color: #374151 !important;
+.map-control-panel [data-slot="placeholder"] {
+  color: #1f2937 !important;
 }
 
-/* Input fields inside map panel */
-.map-control-panel [data-slot="input"],
-.map-control-panel [data-slot="input-wrapper"] {
-  background: rgba(255, 255, 255, 0.9) !important;
-  border-color: #d1d5db !important;
+.map-control-panel [data-slot="label"] {
+  color: #4b5563 !important;
+}
+
+/* ---- Input fields inside map panel ---- */
+
+.map-control-panel [data-slot="input-wrapper"],
+.map-control-panel [data-slot="input"] {
+  background: #ffffff !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 12px !important;
   color: #1f2937 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 .map-control-panel [data-slot="inner-wrapper"] input,
-.map-control-panel input {
+.map-control-panel input,
+.map-control-panel textarea {
   color: #1f2937 !important;
 }
 
-/* Checkbox labels inside map panel */
+.map-control-panel input::placeholder,
+.map-control-panel textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* ---- Checkbox inside map panel ---- */
 .map-control-panel [data-slot="label"] {
   color: #374151 !important;
 }
 
-/* Select popover (rendered in portal outside .map-control-panel DOM) */
-.map-select-popover,
+/* ---- Select Popover (rendered in portal outside DOM tree) ---- */
+
+.map-select-popover {
+  background: #ffffff !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 14px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15) !important;
+  backdrop-filter: blur(30px) saturate(1.5) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(1.5) !important;
+  overflow: hidden !important;
+}
+
 .map-select-popover [data-slot="listbox-wrapper"],
 .map-select-popover [data-slot="base"] {
-  background: rgba(255, 255, 255, 0.98) !important;
+  background: #ffffff !important;
   color: #1f2937 !important;
-  border: 1px solid #d1d5db !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
 }
 
 .map-select-popover [role="option"],
@@ -496,16 +584,17 @@ body {
 .map-select-popover li,
 .map-select-popover li span {
   color: #1f2937 !important;
+  background: transparent !important;
 }
 
 .map-select-popover [role="option"]:hover,
 .map-select-popover [role="option"][data-hover="true"] {
-  background: rgba(243, 244, 246, 0.9) !important;
+  background: #f3f4f6 !important;
 }
 
 .map-select-popover [role="option"][data-selected="true"],
 .map-select-popover [role="option"][aria-selected="true"] {
-  background: rgba(244, 63, 94, 0.1) !important;
+  background: #fff1f2 !important;
   color: #e11d48 !important;
 }
 
