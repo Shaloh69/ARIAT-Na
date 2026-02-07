@@ -278,7 +278,7 @@ export default function MapManager({
     if (geojsonData?.features) {
       const existingMarkers = geojsonData.features.map((feature) => ({
         id: feature.properties.id,
-        position: [feature.geometry.coordinates[1], feature.geometry.coordinates[0]] as [number, number],
+        position: [Number(feature.geometry.coordinates[1]), Number(feature.geometry.coordinates[0])] as [number, number],
         name: feature.properties.name,
         type: feature.properties.point_type || 'intersection',
       }));
@@ -746,7 +746,7 @@ export default function MapManager({
                 <p className="font-semibold text-sm">{marker.name}</p>
                 <p className="text-xs text-gray-500 mb-2">{marker.type.replace('_', ' ')}</p>
                 <p className="text-xs text-gray-400 mb-2">
-                  {marker.position[0].toFixed(6)}, {marker.position[1].toFixed(6)}
+                  {Number(marker.position[0]).toFixed(6)}, {Number(marker.position[1]).toFixed(6)}
                 </p>
                 {marker.id && mode === 'view' && (
                   <div style={{ display: 'flex', gap: '4px' }}>
