@@ -17,9 +17,19 @@ export default function IndexPage() {
       </Head>
       <AnimatedBackground />
       <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p>Redirecting to Admin Console...</p>
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative">
+            <img
+              src="/android-chrome-192x192.png"
+              alt="AIRAT-NA"
+              className="h-20 w-20 object-contain animate-pulse"
+            />
+            <div
+              className="absolute inset-[-8px] rounded-full border-3 border-transparent animate-spin"
+              style={{ borderTopColor: '#f43f5e', borderRightColor: '#fda4af' }}
+            />
+          </div>
+          <p style={{ color: 'var(--text-muted)' }}>Redirecting to Admin Console...</p>
         </div>
       </div>
     </>

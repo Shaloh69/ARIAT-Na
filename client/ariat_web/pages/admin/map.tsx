@@ -15,9 +15,19 @@ const MapManager = dynamic(() => import('@/components/MapManager'), {
   ssr: false,
   loading: () => (
     <div className="flex h-full items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-        <p>Loading map...</p>
+      <div className="flex flex-col items-center gap-4">
+        <div className="relative">
+          <img
+            src="/android-chrome-192x192.png"
+            alt="AIRAT-NA"
+            className="h-16 w-16 object-contain animate-pulse"
+          />
+          <div
+            className="absolute inset-[-6px] rounded-full border-3 border-transparent animate-spin"
+            style={{ borderTopColor: '#f43f5e', borderRightColor: '#fda4af' }}
+          />
+        </div>
+        <p style={{ color: 'var(--text-muted)' }}>Loading map...</p>
       </div>
     </div>
   ),
@@ -248,9 +258,19 @@ export default function MapPage() {
       {isLoading ? (
         <Card className="h-[calc(100vh-12rem)]">
           <CardBody className="flex items-center justify-center">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-              <p>Loading intersection data...</p>
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative">
+                <img
+                  src="/android-chrome-192x192.png"
+                  alt="AIRAT-NA"
+                  className="h-16 w-16 object-contain animate-pulse"
+                />
+                <div
+                  className="absolute inset-[-6px] rounded-full border-3 border-transparent animate-spin"
+                  style={{ borderTopColor: '#f43f5e', borderRightColor: '#fda4af' }}
+                />
+              </div>
+              <p style={{ color: 'var(--text-muted)' }}>Loading intersection data...</p>
             </div>
           </CardBody>
         </Card>

@@ -101,12 +101,25 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p>Loading...</p>
+      <>
+        <AnimatedBackground />
+        <div className="flex h-screen items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative">
+              <img
+                src="/android-chrome-192x192.png"
+                alt="AIRAT-NA"
+                className="h-20 w-20 object-contain animate-pulse"
+              />
+              <div
+                className="absolute inset-[-8px] rounded-full border-3 border-transparent animate-spin"
+                style={{ borderTopColor: 'var(--red-500)', borderRightColor: 'var(--red-300)' }}
+              />
+            </div>
+            <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -122,12 +135,19 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         >
         {/* Logo */}
         <div className="flex h-16 items-center justify-between px-4" style={{ borderBottom: '1px solid var(--border)' }}>
-          {!isSidebarCollapsed && (
-            <span className="text-xl font-bold" style={{ color: 'var(--red-600)' }}>AIRAT-NA</span>
+          {!isSidebarCollapsed ? (
+            <Link href="/admin/dashboard" className="flex items-center gap-2.5">
+              <img src="/android-chrome-192x192.png" alt="AIRAT-NA" className="h-9 w-9 object-contain" />
+              <span className="text-xl font-bold" style={{ color: 'var(--red-600)' }}>AIRAT-NA</span>
+            </Link>
+          ) : (
+            <Link href="/admin/dashboard">
+              <img src="/android-chrome-192x192.png" alt="AIRAT-NA" className="h-9 w-9 object-contain" />
+            </Link>
           )}
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="rounded-lg p-2 hover:bg-white/20"
+            className="rounded-lg p-2 hover:bg-white/20 flex-shrink-0"
           >
             <svg
               className="h-5 w-5"
