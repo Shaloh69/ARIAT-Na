@@ -427,6 +427,8 @@ export default function MapManager({
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeOptimizeFor, setRouteOptimizeFor] = useState<'distance' | 'time'>('distance');
+  const [selectedDestId, setSelectedDestId] = useState<string>('');
+  const [routeError, setRouteError] = useState<string>('');
 
   // Track whether any modal is open to disable the control panel
   const isAnyModalOpen = isModalOpen || isRoadModalOpen || isDestModalOpen;
@@ -526,26 +528,36 @@ export default function MapManager({
         setRouteStart([latlng.lat, latlng.lng]);
         setRouteEnd(null);
         setRouteResult(null);
-        toast.info('Start point set. Click to set destination.');
+        setRouteError('');
+        setSelectedDestId('');
+        toast.info('Start point set. Select a destination from the list or click on the map.');
       } else if (!routeEnd) {
         const end: [number, number] = [latlng.lat, latlng.lng];
         setRouteEnd(end);
+        setRouteError('');
         if (onCalculateRoute) {
           setRouteLoading(true);
           try {
             const result = await onCalculateRoute(routeStart[0], routeStart[1], end[0], end[1], routeOptimizeFor);
             setRouteResult(result);
-            if (result) {
+            if (result && result.totalDistance > 0) {
               toast.success(`Route found: ${Number(result.totalDistance).toFixed(2)} km, ~${result.estimatedTime} min`);
+            } else if (result) {
+              setRouteError('Start and destination are at the same location or too close together.');
+              toast.warning('Start and destination are too close');
             } else {
+              setRouteError('No route found. Ensure roads exist between the start and destination.');
               toast.warning('No route found between these points');
             }
-          } catch {
-            toast.error('Failed to calculate route');
+          } catch (err: any) {
+            const msg = err?.response?.data?.message || err?.message || 'Route calculation failed';
+            setRouteError(msg);
+            toast.error(msg);
           } finally {
             setRouteLoading(false);
           }
         } else {
+          setRouteError('Route calculation service is not available.');
           toast.error('Route calculation not available');
         }
       } else {
@@ -553,7 +565,9 @@ export default function MapManager({
         setRouteStart([latlng.lat, latlng.lng]);
         setRouteEnd(null);
         setRouteResult(null);
-        toast.info('New start point set. Click to set destination.');
+        setRouteError('');
+        setSelectedDestId('');
+        toast.info('New start point set. Select a destination or click on the map.');
       }
     }
   };
@@ -562,6 +576,47 @@ export default function MapManager({
     setRouteStart(null);
     setRouteEnd(null);
     setRouteResult(null);
+    setRouteError('');
+    setSelectedDestId('');
+  };
+
+  // Calculate route to a selected destination
+  const calculateRouteToDestination = async (destId: string) => {
+    if (!routeStart) {
+      toast.error('Please set a start point first by clicking on the map');
+      return;
+    }
+    const dest = destinationMarkers.find((d) => d.id === destId);
+    if (!dest) {
+      toast.error('Destination not found');
+      return;
+    }
+    const end: [number, number] = dest.position;
+    setRouteEnd(end);
+    setRouteError('');
+
+    if (onCalculateRoute) {
+      setRouteLoading(true);
+      try {
+        const result = await onCalculateRoute(routeStart[0], routeStart[1], end[0], end[1], routeOptimizeFor);
+        setRouteResult(result);
+        if (result && result.totalDistance > 0) {
+          toast.success(`Route to ${dest.name}: ${Number(result.totalDistance).toFixed(2)} km, ~${result.estimatedTime} min`);
+        } else if (result) {
+          setRouteError('The start and destination are too close together or on the same road segment.');
+          toast.warning('Start and destination appear to be at the same location');
+        } else {
+          setRouteError('No route found. Make sure roads connect the start point to the destination.');
+          toast.warning('No route found to ' + dest.name);
+        }
+      } catch (err: any) {
+        const msg = err?.response?.data?.message || err?.message || 'Route calculation failed';
+        setRouteError(msg);
+        toast.error(msg);
+      } finally {
+        setRouteLoading(false);
+      }
+    }
   };
 
   const handleSavePoint = async () => {
@@ -905,24 +960,58 @@ export default function MapManager({
                   <SelectItem key="time">Fastest Time</SelectItem>
                 </Select>
 
+                {/* Destination selector — only show when start is set */}
+                {routeStart && !routeEnd && destinationMarkers.length > 0 && (
+                  <Select
+                    label="Select Destination"
+                    placeholder="Choose a destination..."
+                    selectedKeys={selectedDestId ? [selectedDestId] : []}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      if (id) {
+                        setSelectedDestId(id);
+                        calculateRouteToDestination(id);
+                      }
+                    }}
+                    size="sm"
+                    popoverProps={{ className: 'map-select-popover' }}
+                  >
+                    {destinationMarkers.map((dest) => (
+                      <SelectItem key={dest.id}>
+                        {dest.name}{dest.categoryName ? ` (${dest.categoryName})` : ''}
+                      </SelectItem>
+                    ))}
+                  </Select>
+                )}
+
                 <div style={{ fontSize: '0.875rem', color: '#374151' }} className="space-y-1">
                   {!routeStart ? (
-                    <p>Click on the map to set <strong>start point</strong></p>
+                    <div className="p-2 rounded" style={{ background: 'rgba(59, 130, 246, 0.08)' }}>
+                      <p style={{ fontWeight: 500 }}>Step 1: Set your starting point</p>
+                      <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>Click anywhere on the map to place your start</p>
+                    </div>
                   ) : !routeEnd ? (
                     <>
                       <p style={{ color: '#16a34a' }}>Start: {routeStart[0].toFixed(6)}, {routeStart[1].toFixed(6)}</p>
-                      <p>Click on the map to set <strong>destination</strong></p>
+                      <div className="p-2 rounded" style={{ background: 'rgba(59, 130, 246, 0.08)' }}>
+                        <p style={{ fontWeight: 500 }}>Step 2: Choose destination</p>
+                        <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                          {destinationMarkers.length > 0
+                            ? 'Select from the dropdown above or click on the map'
+                            : 'Click on the map to set destination'}
+                        </p>
+                      </div>
                     </>
                   ) : routeLoading ? (
                     <>
                       <p style={{ color: '#16a34a' }}>Start: {routeStart[0].toFixed(6)}, {routeStart[1].toFixed(6)}</p>
                       <p style={{ color: '#dc2626' }}>End: {routeEnd[0].toFixed(6)}, {routeEnd[1].toFixed(6)}</p>
-                      <div className="flex items-center gap-2 pt-1">
+                      <div className="flex items-center gap-2 p-2 rounded" style={{ background: 'rgba(59, 130, 246, 0.08)' }}>
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{ borderColor: '#2563eb' }}></div>
-                        <p style={{ color: '#2563eb' }}>Calculating route...</p>
+                        <p style={{ color: '#2563eb', fontWeight: 500 }}>Calculating route...</p>
                       </div>
                     </>
-                  ) : routeResult ? (
+                  ) : routeResult && routeResult.totalDistance > 0 ? (
                     <>
                       <div className="grid grid-cols-2 gap-2 p-2 rounded" style={{ background: 'rgba(34, 197, 94, 0.1)' }}>
                         <div>
@@ -934,10 +1023,15 @@ export default function MapManager({
                           <p style={{ fontWeight: 700, color: '#111827' }}>{routeResult.estimatedTime} min</p>
                         </div>
                       </div>
+                      {routeResult.virtualConnections && routeResult.virtualConnections.length > 0 && (
+                        <div className="p-1.5 rounded" style={{ fontSize: '0.7rem', background: 'rgba(245, 158, 11, 0.1)', color: '#92400e' }}>
+                          Includes {routeResult.virtualConnections.length} walking connection{routeResult.virtualConnections.length > 1 ? 's' : ''} to/from road
+                        </div>
+                      )}
                       {routeResult.steps.length > 0 && (
                         <div className="pt-2">
                           <p style={{ fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.25rem', color: '#374151' }}>
-                            Directions ({routeResult.steps.length} steps)
+                            Directions ({routeResult.steps.length} step{routeResult.steps.length > 1 ? 's' : ''})
                           </p>
                           <div className="max-h-32 overflow-y-auto space-y-1">
                             {routeResult.steps.map((step, idx) => (
@@ -953,13 +1047,18 @@ export default function MapManager({
                     </>
                   ) : (
                     <>
-                      <p style={{ color: '#16a34a' }}>Start: {routeStart[0].toFixed(6)}, {routeStart[1].toFixed(6)}</p>
-                      <p style={{ color: '#dc2626' }}>End: {routeEnd[0].toFixed(6)}, {routeEnd[1].toFixed(6)}</p>
-                      <p style={{ color: '#dc2626', fontWeight: 500 }}>No route found</p>
+                      <p style={{ color: '#16a34a' }}>Start: {routeStart ? `${routeStart[0].toFixed(6)}, ${routeStart[1].toFixed(6)}` : '—'}</p>
+                      <p style={{ color: '#dc2626' }}>End: {routeEnd ? `${routeEnd[0].toFixed(6)}, ${routeEnd[1].toFixed(6)}` : '—'}</p>
+                      <div className="p-2 rounded" style={{ background: 'rgba(220, 38, 38, 0.08)' }}>
+                        <p style={{ color: '#dc2626', fontWeight: 600, fontSize: '0.8rem' }}>Route not found</p>
+                        <p style={{ fontSize: '0.7rem', color: '#991b1b' }}>
+                          {routeError || 'No connecting roads between start and destination. Try adding more roads or choosing different points.'}
+                        </p>
+                      </div>
                     </>
                   )}
-                  {routeEnd && (
-                    <p style={{ fontSize: '0.75rem', color: '#6b7280', fontStyle: 'italic' }}>Click to start a new route</p>
+                  {routeEnd && !routeLoading && (
+                    <p style={{ fontSize: '0.75rem', color: '#6b7280', fontStyle: 'italic' }}>Click anywhere to start a new route</p>
                   )}
                 </div>
 

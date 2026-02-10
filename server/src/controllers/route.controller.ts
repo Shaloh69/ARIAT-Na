@@ -80,7 +80,7 @@ export const calculateRouteByCoordinates = async (req: AuthRequest, res: Respons
     if (!result.success) {
       res.status(404).json({
         success: false,
-        message: 'No route found between the specified coordinates',
+        message: 'No route found between the specified coordinates. Make sure there are roads connecting the start and destination areas.',
       });
       return;
     }
@@ -93,6 +93,7 @@ export const calculateRouteByCoordinates = async (req: AuthRequest, res: Respons
         totalDistance: result.totalDistance,
         estimatedTime: result.estimatedTime,
         steps: result.steps,
+        virtualConnections: result.virtualConnections,
         optimizedFor: optimize_for,
       },
     });
@@ -100,7 +101,7 @@ export const calculateRouteByCoordinates = async (req: AuthRequest, res: Respons
     console.error('Error calculating route:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to calculate route',
+      message: 'Route calculation failed. Please check that intersections and roads exist in the database.',
     });
   }
 };

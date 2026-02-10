@@ -1,6 +1,7 @@
 /**
  * A* Pathfinding Service for GPS-based Road Networks
  * Uses Haversine distance for heuristic and actual road distances for cost
+ * Supports road interpolation (virtual nodes every ~100m) for precise snapping
  * Supports POIs far from roads, path recalculation, and real-time updates
  */
 
@@ -64,6 +65,7 @@ interface VirtualConnection {
 }
 
 const MAX_VIRTUAL_CONNECTION_DISTANCE = 5.0; // Max 5km for virtual connections
+const INTERPOLATION_INTERVAL = 0.1; // ~100 meters between virtual nodes
 
 /**
  * Calculate Haversine distance between two GPS coordinates (in kilometers)
@@ -81,7 +83,7 @@ function findNearestPointOnRoad(
   lat: number,
   lon: number,
   roadPath: [number, number][]
-): { point: [number, number]; distance: number } {
+): { point: [number, number]; distance: number; index: number } {
   const targetPoint = turf.point([lon, lat]);
   const line = turf.lineString(roadPath.map((p) => [p[1], p[0]])); // Convert to [lon, lat]
 
@@ -90,23 +92,93 @@ function findNearestPointOnRoad(
   return {
     point: [snapped.geometry.coordinates[1], snapped.geometry.coordinates[0]], // Convert back to [lat, lon]
     distance: snapped.properties.dist || 0,
+    index: snapped.properties.index || 0,
   };
 }
 
 /**
+ * Interpolate points along a road path at regular intervals
+ * Returns virtual intersection nodes placed every ~INTERPOLATION_INTERVAL km
+ */
+function interpolateRoadPoints(
+  roadPath: [number, number][],
+  roadId: string,
+  roadName: string
+): { nodes: Intersection[]; segmentDistances: number[] } {
+  if (!roadPath || roadPath.length < 2) return { nodes: [], segmentDistances: [] };
+
+  const nodes: Intersection[] = [];
+  const segmentDistances: number[] = [];
+
+  // Convert road path to turf line [lon, lat]
+  const lineCoords = roadPath.map((p) => [p[1], p[0]]);
+  const line = turf.lineString(lineCoords);
+  const totalLength = turf.length(line, { units: 'kilometers' });
+
+  if (totalLength < INTERPOLATION_INTERVAL) {
+    // Road is shorter than the interval — no intermediate nodes needed
+    return { nodes: [], segmentDistances: [] };
+  }
+
+  // Generate points at regular intervals along the road
+  let distAlong = INTERPOLATION_INTERVAL;
+  while (distAlong < totalLength) {
+    const interpolatedPoint = turf.along(line, distAlong, { units: 'kilometers' });
+    const [lon, lat] = interpolatedPoint.geometry.coordinates;
+
+    const virtualNode = {
+      id: `virtual_${roadId}_${Math.round(distAlong * 1000)}`,
+      name: `${roadName} (${distAlong.toFixed(1)}km)`,
+      latitude: lat,
+      longitude: lon,
+      point_type: 'virtual',
+    } as Intersection;
+
+    nodes.push(virtualNode);
+    segmentDistances.push(distAlong);
+    distAlong += INTERPOLATION_INTERVAL;
+  }
+
+  return { nodes, segmentDistances };
+}
+
+/**
  * Find nearest intersection or road node to GPS coordinates
- * Returns the intersection and whether a virtual connection is needed
+ * Now considers interpolated virtual nodes for better precision
  */
 async function findNearestRoadNode(
   latitude: number,
-  longitude: number
+  longitude: number,
+  allNodes?: Map<string, Intersection>
 ): Promise<{
   intersection: Intersection;
   distance: number;
   needsVirtualConnection: boolean;
   virtualConnectionPoint?: [number, number];
 }> {
-  // First, try to find a close intersection
+  // If we have a pre-built graph with virtual nodes, use it for better precision
+  if (allNodes && allNodes.size > 0) {
+    let nearestNode: Intersection | null = null;
+    let minDistance = Infinity;
+
+    for (const node of allNodes.values()) {
+      const distance = haversineDistance(latitude, longitude, node.latitude, node.longitude);
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestNode = node;
+      }
+    }
+
+    if (nearestNode) {
+      return {
+        intersection: nearestNode,
+        distance: minDistance,
+        needsVirtualConnection: minDistance > 0.05, // > 50m needs virtual connection
+      };
+    }
+  }
+
+  // Fallback: query database directly
   const [intersections] = await pool.execute<Intersection[]>(
     'SELECT id, name, latitude, longitude, point_type FROM intersections'
   );
@@ -182,6 +254,7 @@ async function findNearestRoadNode(
 
 /**
  * Build adjacency list (graph) from database
+ * Now includes interpolated virtual nodes every ~100m along roads
  */
 async function buildGraph(): Promise<{
   intersections: Map<string, Intersection>;
@@ -204,29 +277,92 @@ async function buildGraph(): Promise<{
   const adjacencyList = new Map<string, Array<{ road: Road; neighbor: string }>>();
 
   for (const road of roads) {
-    // Add forward edge (start -> end)
-    if (!adjacencyList.has(road.start_intersection_id)) {
-      adjacencyList.set(road.start_intersection_id, []);
+    let roadPath: [number, number][] | null = null;
+    if (road.path && Array.isArray(road.path) && road.path.length >= 2) {
+      roadPath = road.path;
     }
-    adjacencyList.get(road.start_intersection_id)!.push({
-      road,
-      neighbor: road.end_intersection_id,
-    });
 
-    // Add reverse edge if bidirectional (end -> start)
-    if (road.is_bidirectional) {
-      if (!adjacencyList.has(road.end_intersection_id)) {
-        adjacencyList.set(road.end_intersection_id, []);
+    // Interpolate virtual nodes along the road path
+    const { nodes: virtualNodes, segmentDistances } = roadPath
+      ? interpolateRoadPoints(roadPath, road.id, road.name)
+      : { nodes: [], segmentDistances: [] };
+
+    if (virtualNodes.length > 0) {
+      // Add virtual nodes to the intersection map
+      for (const vNode of virtualNodes) {
+        intersectionMap.set(vNode.id, vNode);
       }
-      adjacencyList.get(road.end_intersection_id)!.push({
-        road: {
+
+      // Calculate total road length for time estimation
+      const totalRoadLength = road.distance || 1;
+      const totalRoadTime = road.estimated_time || 1;
+      const timePerKm = totalRoadTime / totalRoadLength;
+
+      // Build chain: start → v1 → v2 → ... → vN → end
+      const chainIds = [
+        road.start_intersection_id,
+        ...virtualNodes.map((v) => v.id),
+        road.end_intersection_id,
+      ];
+
+      // Distances for each segment: [0, d1, d2, ..., dN, totalLength]
+      const chainDistances = [0, ...segmentDistances, totalRoadLength];
+
+      for (let i = 0; i < chainIds.length - 1; i++) {
+        const fromId = chainIds[i];
+        const toId = chainIds[i + 1];
+        const segDist = Math.max(0.001, chainDistances[i + 1] - chainDistances[i]);
+        const segTime = segDist * timePerKm;
+
+        // Create a virtual road segment for this edge
+        const segmentRoad = {
           ...road,
-          // Swap start and end for reverse direction
-          start_intersection_id: road.end_intersection_id,
-          end_intersection_id: road.start_intersection_id,
-        },
-        neighbor: road.start_intersection_id,
+          id: `${road.id}_seg_${i}`,
+          name: road.name,
+          start_intersection_id: fromId,
+          end_intersection_id: toId,
+          distance: segDist,
+          estimated_time: segTime,
+        } as Road;
+
+        // Forward edge
+        if (!adjacencyList.has(fromId)) adjacencyList.set(fromId, []);
+        adjacencyList.get(fromId)!.push({ road: segmentRoad, neighbor: toId });
+
+        // Reverse edge if bidirectional
+        if (road.is_bidirectional) {
+          const reverseRoad = {
+            ...segmentRoad,
+            start_intersection_id: toId,
+            end_intersection_id: fromId,
+          } as Road;
+          if (!adjacencyList.has(toId)) adjacencyList.set(toId, []);
+          adjacencyList.get(toId)!.push({ road: reverseRoad, neighbor: fromId });
+        }
+      }
+    } else {
+      // No interpolation needed — add direct edges (original behavior)
+      if (!adjacencyList.has(road.start_intersection_id)) {
+        adjacencyList.set(road.start_intersection_id, []);
+      }
+      adjacencyList.get(road.start_intersection_id)!.push({
+        road,
+        neighbor: road.end_intersection_id,
       });
+
+      if (road.is_bidirectional) {
+        if (!adjacencyList.has(road.end_intersection_id)) {
+          adjacencyList.set(road.end_intersection_id, []);
+        }
+        adjacencyList.get(road.end_intersection_id)!.push({
+          road: {
+            ...road,
+            start_intersection_id: road.end_intersection_id,
+            end_intersection_id: road.start_intersection_id,
+          },
+          neighbor: road.start_intersection_id,
+        });
+      }
     }
   }
 
@@ -250,6 +386,18 @@ export async function findShortestPath(
     return {
       success: false,
       path: [],
+      roads: [],
+      totalDistance: 0,
+      estimatedTime: 0,
+      steps: [],
+    };
+  }
+
+  // Same start and end — return immediately
+  if (startIntersectionId === endIntersectionId) {
+    return {
+      success: true,
+      path: [startIntersection],
       roads: [],
       totalDistance: 0,
       estimatedTime: 0,
@@ -358,6 +506,7 @@ export async function findShortestPath(
 
 /**
  * Reconstruct path from goal node to start
+ * Consolidates consecutive segments of the same road into single steps
  */
 function reconstructPath(goalNode: PathNode, optimizeFor: 'distance' | 'time'): RouteResult {
   const path: Intersection[] = [];
@@ -377,23 +526,42 @@ function reconstructPath(goalNode: PathNode, optimizeFor: 'distance' | 'time'): 
     current = current.parent;
   }
 
-  // Build turn-by-turn steps
-  for (let i = 0; i < roads.length; i++) {
+  // Consolidate road segments into named road steps
+  // (virtual segments of the same road should be combined)
+  let i = 0;
+  while (i < roads.length) {
     const road = roads[i];
+    // Extract the base road name (strip segment suffix)
+    const baseName = road.name;
+
+    let segmentDistance = road.distance;
+    let segmentTime = road.estimated_time;
     const from = path[i];
-    const to = path[i + 1];
+    let to = path[i + 1];
 
-    totalDistance += road.distance;
-    totalTime += road.estimated_time;
+    // Consolidate consecutive segments of the same named road
+    let j = i + 1;
+    while (j < roads.length && roads[j].name === baseName) {
+      segmentDistance += roads[j].distance;
+      segmentTime += roads[j].estimated_time;
+      to = path[j + 1];
+      j++;
+    }
 
+    totalDistance += segmentDistance;
+    totalTime += segmentTime;
+
+    // Only add step for real, named road transitions (skip internal virtual segments)
     steps.push({
-      instruction: `Take ${road.name} ${road.is_bidirectional ? '(two-way)' : '(one-way)'}`,
-      roadName: road.name,
-      distance: road.distance,
-      time: road.estimated_time,
+      instruction: `Take ${baseName} ${road.is_bidirectional ? '(two-way)' : '(one-way)'}`,
+      roadName: baseName,
+      distance: segmentDistance,
+      time: segmentTime,
       from: from.name,
       to: to.name,
     });
+
+    i = j;
   }
 
   return {
@@ -420,6 +588,7 @@ export async function findNearestIntersection(
 /**
  * Calculate route from GPS coordinates to GPS coordinates
  * Handles POIs far from roads by creating virtual connections
+ * Uses interpolated road nodes for precise snapping
  */
 export async function calculateRoute(
   startLat: number,
@@ -428,9 +597,12 @@ export async function calculateRoute(
   endLon: number,
   optimizeFor: 'distance' | 'time' = 'distance'
 ): Promise<RouteResult> {
-  // Find nearest road nodes for start and end
-  const startNode = await findNearestRoadNode(startLat, startLon);
-  const endNode = await findNearestRoadNode(endLat, endLon);
+  // Build the enriched graph with virtual nodes
+  const { intersections: allNodes, adjacencyList } = await buildGraph();
+
+  // Find nearest nodes using the enriched graph (includes interpolated points)
+  const startNode = await findNearestRoadNode(startLat, startLon, allNodes);
+  const endNode = await findNearestRoadNode(endLat, endLon, allNodes);
 
   if (!startNode.intersection || !endNode.intersection) {
     return {
@@ -441,6 +613,29 @@ export async function calculateRoute(
       estimatedTime: 0,
       steps: [],
     };
+  }
+
+  // Same node? If they're very close, it's a zero-distance route
+  if (startNode.intersection.id === endNode.intersection.id) {
+    const directDist = haversineDistance(startLat, startLon, endLat, endLon);
+    if (directDist < 0.05) {
+      // < 50m apart, basically same location
+      return {
+        success: true,
+        path: [startNode.intersection],
+        roads: [],
+        totalDistance: directDist,
+        estimatedTime: Math.max(1, Math.round((directDist / 5) * 60)),
+        steps: [{
+          instruction: 'Walk to destination',
+          roadName: 'Direct path',
+          distance: directDist,
+          time: Math.max(1, Math.round((directDist / 5) * 60)),
+          from: 'Starting Point',
+          to: 'Destination',
+        }],
+      };
+    }
   }
 
   // Run A* pathfinding
@@ -467,7 +662,7 @@ export async function calculateRoute(
       isVirtual: true,
     });
     result.totalDistance += walkDistance;
-    result.estimatedTime += Math.round((walkDistance / 5) * 60); // Walking speed ~5 km/h
+    result.estimatedTime += Math.max(1, Math.round((walkDistance / 5) * 60)); // Walking speed ~5 km/h
   }
 
   if (endNode.needsVirtualConnection) {
@@ -484,7 +679,7 @@ export async function calculateRoute(
       isVirtual: true,
     });
     result.totalDistance += walkDistance;
-    result.estimatedTime += Math.round((walkDistance / 5) * 60); // Walking speed ~5 km/h
+    result.estimatedTime += Math.max(1, Math.round((walkDistance / 5) * 60)); // Walking speed ~5 km/h
   }
 
   if (virtualConnections.length > 0) {
