@@ -422,13 +422,12 @@ export default function MapManager({
     amenities: '',
   });
 
-  // Route testing state
+  // Route testing state — supports multi-stop itineraries
   const [routeStart, setRouteStart] = useState<[number, number] | null>(null);
-  const [routeEnd, setRouteEnd] = useState<[number, number] | null>(null);
-  const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
+  const [routeStops, setRouteStops] = useState<Array<{ position: [number, number]; name: string; destId?: string }>>([]);
+  const [routeLegs, setRouteLegs] = useState<RouteResult[]>([]);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeOptimizeFor, setRouteOptimizeFor] = useState<'distance' | 'time'>('distance');
-  const [selectedDestId, setSelectedDestId] = useState<string>('');
   const [routeError, setRouteError] = useState<string>('');
 
   // Track whether any modal is open to disable the control panel
@@ -527,96 +526,93 @@ export default function MapManager({
     } else if (mode === 'test_route') {
       if (!routeStart) {
         setRouteStart([latlng.lat, latlng.lng]);
-        setRouteEnd(null);
-        setRouteResult(null);
+        setRouteStops([]);
+        setRouteLegs([]);
         setRouteError('');
-        setSelectedDestId('');
-        toast.info('Start point set. Select a destination from the list or click on the map.');
-      } else if (!routeEnd) {
-        const end: [number, number] = [latlng.lat, latlng.lng];
-        setRouteEnd(end);
-        setRouteError('');
-        if (onCalculateRoute) {
-          setRouteLoading(true);
-          try {
-            const result = await onCalculateRoute(routeStart[0], routeStart[1], end[0], end[1], routeOptimizeFor);
-            setRouteResult(result);
-            if (result && result.totalDistance > 0) {
-              toast.success(`Route found: ${Number(result.totalDistance).toFixed(2)} km, ~${result.estimatedTime} min`);
-            } else if (result) {
-              setRouteError('Start and destination are at the same location or too close together.');
-              toast.warning('Start and destination are too close');
-            } else {
-              setRouteError('No route found. Ensure roads exist between the start and destination.');
-              toast.warning('No route found between these points');
-            }
-          } catch (err: any) {
-            const msg = err?.response?.data?.message || err?.message || 'Route calculation failed';
-            setRouteError(msg);
-            toast.error(msg);
-          } finally {
-            setRouteLoading(false);
-          }
-        } else {
-          setRouteError('Route calculation service is not available.');
-          toast.error('Route calculation not available');
-        }
+        toast.info('Start point set. Add destinations from the dropdown or click on the map.');
       } else {
-        // Reset for new route
-        setRouteStart([latlng.lat, latlng.lng]);
-        setRouteEnd(null);
-        setRouteResult(null);
-        setRouteError('');
-        setSelectedDestId('');
-        toast.info('New start point set. Select a destination or click on the map.');
+        // Add as a new stop
+        addStop({
+          position: [latlng.lat, latlng.lng],
+          name: `Stop ${routeStops.length + 1}`,
+        });
       }
     }
   };
 
   const clearRoute = () => {
     setRouteStart(null);
-    setRouteEnd(null);
-    setRouteResult(null);
+    setRouteStops([]);
+    setRouteLegs([]);
     setRouteError('');
-    setSelectedDestId('');
   };
 
-  // Calculate route to a selected destination
-  const calculateRouteToDestination = async (destId: string) => {
-    if (!routeStart) {
-      toast.error('Please set a start point first by clicking on the map');
-      return;
-    }
+  // Add a stop to the itinerary
+  const addStop = (stop: { position: [number, number]; name: string; destId?: string }) => {
+    const newStops = [...routeStops, stop];
+    setRouteStops(newStops);
+    calculateMultiStopRoute(newStops);
+  };
+
+  // Add a destination as a stop
+  const addDestinationStop = (destId: string) => {
     const dest = destinationMarkers.find((d) => d.id === destId);
-    if (!dest) {
-      toast.error('Destination not found');
+    if (!dest) return;
+    if (routeStops.some((s) => s.destId === destId)) {
+      toast.warning(`${dest.name} is already in the itinerary`);
       return;
     }
-    const end: [number, number] = dest.position;
-    setRouteEnd(end);
+    addStop({ position: dest.position, name: dest.name, destId: dest.id });
+  };
+
+  // Remove a stop from the itinerary
+  const removeStop = (idx: number) => {
+    const newStops = routeStops.filter((_, i) => i !== idx);
+    setRouteStops(newStops);
+    if (newStops.length > 0) {
+      calculateMultiStopRoute(newStops);
+    } else {
+      setRouteLegs([]);
+      setRouteError('');
+    }
+  };
+
+  // Calculate route through all stops
+  const calculateMultiStopRoute = async (stops: typeof routeStops) => {
+    if (!routeStart || stops.length === 0 || !onCalculateRoute) return;
+
+    setRouteLoading(true);
     setRouteError('');
 
-    if (onCalculateRoute) {
-      setRouteLoading(true);
-      try {
-        const result = await onCalculateRoute(routeStart[0], routeStart[1], end[0], end[1], routeOptimizeFor);
-        setRouteResult(result);
-        if (result && result.totalDistance > 0) {
-          toast.success(`Route to ${dest.name}: ${Number(result.totalDistance).toFixed(2)} km, ~${result.estimatedTime} min`);
-        } else if (result) {
-          setRouteError('The start and destination are too close together or on the same road segment.');
-          toast.warning('Start and destination appear to be at the same location');
-        } else {
-          setRouteError('No route found. Make sure roads connect the start point to the destination.');
-          toast.warning('No route found to ' + dest.name);
+    try {
+      const legs: RouteResult[] = [];
+      const waypoints: [number, number][] = [routeStart, ...stops.map((s) => s.position)];
+
+      for (let i = 0; i < waypoints.length - 1; i++) {
+        const from = waypoints[i];
+        const to = waypoints[i + 1];
+        const result = await onCalculateRoute(from[0], from[1], to[0], to[1], routeOptimizeFor);
+
+        if (!result || !result.totalDistance) {
+          const fromName = i === 0 ? 'Start' : stops[i - 1].name;
+          const toName = stops[i].name;
+          setRouteError(`No route found for leg ${i + 1}: ${fromName} \u2192 ${toName}. Make sure roads connect these areas.`);
+          setRouteLegs(legs);
+          return;
         }
-      } catch (err: any) {
-        const msg = err?.response?.data?.message || err?.message || 'Route calculation failed';
-        setRouteError(msg);
-        toast.error(msg);
-      } finally {
-        setRouteLoading(false);
+        legs.push(result);
       }
+
+      setRouteLegs(legs);
+      const totalDist = legs.reduce((sum, l) => sum + Number(l.totalDistance), 0);
+      const totalTime = legs.reduce((sum, l) => sum + l.estimatedTime, 0);
+      toast.success(`Route: ${totalDist.toFixed(2)} km, ~${totalTime} min (${legs.length} leg${legs.length > 1 ? 's' : ''})`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Route calculation failed';
+      setRouteError(msg);
+      toast.error(msg);
+    } finally {
+      setRouteLoading(false);
     }
   };
 
@@ -833,15 +829,15 @@ export default function MapManager({
     ),
   }));
 
-  // Route positions for polyline — prefer routeGeometry (follows actual road paths) over intersection path
-  const routePositions: [number, number][] = routeResult
-    ? routeResult.routeGeometry && routeResult.routeGeometry.length >= 2
-      ? routeResult.routeGeometry
-      : routeResult.path.map((p) => [p.latitude, p.longitude] as [number, number])
-    : [];
+  // Route leg positions for polylines — one array per leg, prefer routeGeometry over intersection path
+  const routeLegPositions: [number, number][][] = routeLegs.map((leg) =>
+    leg.routeGeometry && leg.routeGeometry.length >= 2
+      ? leg.routeGeometry
+      : leg.path.map((p) => [p.latitude, p.longitude] as [number, number])
+  );
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full" style={{ isolation: 'isolate' }}>
       {/* Control Panel — disabled when any modal is open */}
       <Card
         className={`absolute top-4 left-4 z-[1000] w-80 map-control-panel transition-opacity duration-200 ${isAnyModalOpen ? 'opacity-50' : ''}`}
@@ -949,7 +945,7 @@ export default function MapManager({
               </div>
             )}
 
-            {/* Route Testing Controls */}
+            {/* Route Testing Controls — Multi-stop Itinerary */}
             {mode === 'test_route' && (
               <>
                 <Select
@@ -963,18 +959,14 @@ export default function MapManager({
                   <SelectItem key="time">Fastest Time</SelectItem>
                 </Select>
 
-                {/* Destination selector — only show when start is set */}
-                {routeStart && !routeEnd && destinationMarkers.length > 0 && (
+                {/* Destination selector — show when start is set */}
+                {routeStart && destinationMarkers.length > 0 && (
                   <Select
-                    label="Select Destination"
+                    label="Add Destination Stop"
                     placeholder="Choose a destination..."
-                    selectedKeys={selectedDestId ? [selectedDestId] : []}
+                    selectedKeys={[]}
                     onChange={(e) => {
-                      const id = e.target.value;
-                      if (id) {
-                        setSelectedDestId(id);
-                        calculateRouteToDestination(id);
-                      }
+                      if (e.target.value) addDestinationStop(e.target.value);
                     }}
                     size="sm"
                     popoverProps={{ className: 'map-select-popover' }}
@@ -987,85 +979,125 @@ export default function MapManager({
                   </Select>
                 )}
 
+                {/* Itinerary stops list */}
+                {routeStops.length > 0 && (
+                  <div className="space-y-1">
+                    <p style={{ fontSize: '0.75rem', fontWeight: 500, color: '#374151' }}>
+                      Itinerary ({routeStops.length} stop{routeStops.length > 1 ? 's' : ''})
+                    </p>
+                    {routeStops.map((stop, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-1.5 rounded" style={{ background: 'rgba(0,0,0,0.04)' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#374151' }}>
+                          {idx + 1}. {stop.name}
+                        </span>
+                        <button
+                          onClick={() => removeStop(idx)}
+                          style={{ fontSize: '0.7rem', color: '#dc2626', cursor: 'pointer', background: 'none', border: 'none', padding: '2px 6px' }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div style={{ fontSize: '0.875rem', color: '#374151' }} className="space-y-1">
                   {!routeStart ? (
                     <div className="p-2 rounded" style={{ background: 'rgba(59, 130, 246, 0.08)' }}>
                       <p style={{ fontWeight: 500 }}>Step 1: Set your starting point</p>
-                      <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>Click anywhere on the map to place your start</p>
+                      <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>Click anywhere on the map</p>
                     </div>
-                  ) : !routeEnd ? (
+                  ) : routeStops.length === 0 ? (
                     <>
                       <p style={{ color: '#16a34a' }}>Start: {routeStart[0].toFixed(6)}, {routeStart[1].toFixed(6)}</p>
                       <div className="p-2 rounded" style={{ background: 'rgba(59, 130, 246, 0.08)' }}>
-                        <p style={{ fontWeight: 500 }}>Step 2: Choose destination</p>
+                        <p style={{ fontWeight: 500 }}>Step 2: Add destinations</p>
                         <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>
                           {destinationMarkers.length > 0
                             ? 'Select from the dropdown above or click on the map'
-                            : 'Click on the map to set destination'}
+                            : 'Click on the map to add stops'}
                         </p>
                       </div>
                     </>
                   ) : routeLoading ? (
+                    <div className="flex items-center gap-2 p-2 rounded" style={{ background: 'rgba(59, 130, 246, 0.08)' }}>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{ borderColor: '#2563eb' }}></div>
+                      <p style={{ color: '#2563eb', fontWeight: 500 }}>Calculating route...</p>
+                    </div>
+                  ) : routeLegs.length > 0 ? (
                     <>
-                      <p style={{ color: '#16a34a' }}>Start: {routeStart[0].toFixed(6)}, {routeStart[1].toFixed(6)}</p>
-                      <p style={{ color: '#dc2626' }}>End: {routeEnd[0].toFixed(6)}, {routeEnd[1].toFixed(6)}</p>
-                      <div className="flex items-center gap-2 p-2 rounded" style={{ background: 'rgba(59, 130, 246, 0.08)' }}>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{ borderColor: '#2563eb' }}></div>
-                        <p style={{ color: '#2563eb', fontWeight: 500 }}>Calculating route...</p>
-                      </div>
-                    </>
-                  ) : routeResult && routeResult.totalDistance > 0 ? (
-                    <>
+                      {/* Total summary */}
                       <div className="grid grid-cols-2 gap-2 p-2 rounded" style={{ background: 'rgba(34, 197, 94, 0.1)' }}>
                         <div>
-                          <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>Distance</p>
-                          <p style={{ fontWeight: 700, color: '#111827' }}>{Number(routeResult.totalDistance).toFixed(2)} km</p>
+                          <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>Total Distance</p>
+                          <p style={{ fontWeight: 700, color: '#111827' }}>
+                            {routeLegs.reduce((sum, l) => sum + Number(l.totalDistance), 0).toFixed(2)} km
+                          </p>
                         </div>
                         <div>
-                          <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>Time</p>
-                          <p style={{ fontWeight: 700, color: '#111827' }}>{routeResult.estimatedTime} min</p>
+                          <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>Total Time</p>
+                          <p style={{ fontWeight: 700, color: '#111827' }}>
+                            {routeLegs.reduce((sum, l) => sum + l.estimatedTime, 0)} min
+                          </p>
                         </div>
                       </div>
-                      {routeResult.virtualConnections && routeResult.virtualConnections.length > 0 && (
-                        <div className="p-1.5 rounded" style={{ fontSize: '0.7rem', background: 'rgba(245, 158, 11, 0.1)', color: '#92400e' }}>
-                          Includes {routeResult.virtualConnections.length} walking connection{routeResult.virtualConnections.length > 1 ? 's' : ''} to/from road
+
+                      {/* Per-leg breakdown */}
+                      {routeLegs.length > 1 && (
+                        <div className="space-y-1 pt-1">
+                          <p style={{ fontSize: '0.7rem', fontWeight: 500, color: '#6b7280' }}>Legs</p>
+                          {routeLegs.map((leg, idx) => (
+                            <div key={idx} className="p-1.5 rounded" style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.04)', color: '#374151' }}>
+                              <span style={{ fontWeight: 500, color: '#7c3aed' }}>Leg {idx + 1}</span>{': '}
+                              {idx === 0 ? 'Start' : routeStops[idx - 1].name} {'\u2192'} {routeStops[idx].name}
+                              <span style={{ color: '#6b7280' }}> ({Number(leg.totalDistance).toFixed(2)}km, ~{leg.estimatedTime}min)</span>
+                            </div>
+                          ))}
                         </div>
                       )}
-                      {routeResult.steps.length > 0 && (
+
+                      {/* Directions */}
+                      {routeLegs.some((l) => l.steps.length > 0) && (
                         <div className="pt-2">
                           <p style={{ fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.25rem', color: '#374151' }}>
-                            Directions ({routeResult.steps.length} step{routeResult.steps.length > 1 ? 's' : ''})
+                            Directions
                           </p>
                           <div className="max-h-32 overflow-y-auto space-y-1">
-                            {routeResult.steps.map((step, idx) => (
-                              <div key={idx} className="p-1.5 rounded" style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.04)', color: '#374151' }}>
-                                <span style={{ fontWeight: 500, color: '#2563eb' }}>{idx + 1}.</span>{' '}
-                                {step.instruction}
-                                <span style={{ color: '#6b7280' }}> ({Number(step.distance).toFixed(2)}km)</span>
-                              </div>
-                            ))}
+                            {routeLegs.flatMap((leg, legIdx) =>
+                              leg.steps.map((step, stepIdx) => (
+                                <div key={`${legIdx}-${stepIdx}`} className="p-1.5 rounded" style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.04)', color: '#374151' }}>
+                                  {routeLegs.length > 1 && (
+                                    <span style={{ fontSize: '0.65rem', color: '#9ca3af' }}>[Leg {legIdx + 1}] </span>
+                                  )}
+                                  <span style={{ fontWeight: 500, color: '#2563eb' }}>{stepIdx + 1}.</span>{' '}
+                                  {step.instruction}
+                                  <span style={{ color: '#6b7280' }}> ({Number(step.distance).toFixed(2)}km)</span>
+                                </div>
+                              ))
+                            )}
                           </div>
                         </div>
                       )}
+
+                      {routeError && (
+                        <div className="p-2 rounded" style={{ background: 'rgba(220, 38, 38, 0.08)' }}>
+                          <p style={{ color: '#dc2626', fontSize: '0.75rem' }}>{routeError}</p>
+                        </div>
+                      )}
+
+                      <p style={{ fontSize: '0.75rem', color: '#6b7280', fontStyle: 'italic' }}>
+                        Add more stops from the dropdown or click the map
+                      </p>
                     </>
-                  ) : (
-                    <>
-                      <p style={{ color: '#16a34a' }}>Start: {routeStart ? `${routeStart[0].toFixed(6)}, ${routeStart[1].toFixed(6)}` : '—'}</p>
-                      <p style={{ color: '#dc2626' }}>End: {routeEnd ? `${routeEnd[0].toFixed(6)}, ${routeEnd[1].toFixed(6)}` : '—'}</p>
-                      <div className="p-2 rounded" style={{ background: 'rgba(220, 38, 38, 0.08)' }}>
-                        <p style={{ color: '#dc2626', fontWeight: 600, fontSize: '0.8rem' }}>Route not found</p>
-                        <p style={{ fontSize: '0.7rem', color: '#991b1b' }}>
-                          {routeError || 'No connecting roads between start and destination. Try adding more roads or choosing different points.'}
-                        </p>
-                      </div>
-                    </>
-                  )}
-                  {routeEnd && !routeLoading && (
-                    <p style={{ fontSize: '0.75rem', color: '#6b7280', fontStyle: 'italic' }}>Click anywhere to start a new route</p>
-                  )}
+                  ) : routeError ? (
+                    <div className="p-2 rounded" style={{ background: 'rgba(220, 38, 38, 0.08)' }}>
+                      <p style={{ color: '#dc2626', fontWeight: 600, fontSize: '0.8rem' }}>Route not found</p>
+                      <p style={{ fontSize: '0.7rem', color: '#991b1b' }}>{routeError}</p>
+                    </div>
+                  ) : null}
                 </div>
 
-                {(routeStart || routeResult) && (
+                {(routeStart || routeLegs.length > 0) && (
                   <Button size="sm" color="danger" variant="flat" onClick={clearRoute} className="w-full">
                     Clear Route
                   </Button>
@@ -1305,36 +1337,47 @@ export default function MapManager({
           </CircleMarker>
         )}
 
-        {/* Route testing: end marker */}
-        {mode === 'test_route' && routeEnd && (
+        {/* Route testing: stop markers */}
+        {mode === 'test_route' && routeStops.map((stop, idx) => (
           <CircleMarker
-            center={routeEnd}
-            radius={10}
-            pathOptions={{ color: '#dc2626', fillColor: '#ef4444', fillOpacity: 0.9, weight: 3 }}
+            key={`route-stop-${idx}`}
+            center={stop.position}
+            radius={idx === routeStops.length - 1 ? 10 : 8}
+            pathOptions={{
+              color: idx === routeStops.length - 1 ? '#dc2626' : '#7c3aed',
+              fillColor: idx === routeStops.length - 1 ? '#ef4444' : '#a78bfa',
+              fillOpacity: 0.9,
+              weight: 3,
+            }}
           >
-            <Popup><span style={{ color: '#111', fontWeight: 600 }}>Destination</span></Popup>
+            <Popup><span style={{ color: '#111', fontWeight: 600 }}>Stop {idx + 1}: {stop.name}</span></Popup>
           </CircleMarker>
-        )}
+        ))}
 
-        {/* Route testing: route polyline */}
-        {mode === 'test_route' && routePositions.length >= 2 && (
-          <Polyline
-            positions={routePositions}
-            pathOptions={{ color: '#7c3aed', weight: 5, opacity: 0.8, dashArray: '10, 6' }}
-          />
+        {/* Route testing: route polylines (one per leg) */}
+        {mode === 'test_route' && routeLegPositions.map((positions, idx) =>
+          positions.length >= 2 ? (
+            <Polyline
+              key={`route-leg-${idx}`}
+              positions={positions}
+              pathOptions={{ color: '#7c3aed', weight: 5, opacity: 0.8, dashArray: '10, 6' }}
+            />
+          ) : null
         )}
 
         {/* Route testing: virtual connection lines (walking) */}
-        {mode === 'test_route' && routeResult?.virtualConnections?.map((vc, idx) => (
-          <Polyline
-            key={`vc-${idx}`}
-            positions={[
-              [vc.from.lat, vc.from.lon],
-              [vc.to.lat, vc.to.lon],
-            ]}
-            pathOptions={{ color: '#f59e0b', weight: 3, opacity: 0.7, dashArray: '5, 8' }}
-          />
-        ))}
+        {mode === 'test_route' && routeLegs.flatMap((leg, legIdx) =>
+          (leg.virtualConnections || []).map((vc, idx) => (
+            <Polyline
+              key={`vc-${legIdx}-${idx}`}
+              positions={[
+                [vc.from.lat, vc.from.lon],
+                [vc.to.lat, vc.to.lon],
+              ]}
+              pathOptions={{ color: '#f59e0b', weight: 3, opacity: 0.7, dashArray: '5, 8' }}
+            />
+          ))
+        )}
 
         {/* Destination placement marker */}
         {mode === 'add_destination' && pendingPoint && (

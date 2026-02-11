@@ -598,6 +598,7 @@ body {
   backdrop-filter: blur(30px) saturate(1.5) !important;
   -webkit-backdrop-filter: blur(30px) saturate(1.5) !important;
   overflow: hidden !important;
+  z-index: 9999 !important;
 }
 
 .map-select-popover [data-slot="listbox-wrapper"],
