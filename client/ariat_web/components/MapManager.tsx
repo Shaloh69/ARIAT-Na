@@ -52,6 +52,7 @@ export interface RouteResult {
     from: string;
     to: string;
   }>;
+  routeGeometry?: [number, number][]; // Full polyline [lat, lng][] following actual road paths
   virtualConnections?: Array<{
     type: 'start' | 'end';
     from: { lat: number; lon: number; name?: string };
@@ -832,9 +833,11 @@ export default function MapManager({
     ),
   }));
 
-  // Route positions for polyline
+  // Route positions for polyline — prefer routeGeometry (follows actual road paths) over intersection path
   const routePositions: [number, number][] = routeResult
-    ? routeResult.path.map((p) => [p.latitude, p.longitude] as [number, number])
+    ? routeResult.routeGeometry && routeResult.routeGeometry.length >= 2
+      ? routeResult.routeGeometry
+      : routeResult.path.map((p) => [p.latitude, p.longitude] as [number, number])
     : [];
 
   return (
