@@ -6,6 +6,7 @@ import '../../services/api_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/cache_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive_utils.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/toast_overlay.dart';
@@ -69,8 +70,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 8),
-              const Text('Settings', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: AppColors.textStrong))
-                  .animate().fadeIn(duration: 400.ms),
+              Text(
+                'Settings',
+                style: TextStyle(
+                  fontSize: ResponsiveUtils.responsiveFontSize(
+                    context,
+                    small: 22,
+                    medium: 28,
+                    large: 32,
+                  ),
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textStrong,
+                ),
+              ).animate().fadeIn(duration: 400.ms),
               const SizedBox(height: 24),
 
               // Connection status

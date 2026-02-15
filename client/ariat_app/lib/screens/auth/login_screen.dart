@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/auth_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive_utils.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/toast_overlay.dart';
@@ -57,11 +58,24 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final isOnline = context.watch<ConnectivityService>().isOnline;
 
+    final horizontalPadding = ResponsiveUtils.responsivePadding(
+      context,
+      small: 16,
+      medium: 24,
+      large: 32,
+    );
+    final titleFontSize = ResponsiveUtils.responsiveFontSize(
+      context,
+      small: 22,
+      medium: 28,
+      large: 32,
+    );
+
     return GradientBackground(
       child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.all(horizontalPadding),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -71,9 +85,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     .fadeIn(duration: 600.ms)
                     .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1), duration: 600.ms, curve: Curves.easeOut),
                 const SizedBox(height: 12),
-                const Text(
+                Text(
                   'AIRAT-NA',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: AppColors.textStrong, letterSpacing: 2),
+                  style: TextStyle(fontSize: titleFontSize, fontWeight: FontWeight.w700, color: AppColors.textStrong, letterSpacing: ResponsiveUtils.isSmallScreen(context) ? 1 : 2),
                 ).animate().fadeIn(delay: 200.ms, duration: 500.ms),
                 const SizedBox(height: 4),
                 const Text(

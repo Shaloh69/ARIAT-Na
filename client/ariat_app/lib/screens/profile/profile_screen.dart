@@ -93,8 +93,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ).animate().fadeIn(duration: 500.ms).scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1), duration: 500.ms),
 
               const SizedBox(height: 14),
-              Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textStrong))
-                  .animate().fadeIn(delay: 100.ms, duration: 400.ms),
+              Text(
+                name,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textStrong),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ).animate().fadeIn(delay: 100.ms, duration: 400.ms),
               const SizedBox(height: 4),
               Text(email, style: const TextStyle(fontSize: 13, color: AppColors.textMuted))
                   .animate().fadeIn(delay: 200.ms, duration: 400.ms),

@@ -93,7 +93,7 @@ class _AppShellState extends State<AppShell> {
       onTap: () => setState(() => _selectedIndex = index),
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 64,
+        width: MediaQuery.of(context).size.width / 5.2,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

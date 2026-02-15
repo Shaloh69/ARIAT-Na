@@ -10,6 +10,7 @@ import '../../services/location_service.dart';
 import '../../models/destination.dart';
 import '../../models/route_result.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive_utils.dart';
 import '../../widgets/toast_overlay.dart';
 
 class MapScreen extends StatefulWidget {
@@ -309,7 +310,7 @@ class _MapScreenState extends State<MapScreen> {
                   final colors = [AppColors.purple, AppColors.blue, AppColors.cyan, AppColors.green, AppColors.amber];
                   return Polyline(
                     points: _routePolyline(e.value),
-                    strokeWidth: 5,
+                    strokeWidth: ResponsiveUtils.isSmallScreen(context) ? 3 : 5,
                     color: colors[e.key % colors.length].withAlpha(200),
                   );
                 }).toList(),
@@ -401,7 +402,11 @@ class _MapScreenState extends State<MapScreen> {
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
                 child: Container(
-                  constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+                  constraints: BoxConstraints(
+                    maxHeight: ResponsiveUtils.isShortScreen(context)
+                        ? MediaQuery.of(context).size.height * 0.4
+                        : MediaQuery.of(context).size.height * 0.5,
+                  ),
                   padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
                   decoration: BoxDecoration(
                     color: AppColors.surfaceCard.withAlpha(230),
@@ -476,7 +481,12 @@ class _MapScreenState extends State<MapScreen> {
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(color: Colors.white.withAlpha(15)),
                     ),
-                    child: Text(d.name, style: const TextStyle(fontSize: 11, color: AppColors.text)),
+                    child: Text(
+                      d.name,
+                      style: const TextStyle(fontSize: 11, color: AppColors.text),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               )).toList(),
@@ -522,7 +532,14 @@ class _MapScreenState extends State<MapScreen> {
                     child: Center(child: Text('${i + 1}', style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w700))),
                   ),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(stop.name, style: const TextStyle(fontSize: 12, color: AppColors.text), overflow: TextOverflow.ellipsis)),
+                  Expanded(
+                    child: Text(
+                      stop.name,
+                      style: const TextStyle(fontSize: 12, color: AppColors.text),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                   if (i < _routeLegs.length)
                     Padding(
                       padding: const EdgeInsets.only(right: 6),

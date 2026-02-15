@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/destination.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive_utils.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
 
@@ -38,7 +39,9 @@ class DestinationDetailScreen extends StatelessWidget {
                   children: [
                     if (destination.images.isNotEmpty)
                       SizedBox(
-                        height: 240,
+                        height: ResponsiveUtils.isShortScreen(context)
+                            ? ResponsiveUtils.screenHeight(context) * 0.25
+                            : 240,
                         child: PageView.builder(
                           itemCount: destination.images.length,
                           itemBuilder: (context, index) {
@@ -62,7 +65,14 @@ class DestinationDetailScreen extends StatelessWidget {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(child: Text(destination.name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.textStrong))),
+                              Expanded(
+                                child: Text(
+                                  destination.name,
+                                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.textStrong),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                               if (destination.rating > 0)
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -100,14 +110,38 @@ class DestinationDetailScreen extends StatelessWidget {
                           ],
 
                           const SizedBox(height: 20),
-                          Row(
-                            children: [
-                              Expanded(child: _infoCard('Local Fee', destination.entranceFeeLocal > 0 ? 'PHP ${destination.entranceFeeLocal.toStringAsFixed(0)}' : 'Free')),
-                              const SizedBox(width: 10),
-                              Expanded(child: _infoCard('Foreign Fee', destination.entranceFeeForeign > 0 ? 'PHP ${destination.entranceFeeForeign.toStringAsFixed(0)}' : 'Free')),
-                              const SizedBox(width: 10),
-                              Expanded(child: _infoCard('Duration', destination.averageVisitDuration > 0 ? '${destination.averageVisitDuration} min' : 'N/A')),
-                            ],
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              if (constraints.maxWidth < 350) {
+                                return Wrap(
+                                  spacing: 10,
+                                  runSpacing: 10,
+                                  children: [
+                                    SizedBox(
+                                      width: (constraints.maxWidth - 10) / 2,
+                                      child: _infoCard('Local Fee', destination.entranceFeeLocal > 0 ? 'PHP ${destination.entranceFeeLocal.toStringAsFixed(0)}' : 'Free'),
+                                    ),
+                                    SizedBox(
+                                      width: (constraints.maxWidth - 10) / 2,
+                                      child: _infoCard('Foreign Fee', destination.entranceFeeForeign > 0 ? 'PHP ${destination.entranceFeeForeign.toStringAsFixed(0)}' : 'Free'),
+                                    ),
+                                    SizedBox(
+                                      width: constraints.maxWidth,
+                                      child: _infoCard('Duration', destination.averageVisitDuration > 0 ? '${destination.averageVisitDuration} min' : 'N/A'),
+                                    ),
+                                  ],
+                                );
+                              }
+                              return Row(
+                                children: [
+                                  Expanded(child: _infoCard('Local Fee', destination.entranceFeeLocal > 0 ? 'PHP ${destination.entranceFeeLocal.toStringAsFixed(0)}' : 'Free')),
+                                  const SizedBox(width: 10),
+                                  Expanded(child: _infoCard('Foreign Fee', destination.entranceFeeForeign > 0 ? 'PHP ${destination.entranceFeeForeign.toStringAsFixed(0)}' : 'Free')),
+                                  const SizedBox(width: 10),
+                                  Expanded(child: _infoCard('Duration', destination.averageVisitDuration > 0 ? '${destination.averageVisitDuration} min' : 'N/A')),
+                                ],
+                              );
+                            },
                           ).animate().fadeIn(delay: 300.ms, duration: 400.ms),
 
                           if (destination.description != null && destination.description!.isNotEmpty) ...[

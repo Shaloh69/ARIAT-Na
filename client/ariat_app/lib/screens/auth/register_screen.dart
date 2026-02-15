@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/auth_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive_utils.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/toast_overlay.dart';
@@ -129,14 +130,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+                padding: EdgeInsets.symmetric(
+                  horizontal: ResponsiveUtils.responsivePadding(
+                    context,
+                    small: 16,
+                    medium: 20,
+                    large: 24,
+                  ),
+                ),
                 child: Column(
                   children: [
                     Image.asset('assets/logo.png', width: 56, height: 56)
                         .animate().fadeIn(duration: 500.ms),
                     const SizedBox(height: 8),
-                    const Text('AIRAT-NA', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textStrong, letterSpacing: 2))
-                        .animate().fadeIn(delay: 100.ms, duration: 500.ms),
+                    Text(
+                      'AIRAT-NA',
+                      style: TextStyle(
+                        fontSize: ResponsiveUtils.responsiveFontSize(
+                          context,
+                          small: 18,
+                          medium: 22,
+                          large: 24,
+                        ),
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textStrong,
+                        letterSpacing: 2,
+                      ),
+                    ).animate().fadeIn(delay: 100.ms, duration: 500.ms),
                     const SizedBox(height: 28),
                     GlassCard(
                       padding: const EdgeInsets.all(24),

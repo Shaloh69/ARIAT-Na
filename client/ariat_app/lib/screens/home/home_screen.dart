@@ -8,6 +8,7 @@ import '../../services/api_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../models/destination.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive_utils.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/toast_overlay.dart';
@@ -107,8 +108,12 @@ class _HomeScreenState extends State<HomeScreen> {
                               ],
                             ).animate().fadeIn(duration: 500.ms),
                             const SizedBox(height: 20),
-                            Text('Hello, $userName', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: AppColors.textStrong))
-                                .animate().fadeIn(delay: 100.ms, duration: 500.ms),
+                            Text(
+                              'Hello, $userName',
+                              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: AppColors.textStrong),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ).animate().fadeIn(delay: 100.ms, duration: 500.ms),
                             const SizedBox(height: 4),
                             Text(
                               auth.isOfflineSession ? 'Offline mode — cached data shown' : 'Where would you like to go?',
@@ -154,7 +159,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       SliverToBoxAdapter(
                         child: SizedBox(
-                          height: 80,
+                          height: ResponsiveUtils.isShortScreen(context) ? 70 : 80,
                           child: ListView.separated(
                             scrollDirection: Axis.horizontal,
                             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -170,7 +175,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                   children: [
                                     const Icon(FluentIcons.poi, color: AppColors.red400, size: 22),
                                     const SizedBox(height: 4),
-                                    Text(cat.name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.text)),
+                                    Text(
+                                      cat.name,
+                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.text),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                     Text('${cat.destinationCount}', style: const TextStyle(fontSize: 10, color: AppColors.textFaint)),
                                   ],
                                 ),
