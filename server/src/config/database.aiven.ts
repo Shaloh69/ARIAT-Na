@@ -6,9 +6,20 @@ import path from 'path';
 dotenv.config();
 
 // SSL Configuration for Aiven MySQL
-const sslConfig = process.env.DB_SSL_CA
+const sslCaPath = process.env.DB_SSL_CA
+  ? path.resolve(process.cwd(), process.env.DB_SSL_CA)
+  : null;
+const hasCustomCa = !!sslCaPath && fs.existsSync(sslCaPath);
+
+if (sslCaPath && !hasCustomCa) {
+  console.warn(
+    `[DB] DB_SSL_CA file not found at ${sslCaPath}. Falling back to default SSL settings.`
+  );
+}
+
+const sslConfig = hasCustomCa
   ? {
-      ca: fs.readFileSync(path.resolve(process.env.DB_SSL_CA)),
+      ca: fs.readFileSync(sslCaPath!),
       rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
     }
   : undefined;
