@@ -50,10 +50,12 @@ export const testConnection = async (): Promise<void> => {
 // Execute query helper
 export const query = async <T = any>(
   sql: string,
-  params?: any[]
+  params: any[] = []
 ): Promise<T> => {
   try {
-    const [rows] = await pool.execute(sql, params);
+    const [rows] = params.length
+      ? await pool.execute(sql, params)
+      : await pool.execute(sql);
     return rows as T;
   } catch (error) {
     console.error('Database query error:', error);
