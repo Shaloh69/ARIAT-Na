@@ -93,9 +93,9 @@ export default function LoginPage() {
                   <input type="checkbox" className="rounded" />
                   <span className="text-default-600">Remember me</span>
                 </label>
-                <a href="#" className="text-primary hover:underline">
+                <button type="button" className="text-primary hover:underline">
                   Forgot password?
-                </a>
+                </button>
               </div>
 
               <Button
@@ -108,11 +108,7 @@ export default function LoginPage() {
                 {isLoading ? 'Signing in...' : 'Sign In'}
               </Button>
 
-              <div className="mt-2 rounded-lg bg-default-100 p-3 text-xs">
-                <p className="font-semibold mb-1">Demo Credentials:</p>
-                <p>Email: admin@airat-na.com</p>
-                <p>Password: Admin123!</p>
-              </div>
+
             </form>
           </CardBody>
         </Card>

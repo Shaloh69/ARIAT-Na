@@ -309,7 +309,7 @@ function ZoomAwareDestinationMarker({
     return L.divIcon({
       className: 'destination-marker-zoomed',
       html: `
-        <div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%);pointer-events:auto;">
+        <div style="display:flex;flex-direction:column;align-items:center;pointer-events:auto;">
           ${imgHtml}
           <div style="margin-top:4px;padding:2px 8px;background:rgba(15,23,42,0.9);border-radius:6px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;">
             <span style="color:#fff;font-size:11px;font-weight:600;">${name}</span>
@@ -327,7 +327,7 @@ function ZoomAwareDestinationMarker({
     return L.divIcon({
       className: 'destination-marker-pin',
       html: `
-        <div style="display:flex;align-items:center;justify-content:center;transform:translate(-50%,-100%);">
+        <div style="display:flex;align-items:center;justify-content:center;">
           <svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M14 0C6.268 0 0 6.268 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.268 21.732 0 14 0z" fill="${isFeatured ? '#f59e0b' : '#e11d48'}"/>
             <circle cx="14" cy="14" r="7" fill="white" fill-opacity="0.9"/>
@@ -853,7 +853,7 @@ export default function MapManager({
           <div className="space-y-3">
             {/* Mode Selection */}
             <div>
-              <label style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem', display: 'block', color: '#374151' }}>Mode</label>
+              <span style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem', display: 'block', color: '#374151' }}>Mode</span>
               <div className="grid grid-cols-3 gap-2">
                 <Button size="sm" color={mode === 'view' ? 'primary' : 'default'} variant={mode === 'view' ? 'solid' : 'flat'} onClick={() => switchMode('view')}>
                   View

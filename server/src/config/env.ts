@@ -59,3 +59,15 @@ export const config = {
   isProduction: process.env.NODE_ENV === 'production',
   isDevelopment: process.env.NODE_ENV === 'development',
 };
+
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET environment variable must be set in production');
+  }
+  if (!process.env.ADMIN_EMAIL) {
+    throw new Error('ADMIN_EMAIL environment variable must be set in production');
+  }
+  if (!process.env.ADMIN_PASSWORD) {
+    throw new Error('ADMIN_PASSWORD environment variable must be set in production');
+  }
+}

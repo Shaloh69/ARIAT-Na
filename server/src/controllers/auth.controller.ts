@@ -175,6 +175,59 @@ export const getCurrentUser = async (
   });
 };
 
+/**
+ * Update current user profile
+ * PUT /api/v1/auth/user/me
+ */
+export const updateCurrentUser = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  if (!req.user) {
+    throw new AppError('User not authenticated', 401);
+  }
+
+  const { full_name, phone_number } = req.body;
+
+  if (!full_name && phone_number === undefined) {
+    throw new AppError('At least one field (full_name or phone_number) is required', 400);
+  }
+
+  const fields: string[] = [];
+  const values: any[] = [];
+
+  if (full_name !== undefined) {
+    fields.push('full_name = ?');
+    values.push(full_name);
+  }
+  if (phone_number !== undefined) {
+    fields.push('phone_number = ?');
+    values.push(phone_number);
+  }
+
+  values.push(req.user.id);
+
+  await pool.execute(
+    `UPDATE users SET ${fields.join(', ')}, updated_at = NOW() WHERE id = ?`,
+    values
+  );
+
+  const [users]: any = await pool.execute(
+    'SELECT id, email, full_name, phone_number, profile_image_url, is_verified, created_at FROM users WHERE id = ?',
+    [req.user.id]
+  );
+
+  if (users.length === 0) {
+    throw new AppError('User not found', 404);
+  }
+
+  res.json({
+    success: true,
+    message: 'Profile updated successfully',
+    data: users[0],
+  });
+};
+
 // =====================================================
 // ADMIN AUTHENTICATION (Web Console)
 // =====================================================

@@ -3,6 +3,7 @@ import {
   registerUser,
   loginUser,
   getCurrentUser,
+  updateCurrentUser,
   loginAdmin,
   getCurrentAdmin,
   refreshAccessToken,
@@ -41,6 +42,12 @@ router.get(
   '/user/me',
   authenticateUser,
   asyncHandler(getCurrentUser)
+);
+
+router.put(
+  '/user/me',
+  authenticateUser,
+  asyncHandler(updateCurrentUser)
 );
 
 // =====================================================

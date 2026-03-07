@@ -49,8 +49,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       AppToast.warning(context, 'Please fill in all required fields');
       return;
     }
-    if (password.length < 6) {
-      AppToast.warning(context, 'Password must be at least 6 characters');
+    if (password.length < 8) {
+      AppToast.warning(context, 'Password must be at least 8 characters');
       return;
     }
     if (password != confirm) {

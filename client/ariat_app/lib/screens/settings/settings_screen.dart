@@ -33,18 +33,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveApiUrl() async {
+    final currentContext = context;
     final url = _urlController.text.trim();
     if (url.isEmpty) {
-      AppToast.warning(context, 'Please enter a valid URL');
+      AppToast.warning(currentContext, 'Please enter a valid URL');
       return;
     }
     try {
-      final auth = context.read<AuthService>();
+      final auth = currentContext.read<AuthService>();
+      final api = currentContext.read<ApiService>();
       await auth.setBaseUrl(url);
-      context.read<ApiService>().baseUrl = url;
-      if (mounted) AppToast.success(context, 'API URL updated');
+      if (!currentContext.mounted) return;
+      api.baseUrl = url;
+      AppToast.success(currentContext, 'API URL updated');
     } catch (e) {
-      if (mounted) AppToast.error(context, 'Failed to update URL');
+      if (!currentContext.mounted) return;
+      AppToast.error(currentContext, 'Failed to update URL');
     }
   }
 
@@ -246,7 +250,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Button(
                         onPressed: () async {
                           await context.read<AuthService>().logout();
-                          if (mounted) AppToast.info(context, 'Signed out');
+                          if (!context.mounted) return;
+                          AppToast.info(context, 'Signed out');
                         },
                         style: ButtonStyle(
                           backgroundColor: WidgetStateProperty.all(const Color(0xFFDC2626).withAlpha(20)),

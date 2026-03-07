@@ -65,7 +65,7 @@ export default function NavigationDashboardPage() {
               <div>
                 <p className="text-sm text-gray-500 mb-1">Server URL</p>
                 <code className="text-sm bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
-                  ws://localhost:5000
+                  {process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:5000'}
                 </code>
               </div>
               <div>

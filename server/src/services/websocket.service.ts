@@ -8,6 +8,7 @@ import { Server, Socket } from 'socket.io';
 import { verifyAccessToken } from '../utils/auth';
 import { recalculateRoute, checkIfOffCourse } from './pathfinding.service';
 import { logger } from '../utils/logger';
+import { config } from '../config/env';
 
 interface NavigationSession {
   userId: string;
@@ -31,7 +32,7 @@ let io: Server;
 export function initializeWebSocket(httpServer: HttpServer): Server {
   io = new Server(httpServer, {
     cors: {
-      origin: '*', // Configure appropriately for production
+      origin: config.cors.origin,
       methods: ['GET', 'POST'],
       credentials: true,
     },
@@ -121,6 +122,11 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
           return;
         }
 
+        if (session.userId !== socket.data.user?.id) {
+          socket.emit('navigation:error', { message: 'Unauthorized session access' });
+          return;
+        }
+
         // Update current position
         session.currentPosition = { lat: latitude, lon: longitude };
         session.lastUpdate = new Date();
@@ -188,6 +194,11 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
 
         if (!session || !session.route) {
           socket.emit('navigation:error', { message: 'No active navigation session' });
+          return;
+        }
+
+        if (session.userId !== socket.data.user?.id) {
+          socket.emit('navigation:error', { message: 'Unauthorized session access' });
           return;
         }
 

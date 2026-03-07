@@ -14,17 +14,15 @@ class ApiException implements Exception {
 
 class ApiService {
   static const String _defaultBaseUrl = 'http://10.0.2.2:5000/api/v1';
-  String _baseUrl;
+  String baseUrl;
   final AuthService _authService;
   final CacheService _cache;
   final ConnectivityService _connectivity;
 
   ApiService(this._authService, this._cache, this._connectivity,
       {String? baseUrl})
-      : _baseUrl = baseUrl ?? _defaultBaseUrl;
+      : baseUrl = baseUrl ?? _defaultBaseUrl;
 
-  String get baseUrl => _baseUrl;
-  set baseUrl(String url) => _baseUrl = url;
   bool get isOnline => _connectivity.isOnline;
 
   Map<String, String> _headers({bool auth = false}) {
@@ -40,7 +38,7 @@ class ApiService {
     if (_connectivity.isOnline) {
       try {
         final uri =
-            Uri.parse('$_baseUrl$path').replace(queryParameters: query);
+            Uri.parse('$baseUrl$path').replace(queryParameters: query);
         final response = await http.get(uri, headers: _headers(auth: auth));
         final body = _handleResponse(response);
 
@@ -61,7 +59,7 @@ class ApiService {
     if (!_connectivity.isOnline) {
       throw ApiException('No internet connection. This action requires online access.', 0);
     }
-    final uri = Uri.parse('$_baseUrl$path');
+    final uri = Uri.parse('$baseUrl$path');
     final response = await http.post(uri,
         headers: _headers(auth: auth),
         body: body != null ? jsonEncode(body) : null);
@@ -73,7 +71,7 @@ class ApiService {
     if (!_connectivity.isOnline) {
       throw ApiException('No internet connection. This action requires online access.', 0);
     }
-    final uri = Uri.parse('$_baseUrl$path');
+    final uri = Uri.parse('$baseUrl$path');
     final response = await http.put(uri,
         headers: _headers(auth: auth),
         body: body != null ? jsonEncode(body) : null);
@@ -85,7 +83,7 @@ class ApiService {
     if (!_connectivity.isOnline) {
       throw ApiException('No internet connection. This action requires online access.', 0);
     }
-    final uri = Uri.parse('$_baseUrl$path');
+    final uri = Uri.parse('$baseUrl$path');
     final response =
         await http.delete(uri, headers: _headers(auth: auth));
     return _handleResponse(response);
@@ -96,7 +94,7 @@ class ApiService {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return body;
     }
-    final message = body['message'] as String? ?? 'Request failed';
+    final message = body['message'] as String? ?? body['error'] as String? ?? 'Request failed';
     throw ApiException(message, response.statusCode);
   }
 

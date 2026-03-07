@@ -30,7 +30,13 @@ class _MapScreenState extends State<MapScreen> {
   bool _showRoutePanel = false;
   bool _isNavigating = false;
 
-  static const _defaultCenter = LatLng(14.5995, 120.9842);
+  // Cebu Province (OSM relation:1506936) bounding box:
+  // minlat=9.3223413, minlon=123.2352650, maxlat=11.6238718, maxlon=124.6671822
+  static final _cebuBounds = LatLngBounds(
+    LatLng(9.3223413, 123.2352650),   // southwest
+    LatLng(11.6238718, 124.6671822),  // northeast
+  );
+  static const _defaultCenter = LatLng(10.4731066, 123.9512236);
 
   @override
   void initState() {
@@ -233,8 +239,15 @@ class _MapScreenState extends State<MapScreen> {
         FlutterMap(
           mapController: _mapController,
           options: MapOptions(
+            initialCameraFit: CameraFit.insideBounds(
+              bounds: _cebuBounds,
+              padding: EdgeInsets.all(20),
+            ),
             initialCenter: _defaultCenter,
             initialZoom: 13,
+            minZoom: 8.2,
+            maxZoom: 18,
+            cameraConstraint: CameraConstraint.contain(bounds: _cebuBounds),
             onTap: (_, point) => _onMapTap(point),
           ),
           children: [

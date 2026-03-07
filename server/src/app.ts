@@ -115,9 +115,9 @@ const httpServer = http.createServer(app);
 // Initialize WebSocket server
 initializeWebSocket(httpServer);
 
-// Canonical admin credentials — always use these regardless of .env overrides
-const ADMIN_EMAIL = 'admin@airat-na.com';
-const ADMIN_PASSWORD = 'Admin123!';
+// Admin credentials sourced from environment (see config/env.ts)
+const ADMIN_EMAIL = config.admin.email;
+const ADMIN_PASSWORD = config.admin.password;
 // Known old misspelling that may exist in the database from earlier seeds
 const OLD_ADMIN_EMAIL = 'admin@ariat-na.com';
 

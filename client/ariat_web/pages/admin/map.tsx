@@ -299,7 +299,7 @@ export default function MapPage() {
           <CardBody>
             <h3 className="font-semibold mb-2">Adding Points & Destinations</h3>
             <ol className="text-sm space-y-1 text-gray-600 dark:text-gray-400">
-              <li>1. Select "Point" or "Dest." mode</li>
+              <li>1. Select &quot;Point&quot; or &quot;Dest.&quot; mode</li>
               <li>2. For points: choose type, click map, enter name</li>
               <li>3. For destinations: click map, fill in details</li>
               <li>4. Save to create the entry</li>
@@ -311,10 +311,10 @@ export default function MapPage() {
           <CardBody>
             <h3 className="font-semibold mb-2">Drawing Roads</h3>
             <ol className="text-sm space-y-1 text-gray-600 dark:text-gray-400">
-              <li>1. Select "Road" mode</li>
+              <li>1. Select &quot;Road&quot; mode</li>
               <li>2. Choose road type</li>
               <li>3. Click points along the road path</li>
-              <li>4. Click "Finish Road" and enter name</li>
+              <li>4. Click &quot;Finish Road&quot; and enter name</li>
             </ol>
           </CardBody>
         </Card>
@@ -323,7 +323,7 @@ export default function MapPage() {
           <CardBody>
             <h3 className="font-semibold mb-2">Testing Routes</h3>
             <ol className="text-sm space-y-1 text-gray-600 dark:text-gray-400">
-              <li>1. Select "Route" mode</li>
+              <li>1. Select &quot;Route&quot; mode</li>
               <li>2. Choose optimization (distance/time)</li>
               <li>3. Click start point on map</li>
               <li>4. Click destination — route auto-calculates</li>

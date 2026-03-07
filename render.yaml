@@ -1,0 +1,54 @@
+﻿# Render Blueprint for AIRAT-NA
+#
+# REQUIRED env vars — set in Render Dashboard for airat-na-api:
+#   DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+#   DB_SSL_REJECT_UNAUTHORIZED=false  (Aiven auto-SSL; or set DB_SSL_CA=./ca/ca.pem if you commit the cert)
+#   JWT_SECRET          (openssl rand -base64 32)
+#   JWT_EXPIRES_IN      e.g. 7d
+#   JWT_REFRESH_EXPIRES_IN  e.g. 30d
+#   ADMIN_EMAIL         bootstrap admin email
+#   ADMIN_PASSWORD      bootstrap admin password (min 8 chars)
+#   SUPABASE_URL        from Supabase Console → Settings → API
+#   SUPABASE_SERVICE_KEY  service role key (keep secret)
+#   SUPABASE_BUCKET     storage bucket name (e.g. destination-media)
+#   CORS_ORIGIN         https://airat-na-web.onrender.com
+#
+# REQUIRED env vars — set in Render Dashboard for airat-na-web:
+#   NEXT_PUBLIC_API_URL  https://airat-na-api.onrender.com/api/v1
+#   NEXT_PUBLIC_WS_URL   wss://airat-na-api.onrender.com
+#
+# Optional: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
+#           RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS, MAX_FILE_SIZE
+
+services:
+  - type: web
+    name: airat-na-api
+    env: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_PREFIX
+        value: /api/v1
+
+  - type: web
+    name: airat-na-web
+    env: node
+    rootDir: client/ariat_web
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Set to your actual Render API service URL after first deploy:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://airat-na-api.onrender.com/api/v1
+      - key: NEXT_PUBLIC_WS_URL
+        value: wss://airat-na-api.onrender.com

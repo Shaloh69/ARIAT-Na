@@ -90,7 +90,7 @@ export const verifyRefreshToken = async (
   token: string
 ): Promise<TokenPayload | null> => {
   const sql = `
-    SELECT rt.*, u.email as user_email, a.email as admin_email
+    SELECT rt.*, u.email as user_email, a.email as admin_email, a.role as admin_role
     FROM refresh_tokens rt
     LEFT JOIN users u ON rt.user_id = u.id
     LEFT JOIN admins a ON rt.admin_id = a.id
@@ -109,7 +109,7 @@ export const verifyRefreshToken = async (
     id: tokenData.user_type === 'user' ? tokenData.user_id : tokenData.admin_id,
     email: tokenData.user_type === 'user' ? tokenData.user_email : tokenData.admin_email,
     type: tokenData.user_type,
-    role: tokenData.user_type === 'admin' ? tokenData.role : undefined,
+    role: tokenData.user_type === 'admin' ? tokenData.admin_role : undefined,
   };
 };
 

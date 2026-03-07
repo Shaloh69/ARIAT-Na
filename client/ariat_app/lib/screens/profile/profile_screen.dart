@@ -177,7 +177,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 16),
                     _actionTile('Sign Out', FluentIcons.sign_out, const Color(0xFFDC2626), () async {
                       await auth.logout();
-                      if (mounted) AppToast.info(context, 'Signed out');
+                      if (!context.mounted) return;
+                      AppToast.info(context, 'Signed out');
                     }),
                   ],
                 ),

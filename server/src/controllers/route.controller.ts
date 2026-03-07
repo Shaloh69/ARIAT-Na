@@ -62,7 +62,10 @@ export const calculateRouteByCoordinates = async (req: AuthRequest, res: Respons
   try {
     const { start_lat, start_lon, end_lat, end_lon, optimize_for = 'distance' } = req.body;
 
-    if (!start_lat || !start_lon || !end_lat || !end_lon) {
+    if (start_lat === undefined || start_lat === null ||
+        start_lon === undefined || start_lon === null ||
+        end_lat === undefined || end_lat === null ||
+        end_lon === undefined || end_lon === null) {
       res.status(400).json({
         success: false,
         message: 'start_lat, start_lon, end_lat, and end_lon are required',
