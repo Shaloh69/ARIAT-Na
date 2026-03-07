@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd /c \"cd /d d:\\\\Projects-Shem\\\\Thesis\\\\2026\\\\AIRAT-NA\\\\client\\\\ariat_app && flutter analyze\")",
+      "Read(//c//**)",
+      "Bash(cmd /c \"where flutter 2>&1 & echo EXIT:%errorlevel%\")"
+    ]
+  }
+}

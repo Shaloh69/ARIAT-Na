@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import * as turf from '@turf/turf';
+import { RowDataPacket } from 'mysql2';
 import { AuthRequest, AppError } from '../types';
 import { pool } from '../config/database';
 
@@ -30,6 +31,31 @@ function ensurePathArray(value: any): [number, number][] {
   const parsed = safeJsonParse(value, []);
   if (Array.isArray(parsed)) return parsed;
   return [];
+}
+
+/**
+ * Find an existing intersection within 15 m of (lat, lng), or create one.
+ * Used by createRoad to auto-resolve start/end nodes from path coordinates.
+ */
+async function resolveOrCreateIntersection(lat: number, lng: number, labelHint: string): Promise<string> {
+  const SNAP_KM = 0.015; // 15 m
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    'SELECT id, latitude, longitude FROM intersections WHERE is_active = TRUE'
+  );
+  for (const row of rows as any[]) {
+    const dlat = (row.latitude as number) - lat;
+    const dlng = (row.longitude as number) - lng;
+    // 1 degree ≈ 111 km
+    const dist = Math.sqrt(dlat * dlat + dlng * dlng) * 111;
+    if (dist < SNAP_KM) return row.id as string;
+  }
+  const newId = uuidv4();
+  await pool.execute(
+    `INSERT INTO intersections (id, name, latitude, longitude, point_type, is_active)
+     VALUES (?, ?, ?, ?, 'intersection', TRUE)`,
+    [newId, labelHint, lat, lng]
+  );
+  return newId;
 }
 
 /**
@@ -135,8 +161,6 @@ export const createRoad = async (
   const {
     name,
     description,
-    start_intersection_id,
-    end_intersection_id,
     road_type = 'local_road',
     is_bidirectional = true,
   } = req.body;
@@ -144,12 +168,6 @@ export const createRoad = async (
   // Validate required fields
   if (!name || !name.trim()) {
     throw new AppError('Road name is required', 400);
-  }
-  if (!start_intersection_id) {
-    throw new AppError('Start intersection ID is required', 400);
-  }
-  if (!end_intersection_id) {
-    throw new AppError('End intersection ID is required', 400);
   }
 
   // Handle path - could arrive as string or array
@@ -171,6 +189,15 @@ export const createRoad = async (
   if (!validRoadTypes.includes(road_type)) {
     throw new AppError(`Invalid road type. Must be one of: ${validRoadTypes.join(', ')}`, 400);
   }
+
+  // Auto-resolve start/end intersections from path endpoints
+  const trimmedName = name.trim();
+  const startId = await resolveOrCreateIntersection(
+    path[0][0], path[0][1], `${trimmedName} - Start`
+  );
+  const endId = await resolveOrCreateIntersection(
+    path[path.length - 1][0], path[path.length - 1][1], `${trimmedName} - End`
+  );
 
   // Calculate distance using turf.js
   const line = turf.lineString(path.map((p: [number, number]) => [p[1], p[0]])); // [lng, lat]
@@ -197,10 +224,10 @@ export const createRoad = async (
 
   await pool.execute(sql, [
     roadId,
-    name.trim(),
+    trimmedName,
     description || null,
-    start_intersection_id,
-    end_intersection_id,
+    startId,
+    endId,
     road_type,
     distance.toFixed(2),
     estimated_time,

@@ -135,8 +135,8 @@ interface NewPoint {
 
 interface NewRoad {
   name: string;
-  start_intersection_id: string;
-  end_intersection_id: string;
+  start_intersection_id?: string;
+  end_intersection_id?: string;
   road_type: 'highway' | 'main_road' | 'local_road';
   path: [number, number][];
   is_bidirectional: boolean;
@@ -462,7 +462,7 @@ export default function MapManager({
 
   const findNearestMarker = (lat: number, lng: number) => {
     let minDist = Infinity;
-    let nearest: { position: [number, number]; name: string; type: string } | null = null;
+    let nearest: { id?: string; position: [number, number]; name: string; type: string } | null = null;
 
     for (const marker of markers) {
       const dlat = marker.position[0] - lat;
@@ -664,8 +664,6 @@ export default function MapManager({
     try {
       await onSaveRoad({
         name: roadName,
-        start_intersection_id: 'temp_start',
-        end_intersection_id: 'temp_end',
         road_type: roadType,
         path: roadPoints,
         is_bidirectional: isBidirectional,
@@ -1049,7 +1047,7 @@ export default function MapManager({
                           {routeLegs.map((leg, idx) => (
                             <div key={idx} className="p-1.5 rounded" style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.04)', color: '#374151' }}>
                               <span style={{ fontWeight: 500, color: '#7c3aed' }}>Leg {idx + 1}</span>{': '}
-                              {idx === 0 ? 'Start' : routeStops[idx - 1].name} {'\u2192'} {routeStops[idx].name}
+                              {idx === 0 ? 'Start' : (routeStops[idx - 1]?.name ?? 'Stop')} {'\u2192'} {routeStops[idx]?.name ?? 'Destination'}
                               <span style={{ color: '#6b7280' }}> ({Number(leg.totalDistance).toFixed(2)}km, ~{leg.estimatedTime}min)</span>
                             </div>
                           ))}

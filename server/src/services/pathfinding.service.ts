@@ -219,17 +219,16 @@ async function findNearestRoadNode(
     const { point, distance } = findNearestPointOnRoad(latitude, longitude, road.path);
 
     if (!bestRoadNode || distance < bestRoadNode.distance) {
-      // Find which intersection is closer to this point on the road
-      const startIntersection = intersections.find((i) => i.id === road.start_intersection_id);
-      const endIntersection = intersections.find((i) => i.id === road.end_intersection_id);
-
-      if (!startIntersection || !endIntersection) continue;
-
-      const distToStart = haversineDistance(point[0], point[1], startIntersection.latitude, startIntersection.longitude);
-      const distToEnd = haversineDistance(point[0], point[1], endIntersection.latitude, endIntersection.longitude);
-
+      // Use a synthetic intersection at the actual snapped point for precision
+      const syntheticId = `virtual_snap_${road.id}_${Math.round(point[0] * 1e6)}_${Math.round(point[1] * 1e6)}`;
       bestRoadNode = {
-        intersection: distToStart < distToEnd ? startIntersection : endIntersection,
+        intersection: {
+          id: syntheticId,
+          name: 'Snapped point',
+          latitude: point[0],
+          longitude: point[1],
+          point_type: 'virtual',
+        } as Intersection,
         distance,
         point,
       };
@@ -303,12 +302,33 @@ async function buildGraph(): Promise<{
       const totalRoadTime = road.estimated_time || 1;
       const timePerKm = totalRoadTime / totalRoadLength;
 
+      // Snap virtual nodes to real DB intersections within 50 m
+      // (excludes start/end of this road which are already in the chain)
+      const realMidIntersections = intersections.filter(
+        (i) => i.id !== road.start_intersection_id && i.id !== road.end_intersection_id
+      );
+
+      const substituteId = (vNodeId: string): string => {
+        const vNode = intersectionMap.get(vNodeId);
+        if (!vNode) return vNodeId;
+        for (const real of realMidIntersections) {
+          if (haversineDistance(vNode.latitude, vNode.longitude, real.latitude, real.longitude) <= 0.05) {
+            return real.id;
+          }
+        }
+        return vNodeId;
+      };
+
       // Build chain: start → v1 → v2 → ... → vN → end
-      const chainIds = [
+      // Deduplicate consecutive IDs after real-intersection substitution
+      const rawChain = [
         road.start_intersection_id,
         ...virtualNodes.map((v) => v.id),
         road.end_intersection_id,
       ];
+      const chainIds = rawChain
+        .map((id) => (id.startsWith('virtual_') ? substituteId(id) : id))
+        .filter((id, i, arr) => i === 0 || arr[i - 1] !== id);
 
       // Distances for each segment: [0, d1, d2, ..., dN, totalLength]
       const chainDistances = [0, ...segmentDistances, totalRoadLength];
