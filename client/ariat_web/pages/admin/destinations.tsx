@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import AdminLayout from "@/layouts/admin";
 import Head from "next/head";
 import { Card, CardBody, CardHeader } from "@heroui/card";
@@ -20,14 +20,28 @@ import { modalClassNames } from "@/lib/modal-styles";
 import { apiClient } from "@/lib/api";
 import { API_ENDPOINTS } from "@/lib/constants";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface Destination {
   id: string;
   name: string;
   description?: string;
   category_id: string;
+  category_name?: string;
+  category_slug?: string;
+  cluster_id?: string;
+  municipality?: string;
+  budget_level?: string;
+  tags?: string[];
+  family_friendly?: boolean;
   latitude: number;
   longitude: number;
   address?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  website_url?: string;
+  facebook_url?: string;
+  instagram_url?: string;
   entrance_fee_local: number;
   entrance_fee_foreign: number;
   average_visit_duration: number;
@@ -36,9 +50,18 @@ interface Destination {
   review_count: number;
   is_active: boolean;
   is_featured: boolean;
+  is_island?: boolean;
   images?: string[];
-  operating_hours?: Record<string, string> | null;
+  menu_images?: string[];
+  operating_hours?: Record<string, { open: string; close: string; closed: boolean }> | null;
   amenities?: string[];
+  cuisine_types?: string[];
+  service_types?: string[];
+  seating_capacity?: number;
+  accommodation_pricing?: { per_night_min?: number; per_night_max?: number; per_hour?: number } | null;
+  star_rating?: number;
+  check_in_time?: string;
+  check_out_time?: string;
 }
 
 interface Category {
@@ -47,16 +70,61 @@ interface Category {
   slug: string;
 }
 
+interface Cluster {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+type DayHours = { open: string; close: string; closed: boolean };
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DAYS: { key: string; label: string }[] = [
+  { key: "mon", label: "Monday" },
+  { key: "tue", label: "Tuesday" },
+  { key: "wed", label: "Wednesday" },
+  { key: "thu", label: "Thursday" },
+  { key: "fri", label: "Friday" },
+  { key: "sat", label: "Saturday" },
+  { key: "sun", label: "Sunday" },
+];
+
+const DEFAULT_HOURS = (): Record<string, DayHours> =>
+  Object.fromEntries(
+    DAYS.map(({ key }) => [key, { open: "08:00", close: "18:00", closed: key === "sun" }])
+  );
+
+const SERVICE_TYPE_LABELS: Record<string, string> = {
+  dine_in: "Dine-in",
+  takeout: "Takeout",
+  delivery: "Delivery",
+};
+
+// Detect category type from slug or name
+function detectCatType(slug: string, name: string) {
+  const s = (slug + " " + name).toLowerCase();
+  const isRestaurant = /restaurant|food|cafe|caf|dining|bar|bistro|eatery|kitchen|restobar|fastfood|fast.food/.test(s);
+  const isHotel = /hotel|resort|lodge|accommodation|hostel|pension|villa|inn|motel|bed.and|b&b|airbnb/.test(s);
+  return { isRestaurant, isHotel };
+}
+
+function isVideoUrl(url: string) {
+  return /\.(mp4|webm|mov|avi)$/i.test(url);
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function DestinationsPage() {
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [clusters, setClusters] = useState<Cluster[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingDestination, setEditingDestination] =
-    useState<Destination | null>(null);
-  const [formIsIsland, setFormIsIsland] = useState(false);
+  const [editingDestination, setEditingDestination] = useState<Destination | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  // Form state
+  // ── Basic form fields ──────────────────────────────────────────────────────
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -70,27 +138,78 @@ export default function DestinationsPage() {
     best_time_to_visit: "",
     amenities: "",
   });
+
+  // ── Classification ─────────────────────────────────────────────────────────
+  const [formClusterId, setFormClusterId] = useState("");
+  const [formMunicipality, setFormMunicipality] = useState("");
+  const [formBudgetLevel, setFormBudgetLevel] = useState("mid");
+  const [formTags, setFormTags] = useState("");
+  const [formFamilyFriendly, setFormFamilyFriendly] = useState(false);
+  const [formIsActive, setFormIsActive] = useState(true);
+  const [formIsIsland, setFormIsIsland] = useState(false);
+  const [formIsFeatured, setFormIsFeatured] = useState(false);
+
+  // ── Media ──────────────────────────────────────────────────────────────────
   const [formImages, setFormImages] = useState<string[]>([]);
   const [formVideos, setFormVideos] = useState<string[]>([]);
+  const [formMenuImages, setFormMenuImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const menuImageInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Operating hours ────────────────────────────────────────────────────────
+  const [formHoursEnabled, setFormHoursEnabled] = useState(false);
+  const [formHours, setFormHours] = useState<Record<string, DayHours>>(DEFAULT_HOURS());
+
+  // ── Contact & social ──────────────────────────────────────────────────────
+  const [formContact, setFormContact] = useState({
+    contact_phone: "",
+    contact_email: "",
+    website_url: "",
+    facebook_url: "",
+    instagram_url: "",
+  });
+
+  // ── Restaurant ─────────────────────────────────────────────────────────────
+  const [formCuisineTypes, setFormCuisineTypes] = useState("");
+  const [formServiceTypes, setFormServiceTypes] = useState<string[]>([]);
+  const [formSeatingCapacity, setFormSeatingCapacity] = useState("");
+
+  // ── Hotel ─────────────────────────────────────────────────────────────────
+  const [formStarRating, setFormStarRating] = useState(0);
+  const [formPerNightMin, setFormPerNightMin] = useState("");
+  const [formPerNightMax, setFormPerNightMax] = useState("");
+  const [formPerHour, setFormPerHour] = useState("");
+  const [formCheckIn, setFormCheckIn] = useState("14:00");
+  const [formCheckOut, setFormCheckOut] = useState("12:00");
+
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const selectedCategory = categories.find((c) => c.id === formData.category_id);
+  const { isRestaurant, isHotel } = detectCatType(
+    selectedCategory?.slug ?? "",
+    selectedCategory?.name ?? ""
+  );
+
+  // ─── Data fetching ────────────────────────────────────────────────────────
 
   useEffect(() => {
     fetchDestinations();
     fetchCategories();
+    fetchClusters();
   }, []);
 
   const fetchDestinations = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get<Destination[]>(
-        API_ENDPOINTS.DESTINATIONS,
+      const res = await apiClient.get<any>(
+        `${API_ENDPOINTS.DESTINATIONS}?limit=100&active=false`
       );
-      if (response.success && response.data) {
-        setDestinations(response.data);
+      if (res.success && res.data) {
+        const list = Array.isArray(res.data) ? res.data : (res.data as any).data ?? [];
+        setDestinations(list);
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to fetch destinations");
     } finally {
       setLoading(false);
@@ -99,18 +218,36 @@ export default function DestinationsPage() {
 
   const fetchCategories = async () => {
     try {
-      const response = await apiClient.get<Category[]>(
-        API_ENDPOINTS.CATEGORIES,
-      );
-      if (response.success && response.data) {
-        setCategories(response.data);
-      }
-    } catch (error) {
+      const res = await apiClient.get<Category[]>(API_ENDPOINTS.CATEGORIES);
+      if (res.success && res.data) setCategories(res.data);
+    } catch {
       toast.error("Failed to fetch categories");
     }
   };
 
-  const isVideoUrl = (url: string) => /\.(mp4|webm|mov|avi)$/i.test(url);
+  const fetchClusters = async () => {
+    try {
+      const res = await apiClient.get<Cluster[]>("/clusters");
+      if (res.success && res.data) setClusters(res.data);
+    } catch {
+      // clusters optional — not critical
+    }
+  };
+
+  // ─── Modal helpers ────────────────────────────────────────────────────────
+
+  const resetForm = useCallback(() => {
+    setFormData({ name: "", description: "", category_id: "", latitude: "", longitude: "", address: "", entrance_fee_local: "0", entrance_fee_foreign: "0", average_visit_duration: "120", best_time_to_visit: "", amenities: "" });
+    setFormClusterId(""); setFormMunicipality(""); setFormBudgetLevel("mid");
+    setFormTags(""); setFormFamilyFriendly(false); setFormIsActive(true);
+    setFormIsIsland(false); setFormIsFeatured(false);
+    setFormImages([]); setFormVideos([]); setFormMenuImages([]);
+    setFormHoursEnabled(false); setFormHours(DEFAULT_HOURS());
+    setFormContact({ contact_phone: "", contact_email: "", website_url: "", facebook_url: "", instagram_url: "" });
+    setFormCuisineTypes(""); setFormServiceTypes([]); setFormSeatingCapacity("");
+    setFormStarRating(0); setFormPerNightMin(""); setFormPerNightMax(""); setFormPerHour("");
+    setFormCheckIn("14:00"); setFormCheckOut("12:00");
+  }, []);
 
   const handleOpenModal = (destination?: Destination) => {
     if (destination) {
@@ -119,37 +256,55 @@ export default function DestinationsPage() {
         name: destination.name,
         description: destination.description || "",
         category_id: destination.category_id,
-        latitude: destination.latitude.toString(),
-        longitude: destination.longitude.toString(),
+        latitude: String(destination.latitude),
+        longitude: String(destination.longitude),
         address: destination.address || "",
-        entrance_fee_local: destination.entrance_fee_local.toString(),
-        entrance_fee_foreign: destination.entrance_fee_foreign.toString(),
-        average_visit_duration: destination.average_visit_duration.toString(),
+        entrance_fee_local: String(destination.entrance_fee_local ?? 0),
+        entrance_fee_foreign: String(destination.entrance_fee_foreign ?? 0),
+        average_visit_duration: String(destination.average_visit_duration ?? 120),
         best_time_to_visit: destination.best_time_to_visit || "",
-        amenities: destination.amenities?.join(", ") || "",
+        amenities: (destination.amenities ?? []).join(", "),
       });
-      const existingMedia = destination.images || [];
-      setFormVideos(existingMedia.filter(isVideoUrl));
-      setFormImages(existingMedia.filter((u) => !isVideoUrl(u)));
-      setFormIsIsland((destination as any).is_island === true || (destination as any).is_island === 1);
+      setFormClusterId(destination.cluster_id || "");
+      setFormMunicipality(destination.municipality || "");
+      setFormBudgetLevel(destination.budget_level || "mid");
+      setFormTags((destination.tags ?? []).join(", "));
+      setFormFamilyFriendly(destination.family_friendly === true || (destination.family_friendly as any) === 1);
+      setFormIsActive(destination.is_active !== false);
+      setFormIsIsland(destination.is_island === true || (destination.is_island as any) === 1);
+      setFormIsFeatured(destination.is_featured === true || (destination.is_featured as any) === 1);
+      const allMedia = destination.images || [];
+      setFormImages(allMedia.filter((u) => !isVideoUrl(u)));
+      setFormVideos(allMedia.filter(isVideoUrl));
+      setFormMenuImages(destination.menu_images || []);
+      const oh = destination.operating_hours;
+      if (oh && typeof oh === "object" && Object.keys(oh).length > 0) {
+        setFormHoursEnabled(true);
+        setFormHours({ ...DEFAULT_HOURS(), ...oh });
+      } else {
+        setFormHoursEnabled(false);
+        setFormHours(DEFAULT_HOURS());
+      }
+      setFormContact({
+        contact_phone: destination.contact_phone || "",
+        contact_email: destination.contact_email || "",
+        website_url: destination.website_url || "",
+        facebook_url: destination.facebook_url || "",
+        instagram_url: destination.instagram_url || "",
+      });
+      setFormCuisineTypes((destination.cuisine_types ?? []).join(", "));
+      setFormServiceTypes(destination.service_types ?? []);
+      setFormSeatingCapacity(destination.seating_capacity ? String(destination.seating_capacity) : "");
+      setFormStarRating(destination.star_rating ?? 0);
+      const ap = destination.accommodation_pricing;
+      setFormPerNightMin(ap?.per_night_min ? String(ap.per_night_min) : "");
+      setFormPerNightMax(ap?.per_night_max ? String(ap.per_night_max) : "");
+      setFormPerHour(ap?.per_hour ? String(ap.per_hour) : "");
+      setFormCheckIn(destination.check_in_time || "14:00");
+      setFormCheckOut(destination.check_out_time || "12:00");
     } else {
       setEditingDestination(null);
-      setFormIsIsland(false);
-      setFormData({
-        name: "",
-        description: "",
-        category_id: "",
-        latitude: "",
-        longitude: "",
-        address: "",
-        entrance_fee_local: "0",
-        entrance_fee_foreign: "0",
-        average_visit_duration: "120",
-        best_time_to_visit: "",
-        amenities: "",
-      });
-      setFormImages([]);
-      setFormVideos([]);
+      resetForm();
     }
     setIsModalOpen(true);
   };
@@ -159,198 +314,208 @@ export default function DestinationsPage() {
     setEditingDestination(null);
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  // ─── Upload handlers ──────────────────────────────────────────────────────
 
+  const uploadImages = async (files: FileList, onDone: (urls: string[]) => void) => {
     for (const file of Array.from(files)) {
-      if (!file.type.startsWith("image/")) {
-        toast.error(`"${file.name}" is not an image`);
-        return;
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error(`"${file.name}" exceeds 5MB limit`);
-        return;
-      }
+      if (!file.type.startsWith("image/")) { toast.error(`"${file.name}" is not an image`); return; }
+      if (file.size > 5 * 1024 * 1024) { toast.error(`"${file.name}" exceeds 5MB`); return; }
     }
-
     try {
       setUploading(true);
-      const uploadData = new FormData();
-      for (const file of Array.from(files)) {
-        uploadData.append("files", file);
-      }
-      uploadData.append("folder", "destinations");
-
-      const response = await apiClient.post<any>(
-        API_ENDPOINTS.UPLOAD_IMAGES,
-        uploadData,
-        { headers: { "Content-Type": "multipart/form-data" } },
-      );
-
-      if (response.success && response.data) {
-        const urls = Array.isArray(response.data)
-          ? response.data.map((r: any) => r.url)
-          : [response.data.url];
-        setFormImages((prev) => [...prev, ...urls]);
+      const fd = new FormData();
+      Array.from(files).forEach((f) => fd.append("files", f));
+      fd.append("folder", "destinations");
+      const res = await apiClient.post<any>(API_ENDPOINTS.UPLOAD_IMAGES, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      if (res.success && res.data) {
+        const urls = Array.isArray(res.data) ? res.data.map((r: any) => r.url) : [res.data.url];
+        onDone(urls);
         toast.success(`${urls.length} image(s) uploaded`);
       }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to upload images");
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || "Upload failed");
     } finally {
       setUploading(false);
-      if (imageInputRef.current) imageInputRef.current.value = "";
     }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return;
+    uploadImages(e.target.files, (urls) => setFormImages((p) => [...p, ...urls]));
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  };
+
+  const handleMenuImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return;
+    uploadImages(e.target.files, (urls) => setFormMenuImages((p) => [...p, ...urls]));
+    if (menuImageInputRef.current) menuImageInputRef.current.value = "";
   };
 
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (!file.type.startsWith("video/")) {
-      toast.error("Please select a video file");
-      return;
-    }
-    if (file.size > 50 * 1024 * 1024) {
-      toast.error("Video must be less than 50MB");
-      return;
-    }
-
+    if (!file.type.startsWith("video/")) { toast.error("Please select a video file"); return; }
+    if (file.size > 50 * 1024 * 1024) { toast.error("Video must be less than 50MB"); return; }
     try {
       setUploading(true);
-      const uploadData = new FormData();
-      uploadData.append("file", file);
-      uploadData.append("folder", "destinations");
-
-      const response = await apiClient.post<any>(
-        API_ENDPOINTS.UPLOAD_VIDEO,
-        uploadData,
-        { headers: { "Content-Type": "multipart/form-data" } },
-      );
-
-      if (response.success && response.data) {
-        setFormVideos((prev) => [...prev, response.data.url]);
-        toast.success("Video uploaded");
-      }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to upload video");
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("folder", "destinations");
+      const res = await apiClient.post<any>(API_ENDPOINTS.UPLOAD_VIDEO, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      if (res.success && res.data) { setFormVideos((p) => [...p, res.data.url]); toast.success("Video uploaded"); }
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || "Video upload failed");
     } finally {
       setUploading(false);
       if (videoInputRef.current) videoInputRef.current.value = "";
     }
   };
 
-  const handleRemoveImage = async (url: string) => {
-    try {
-      await apiClient.delete(API_ENDPOINTS.UPLOAD_DELETE, { data: { url } });
-    } catch {
-      toast.warning("Could not delete file from server, but removed from form");
-    }
-    setFormImages((prev) => prev.filter((u) => u !== url));
+  const removeMedia = async (url: string, setter: React.Dispatch<React.SetStateAction<string[]>>) => {
+    try { await apiClient.delete(API_ENDPOINTS.UPLOAD_DELETE, { data: { url } }); }
+    catch { toast.warning("Could not delete from server, removed from form"); }
+    setter((p) => p.filter((u) => u !== url));
   };
 
-  const handleRemoveVideo = async (url: string) => {
-    try {
-      await apiClient.delete(API_ENDPOINTS.UPLOAD_DELETE, { data: { url } });
-    } catch {
-      toast.warning("Could not delete file from server, but removed from form");
-    }
-    setFormVideos((prev) => prev.filter((u) => u !== url));
-  };
+  // ─── Submit ───────────────────────────────────────────────────────────────
 
   const handleSubmit = async () => {
-    if (!formData.name.trim()) {
-      toast.error("Name is required");
-      return;
-    }
-    if (!formData.category_id) {
-      toast.error("Category is required");
-      return;
-    }
+    if (!formData.name.trim()) { toast.error("Name is required"); return; }
+    if (!formData.category_id) { toast.error("Category is required"); return; }
+    if (!formData.latitude || !formData.longitude) { toast.error("Latitude and longitude are required"); return; }
+
+    const amenitiesList = formData.amenities.split(",").map((a) => a.trim()).filter(Boolean);
+    const tagsList = formTags.split(",").map((t) => t.trim()).filter(Boolean);
+    const cuisineList = formCuisineTypes.split(",").map((c) => c.trim()).filter(Boolean);
+    const allMedia = [...formImages, ...formVideos];
+
+    const payload: Record<string, any> = {
+      name: formData.name.trim(),
+      description: formData.description || undefined,
+      category_id: formData.category_id,
+      latitude: parseFloat(formData.latitude),
+      longitude: parseFloat(formData.longitude),
+      address: formData.address || undefined,
+      entrance_fee_local: parseFloat(formData.entrance_fee_local) || 0,
+      entrance_fee_foreign: parseFloat(formData.entrance_fee_foreign) || 0,
+      average_visit_duration: parseInt(formData.average_visit_duration) || 120,
+      best_time_to_visit: formData.best_time_to_visit || undefined,
+      images: allMedia.length > 0 ? allMedia : undefined,
+      amenities: amenitiesList.length > 0 ? amenitiesList : undefined,
+      is_active: formIsActive,
+      is_featured: formIsFeatured,
+      is_island: formIsIsland,
+      family_friendly: formFamilyFriendly,
+      cluster_id: formClusterId || undefined,
+      municipality: formMunicipality || undefined,
+      budget_level: formBudgetLevel,
+      tags: tagsList.length > 0 ? tagsList : undefined,
+      // Contact
+      contact_phone: formContact.contact_phone || undefined,
+      contact_email: formContact.contact_email || undefined,
+      website_url: formContact.website_url || undefined,
+      facebook_url: formContact.facebook_url || undefined,
+      instagram_url: formContact.instagram_url || undefined,
+      // Operating hours
+      operating_hours: formHoursEnabled ? formHours : undefined,
+      // Restaurant
+      cuisine_types: cuisineList.length > 0 ? cuisineList : undefined,
+      service_types: formServiceTypes.length > 0 ? formServiceTypes : undefined,
+      seating_capacity: formSeatingCapacity ? parseInt(formSeatingCapacity) : undefined,
+      menu_images: formMenuImages.length > 0 ? formMenuImages : undefined,
+      // Hotel
+      star_rating: formStarRating > 0 ? formStarRating : undefined,
+      accommodation_pricing: (formPerNightMin || formPerNightMax || formPerHour)
+        ? {
+            per_night_min: formPerNightMin ? parseFloat(formPerNightMin) : undefined,
+            per_night_max: formPerNightMax ? parseFloat(formPerNightMax) : undefined,
+            per_hour: formPerHour ? parseFloat(formPerHour) : undefined,
+          }
+        : undefined,
+      check_in_time: formCheckIn || undefined,
+      check_out_time: formCheckOut || undefined,
+    };
 
     try {
-      const allMedia = [...formImages, ...formVideos];
-      const amenitiesList = formData.amenities
-        .split(",")
-        .map((a) => a.trim())
-        .filter(Boolean);
-
-      const payload = {
-        name: formData.name,
-        description: formData.description,
-        category_id: formData.category_id,
-        latitude: parseFloat(formData.latitude),
-        longitude: parseFloat(formData.longitude),
-        address: formData.address || undefined,
-        entrance_fee_local: parseFloat(formData.entrance_fee_local),
-        entrance_fee_foreign: parseFloat(formData.entrance_fee_foreign),
-        average_visit_duration: parseInt(formData.average_visit_duration),
-        best_time_to_visit: formData.best_time_to_visit || undefined,
-        images: allMedia.length > 0 ? allMedia : undefined,
-        amenities: amenitiesList.length > 0 ? amenitiesList : undefined,
-        is_island: formIsIsland,
-      };
-
+      setSaving(true);
       if (editingDestination) {
-        const response = await apiClient.put(
-          `${API_ENDPOINTS.DESTINATIONS}/${editingDestination.id}`,
-          payload,
-        );
-        if (response.success) {
-          toast.success("Destination updated successfully");
+        const res = await apiClient.put(`${API_ENDPOINTS.DESTINATIONS}/${editingDestination.id}`, payload);
+        if (res.success) {
+          toast.success("Destination updated");
           fetchDestinations();
           handleCloseModal();
+        } else {
+          toast.error((res as any).message || "Update failed");
         }
       } else {
-        const response = await apiClient.post(
-          API_ENDPOINTS.DESTINATIONS,
-          payload,
-        );
-        if (response.success) {
-          toast.success("Destination created successfully");
+        const res = await apiClient.post(API_ENDPOINTS.DESTINATIONS, payload);
+        if (res.success) {
+          toast.success("Destination created");
           fetchDestinations();
           handleCloseModal();
+        } else {
+          toast.error((res as any).message || "Create failed");
         }
       }
-    } catch (error) {
-      toast.error("Failed to save destination");
+    } catch (error: any) {
+      const msg =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to save destination";
+      toast.error(msg);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this destination?")) return;
-
+    if (!confirm("Delete this destination permanently?")) return;
     try {
-      const response = await apiClient.delete(
-        `${API_ENDPOINTS.DESTINATIONS}/${id}`,
-      );
-      if (response.success) {
-        toast.success("Destination deleted successfully");
-        fetchDestinations();
-      }
-    } catch (error) {
-      toast.error("Failed to delete destination");
-    }
+      const res = await apiClient.delete(`${API_ENDPOINTS.DESTINATIONS}/${id}`);
+      if (res.success) { toast.success("Destination deleted"); fetchDestinations(); }
+    } catch { toast.error("Failed to delete destination"); }
   };
 
   const handleToggleFeatured = async (destination: Destination) => {
     try {
-      const response = await apiClient.put(
-        `${API_ENDPOINTS.DESTINATIONS}/${destination.id}`,
-        {
-          is_featured: !destination.is_featured,
-        },
-      );
-      if (response.success) {
-        toast.success(
-          `Destination ${destination.is_featured ? "unfeatured" : "featured"} successfully`,
-        );
-        fetchDestinations();
-      }
-    } catch (error) {
-      toast.error("Failed to update destination");
-    }
+      const res = await apiClient.put(`${API_ENDPOINTS.DESTINATIONS}/${destination.id}`, { is_featured: !destination.is_featured });
+      if (res.success) { toast.success(destination.is_featured ? "Unfeatured" : "Featured"); fetchDestinations(); }
+    } catch { toast.error("Failed to update destination"); }
   };
+
+  const toggleServiceType = (type: string) => {
+    setFormServiceTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
+  };
+
+  const updateDayHour = (day: string, field: keyof DayHours, value: string | boolean) => {
+    setFormHours((prev) => ({ ...prev, [day]: { ...prev[day], [field]: value } }));
+  };
+
+  // ─── Render helpers ───────────────────────────────────────────────────────
+
+  const SectionTitle = ({ children }: { children: React.ReactNode }) => (
+    <h4 className="font-semibold text-sm uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
+      {children}
+    </h4>
+  );
+
+  const UploadButton = ({ label, icon, onClick, disabled }: { label: string; icon: React.ReactNode; onClick: () => void; disabled?: boolean }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50"
+      style={{ borderColor: "var(--border-medium)", color: "var(--text)", background: "var(--bg-3)" }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+
+  // ─── Page ─────────────────────────────────────────────────────────────────
 
   return (
     <AdminLayout>
@@ -366,655 +531,439 @@ export default function DestinationsPage() {
               Manage tourist destinations ({destinations.length} total)
             </p>
           </div>
-          <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
-            content="Open Map Manager to place a new destination on the map"
-            delay={700}
-            showArrow
-            placement="left"
-          >
-            <Button
-              color="primary"
-              onClick={() => (window.location.href = "/admin/map")}
+          <div className="flex gap-2">
+            <Tooltip
+              classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+              content="Add a destination manually without placing it on the map"
+              delay={700} showArrow placement="left"
             >
-              <svg
-                className="h-5 w-5 mr-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              Add Destination on Map
-            </Button>
-          </Tooltip>
+              <Button color="default" variant="flat" onClick={() => handleOpenModal()}>
+                <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Destination
+              </Button>
+            </Tooltip>
+            <Tooltip
+              classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+              content="Open Map Manager to place a new destination on the map"
+              delay={700} showArrow placement="left"
+            >
+              <Button color="primary" onClick={() => (window.location.href = "/admin/map")}>
+                <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                </svg>
+                Add on Map
+              </Button>
+            </Tooltip>
+          </div>
         </div>
 
         {loading ? (
-          <Card>
-            <CardBody className="text-center py-12">
-              <p className="text-gray-600">Loading destinations...</p>
-            </CardBody>
-          </Card>
+          <Card><CardBody className="text-center py-12"><p className="text-gray-600">Loading destinations...</p></CardBody></Card>
         ) : destinations.length === 0 ? (
           <Card>
             <CardBody className="text-center py-12">
-              <svg
-                className="mx-auto h-12 w-12 text-gray-400 mb-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                />
-              </svg>
-              <p className="text-gray-600 dark:text-gray-400 mb-2">
-                No destinations yet
-              </p>
-              <p className="text-sm text-gray-500 mb-4">
-                Use the Map Manager to create destinations
-              </p>
-              <Button
-                color="primary"
-                size="sm"
-                onClick={() => (window.location.href = "/admin/map")}
-              >
-                Go to Map Manager
-              </Button>
+              <p className="text-gray-600 dark:text-gray-400 mb-2">No destinations yet</p>
+              <p className="text-sm text-gray-500 mb-4">Use the Map Manager to create destinations</p>
+              <Button color="primary" size="sm" onClick={() => (window.location.href = "/admin/map")}>Go to Map Manager</Button>
             </CardBody>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {destinations.map((destination) => (
-              <Card
-                key={destination.id}
-                className="hover:shadow-lg transition-shadow"
-              >
-                {/* Thumbnail */}
-                {destination.images &&
-                  destination.images.filter((u) => !isVideoUrl(u)).length >
-                    0 && (
+            {destinations.map((dest) => {
+              const cover = (dest.images || []).filter((u) => !isVideoUrl(u))[0];
+              const { isRestaurant: isR, isHotel: isH } = detectCatType(dest.category_slug ?? "", dest.category_name ?? "");
+              return (
+                <Card key={dest.id} className="hover:shadow-lg transition-shadow">
+                  {cover && (
                     <div className="h-40 overflow-hidden rounded-t-xl">
-                      <img
-                        src={
-                          destination.images.filter((u) => !isVideoUrl(u))[0]
-                        }
-                        alt={destination.name}
-                        className="w-full h-full object-cover"
-                      />
+                      <img src={cover} alt={dest.name} className="w-full h-full object-cover" />
                     </div>
                   )}
-                <CardHeader className="flex-col items-start gap-2 pb-0">
-                  <div className="flex items-start justify-between w-full">
-                    <h3 className="font-semibold text-lg">
-                      {destination.name}
-                    </h3>
-                    <div className="flex gap-1">
-                      {destination.is_featured && (
-                        <Chip size="sm" color="warning" variant="flat">
-                          Featured
+                  <CardHeader className="flex-col items-start gap-1 pb-0">
+                    <div className="flex items-start justify-between w-full gap-2">
+                      <h3 className="font-semibold text-base leading-snug">{dest.name}</h3>
+                      <div className="flex gap-1 flex-shrink-0">
+                        {dest.is_featured && <Chip size="sm" color="warning" variant="flat">Featured</Chip>}
+                        <Chip size="sm" color={dest.is_active ? "success" : "default"} variant="flat">
+                          {dest.is_active ? "Active" : "Inactive"}
                         </Chip>
-                      )}
-                      {destination.is_active ? (
-                        <Chip size="sm" color="success" variant="flat">
-                          Active
-                        </Chip>
-                      ) : (
-                        <Chip size="sm" color="default" variant="flat">
-                          Inactive
-                        </Chip>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                  <p className="text-sm text-gray-500 line-clamp-2">
-                    {destination.description || "No description"}
-                  </p>
-                </CardHeader>
-                <CardBody className="pt-2">
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2">
-                      <svg
-                        className="h-4 w-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                        />
-                      </svg>
-                      <span className="text-gray-600 dark:text-gray-400">
-                        {Number(destination.latitude).toFixed(4)},{" "}
-                        {Number(destination.longitude).toFixed(4)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <svg
-                        className="h-4 w-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                      <span className="text-gray-600 dark:text-gray-400">
-                        ₱{destination.entrance_fee_local} / $
-                        {destination.entrance_fee_foreign}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <svg
-                        className="h-4 w-4 text-yellow-500"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                      <span className="text-gray-600 dark:text-gray-400">
-                        {Number(destination.rating).toFixed(1)} (
-                        {destination.review_count} reviews)
-                      </span>
-                    </div>
-                    {destination.images && destination.images.length > 0 && (
+                    {dest.category_name && <p className="text-xs text-gray-400">{dest.category_name}{dest.municipality ? ` · ${dest.municipality}` : ""}</p>}
+                    <p className="text-sm text-gray-500 line-clamp-2">{dest.description || "No description"}</p>
+                  </CardHeader>
+                  <CardBody className="pt-2">
+                    <div className="space-y-1 text-sm">
                       <div className="flex items-center gap-2">
-                        <svg
-                          className="h-4 w-4 text-gray-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                          />
-                        </svg>
-                        <span className="text-gray-600 dark:text-gray-400">
-                          {destination.images.length} media file(s)
+                        <span className="text-gray-400 text-xs">📍</span>
+                        <span className="text-gray-600 dark:text-gray-400 text-xs">
+                          {Number(dest.latitude).toFixed(4)}, {Number(dest.longitude).toFixed(4)}
                         </span>
                       </div>
-                    )}
-                  </div>
-                  <div className="flex gap-2 mt-4">
-                    <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
-                      content="Edit destination details, images and info"
-                      delay={700}
-                      showArrow
-                      placement="top"
-                    >
-                      <Button
-                        size="sm"
-                        color="primary"
-                        variant="flat"
-                        onClick={() => handleOpenModal(destination)}
-                      >
-                        Edit
-                      </Button>
-                    </Tooltip>
-                    <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
-                      content={
-                        destination.is_featured
-                          ? "Remove from featured section"
-                          : "Highlight in the app's featured section"
-                      }
-                      delay={700}
-                      showArrow
-                      placement="top"
-                    >
-                      <Button
-                        size="sm"
-                        color="warning"
-                        variant="flat"
-                        onClick={() => handleToggleFeatured(destination)}
-                      >
-                        {destination.is_featured ? "Unfeature" : "Feature"}
-                      </Button>
-                    </Tooltip>
-                    <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
-                      content="Permanently delete this destination"
-                      delay={700}
-                      showArrow
-                      placement="top"
-                      color="danger"
-                    >
-                      <Button
-                        size="sm"
-                        color="danger"
-                        variant="flat"
-                        onClick={() => handleDelete(destination.id)}
-                      >
-                        Delete
-                      </Button>
-                    </Tooltip>
-                  </div>
-                </CardBody>
-              </Card>
-            ))}
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-gray-500">₱{Number(dest.entrance_fee_local).toFixed(0)} local</span>
+                        <span className="text-yellow-500 text-xs">★ {Number(dest.rating).toFixed(1)}</span>
+                        {isR && <span className="text-xs text-orange-400">🍽 Restaurant</span>}
+                        {isH && <span className="text-xs text-blue-400">🏨 Hotel</span>}
+                        {dest.is_island && <span className="text-xs text-purple-400">⛴ Island</span>}
+                      </div>
+                      {dest.contact_phone && <p className="text-xs text-gray-500">📞 {dest.contact_phone}</p>}
+                    </div>
+                    <div className="flex gap-2 mt-3 flex-wrap">
+                      <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }} content="Edit all destination details" delay={700} showArrow placement="top">
+                        <Button size="sm" color="primary" variant="flat" onClick={() => handleOpenModal(dest)}>Edit</Button>
+                      </Tooltip>
+                      <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }} content={dest.is_featured ? "Remove from featured" : "Highlight in featured section"} delay={700} showArrow placement="top">
+                        <Button size="sm" color="warning" variant="flat" onClick={() => handleToggleFeatured(dest)}>
+                          {dest.is_featured ? "Unfeature" : "Feature"}
+                        </Button>
+                      </Tooltip>
+                      <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }} content="Permanently delete" delay={700} showArrow placement="top" color="danger">
+                        <Button size="sm" color="danger" variant="flat" onClick={() => handleDelete(dest.id)}>Delete</Button>
+                      </Tooltip>
+                    </div>
+                  </CardBody>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Add/Edit Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        size="3xl"
-        scrollBehavior="inside"
-        classNames={modalClassNames}
-      >
+      {/* ─── Add / Edit Modal ─────────────────────────────────────────────────── */}
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} size="4xl" scrollBehavior="inside" classNames={modalClassNames}>
         <ModalContent>
-          <ModalHeader>
-            {editingDestination ? "Edit Destination" : "Add Destination"}
-          </ModalHeader>
+          <ModalHeader>{editingDestination ? "Edit Destination" : "Add Destination"}</ModalHeader>
           <ModalBody>
-            <div className="space-y-6">
-              {/* Basic Info */}
+            <div className="space-y-8">
+
+              {/* ── Basic Information ───────────────────────────────────────── */}
               <div>
-                <h4 className="font-medium mb-3">Basic Information</h4>
+                <SectionTitle>Basic Information</SectionTitle>
                 <div className="space-y-4">
-                  <Input
-                    label="Name"
-                    placeholder="Enter destination name"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    isRequired
-                  />
-                  <Textarea
-                    label="Description"
-                    placeholder="Write a complete description of this destination. Include history, things to do, what makes it special, tips for visitors..."
-                    value={formData.description}
-                    onChange={(e) =>
-                      setFormData({ ...formData, description: e.target.value })
-                    }
-                    minRows={5}
-                    maxRows={12}
-                  />
+                  <Input label="Name" placeholder="Destination name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} isRequired />
+                  <Textarea label="Description" placeholder="Complete description — history, what to do, tips for visitors..." value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} minRows={4} maxRows={10} />
                   <Select
                     label="Category"
                     placeholder="Select a category"
-                    selectedKeys={
-                      formData.category_id ? [formData.category_id] : []
-                    }
-                    onChange={(e) =>
-                      setFormData({ ...formData, category_id: e.target.value })
-                    }
+                    selectedKeys={formData.category_id ? [formData.category_id] : []}
+                    onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
                     isRequired
                   >
-                    {categories.map((category) => (
-                      <SelectItem key={category.id}>{category.name}</SelectItem>
-                    ))}
+                    {categories.map((c) => <SelectItem key={c.id}>{c.name}</SelectItem>)}
                   </Select>
                 </div>
               </div>
 
-              {/* Images */}
+              {/* ── Classification ──────────────────────────────────────────── */}
               <div>
-                <h4 className="font-medium mb-3">Images</h4>
+                <SectionTitle>Classification</SectionTitle>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    {clusters.length > 0 && (
+                      <Select
+                        label="Cluster / Region"
+                        placeholder="Select cluster"
+                        selectedKeys={formClusterId ? [formClusterId] : []}
+                        onChange={(e) => setFormClusterId(e.target.value)}
+                      >
+                        {clusters.map((cl) => <SelectItem key={cl.id}>{cl.name}</SelectItem>)}
+                      </Select>
+                    )}
+                    <Input label="Municipality" placeholder="e.g. Cebu City, Lapu-Lapu" value={formMunicipality} onChange={(e) => setFormMunicipality(e.target.value)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Select
+                      label="Budget Level"
+                      selectedKeys={[formBudgetLevel]}
+                      onChange={(e) => setFormBudgetLevel(e.target.value)}
+                    >
+                      <SelectItem key="budget">💰 Budget-friendly</SelectItem>
+                      <SelectItem key="mid">💰💰 Mid-range</SelectItem>
+                      <SelectItem key="premium">💰💰💰 Premium</SelectItem>
+                    </Select>
+                    <Input label="Tags" placeholder="Comma-separated: nature, heritage, beach..." value={formTags} onChange={(e) => setFormTags(e.target.value)} />
+                  </div>
+                  {formTags && (
+                    <div className="flex flex-wrap gap-1">
+                      {formTags.split(",").map((t) => t.trim()).filter(Boolean).map((tag, i) => (
+                        <Chip key={i} size="sm" variant="flat" color="secondary">{tag}</Chip>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-6">
+                    <Switch isSelected={formFamilyFriendly} onValueChange={setFormFamilyFriendly}>Family-friendly</Switch>
+                    <Switch isSelected={formIsActive} onValueChange={setFormIsActive}>Active (visible in app)</Switch>
+                    <Switch isSelected={formIsFeatured} onValueChange={setFormIsFeatured}>Featured</Switch>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Destination Images ──────────────────────────────────────── */}
+              <div>
+                <SectionTitle>Destination Images</SectionTitle>
                 <div className="space-y-3">
                   {formImages.length > 0 && (
-                    <div className="grid grid-cols-3 gap-3">
-                      {formImages.map((url, idx) => (
-                        <div
-                          key={idx}
-                          className="relative group rounded-lg overflow-hidden h-32"
-                        >
-                          <img
-                            src={url}
-                            alt={`Destination ${idx + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                          <button
-                            onClick={() => handleRemoveImage(url)}
-                            className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            X
-                          </button>
-                          {idx === 0 && (
-                            <span className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-2 py-0.5 rounded">
-                              Cover
-                            </span>
-                          )}
+                    <div className="grid grid-cols-4 gap-2">
+                      {formImages.map((url, i) => (
+                        <div key={i} className="relative group rounded-lg overflow-hidden h-24">
+                          <img src={url} alt="" className="w-full h-full object-cover" />
+                          <button onClick={() => removeMedia(url, setFormImages)} className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                          {i === 0 && <span className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">Cover</span>}
                         </div>
                       ))}
                     </div>
                   )}
-                  <div>
-                    <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
-                      content="Upload photos (JPG, PNG, GIF — max 5MB each). First image becomes the cover."
-                      delay={700}
-                      showArrow
-                      placement="right"
-                    >
-                      <label>
-                        <Button
-                          as="span"
-                          size="sm"
-                          color="primary"
-                          variant="flat"
-                          isLoading={uploading}
-                          className="cursor-pointer"
-                        >
-                          <svg
-                            className="h-4 w-4 mr-1"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                            />
-                          </svg>
-                          Upload Images
-                        </Button>
-                        <input
-                          ref={imageInputRef}
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          className="hidden"
-                          onChange={handleImageUpload}
-                          disabled={uploading}
-                        />
-                      </label>
-                    </Tooltip>
-                    <p
-                      className="text-xs mt-1"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      JPG, PNG, GIF. Max 5MB each. First image is the cover
-                      photo.
-                    </p>
-                  </div>
+                  <label>
+                    <UploadButton label="Upload Images" disabled={uploading} onClick={() => imageInputRef.current?.click()}
+                      icon={<svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+                    />
+                    <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} disabled={uploading} />
+                  </label>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>JPG, PNG, GIF · Max 5MB each · First image is the cover</p>
                 </div>
               </div>
 
-              {/* Videos */}
+              {/* ── Videos ──────────────────────────────────────────────────── */}
               <div>
-                <h4 className="font-medium mb-3">Videos</h4>
-                <div className="space-y-3">
-                  {formVideos.length > 0 && (
-                    <div className="space-y-2">
-                      {formVideos.map((url, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center gap-3 p-2 rounded-lg"
-                          style={{ background: "var(--bg-3)" }}
-                        >
-                          <svg
-                            className="h-5 w-5 flex-shrink-0"
-                            style={{ color: "var(--text-muted)" }}
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                            />
-                          </svg>
-                          <span className="text-sm truncate flex-1">
-                            {url.split("/").pop()}
-                          </span>
-                          <Button
-                            size="sm"
-                            color="danger"
-                            variant="flat"
-                            onClick={() => handleRemoveVideo(url)}
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div>
-                    <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
-                      content="Upload a video for this destination (MP4, WebM, MOV — max 50MB)"
-                      delay={700}
-                      showArrow
-                      placement="right"
-                    >
-                      <label>
-                        <Button
-                          as="span"
-                          size="sm"
-                          color="primary"
-                          variant="flat"
-                          isLoading={uploading}
-                          className="cursor-pointer"
-                        >
-                          <svg
-                            className="h-4 w-4 mr-1"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                            />
-                          </svg>
-                          Upload Video
-                        </Button>
-                        <input
-                          ref={videoInputRef}
-                          type="file"
-                          accept="video/*"
-                          className="hidden"
-                          onChange={handleVideoUpload}
-                          disabled={uploading}
-                        />
-                      </label>
-                    </Tooltip>
-                    <p
-                      className="text-xs mt-1"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      MP4, WebM, MOV. Max 50MB.
-                    </p>
+                <SectionTitle>Videos</SectionTitle>
+                {formVideos.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    {formVideos.map((url, i) => (
+                      <div key={i} className="flex items-center gap-3 p-2 rounded-lg" style={{ background: "var(--bg-3)" }}>
+                        <span className="text-sm truncate flex-1">{url.split("/").pop()}</span>
+                        <Button size="sm" color="danger" variant="flat" onClick={() => removeMedia(url, setFormVideos)}>Remove</Button>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              </div>
-
-              {/* Location */}
-              <div>
-                <h4 className="font-medium mb-3">Location</h4>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <Input
-                      label="Latitude"
-                      type="number"
-                      step="0.000001"
-                      placeholder="10.3157"
-                      value={formData.latitude}
-                      onChange={(e) =>
-                        setFormData({ ...formData, latitude: e.target.value })
-                      }
-                      isRequired
-                    />
-                    <Input
-                      label="Longitude"
-                      type="number"
-                      step="0.000001"
-                      placeholder="123.8854"
-                      value={formData.longitude}
-                      onChange={(e) =>
-                        setFormData({ ...formData, longitude: e.target.value })
-                      }
-                      isRequired
-                    />
-                  </div>
-                  <Input
-                    label="Address"
-                    placeholder="Full address of the destination"
-                    value={formData.address}
-                    onChange={(e) =>
-                      setFormData({ ...formData, address: e.target.value })
-                    }
+                )}
+                <label>
+                  <UploadButton label="Upload Video" disabled={uploading} onClick={() => videoInputRef.current?.click()}
+                    icon={<svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}
                   />
-                </div>
+                  <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideoUpload} disabled={uploading} />
+                </label>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>MP4, WebM, MOV · Max 50MB</p>
               </div>
 
-              {/* Fees & Visiting Info */}
+              {/* ── Restaurant-specific ─────────────────────────────────────── */}
+              {isRestaurant && (
+                <div>
+                  <SectionTitle>🍽 Restaurant Details</SectionTitle>
+                  <div className="space-y-4">
+                    <Input label="Cuisine Types" placeholder="Filipino, Seafood, Asian, Western..." value={formCuisineTypes} onChange={(e) => setFormCuisineTypes(e.target.value)} description="Comma-separated" />
+                    {formCuisineTypes && (
+                      <div className="flex flex-wrap gap-1">
+                        {formCuisineTypes.split(",").map((c) => c.trim()).filter(Boolean).map((c, i) => (
+                          <Chip key={i} size="sm" variant="flat" color="warning">{c}</Chip>
+                        ))}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm font-medium mb-2">Service Types</p>
+                      <div className="flex gap-2">
+                        {Object.entries(SERVICE_TYPE_LABELS).map(([key, label]) => (
+                          <Chip
+                            key={key}
+                            className="cursor-pointer"
+                            color={formServiceTypes.includes(key) ? "primary" : "default"}
+                            variant={formServiceTypes.includes(key) ? "solid" : "flat"}
+                            onClick={() => toggleServiceType(key)}
+                          >
+                            {label}
+                          </Chip>
+                        ))}
+                      </div>
+                    </div>
+                    <Input label="Seating Capacity" type="number" placeholder="e.g. 50" value={formSeatingCapacity} onChange={(e) => setFormSeatingCapacity(e.target.value)} />
+
+                    {/* Menu Images */}
+                    <div>
+                      <p className="text-sm font-medium mb-2">Menu Images</p>
+                      {formMenuImages.length > 0 && (
+                        <div className="grid grid-cols-4 gap-2 mb-3">
+                          {formMenuImages.map((url, i) => (
+                            <div key={i} className="relative group rounded-lg overflow-hidden h-24">
+                              <img src={url} alt="" className="w-full h-full object-cover" />
+                              <button onClick={() => removeMedia(url, setFormMenuImages)} className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <label>
+                        <UploadButton label="Upload Menu Images" disabled={uploading} onClick={() => menuImageInputRef.current?.click()}
+                          icon={<svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>}
+                        />
+                        <input ref={menuImageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleMenuImageUpload} disabled={uploading} />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Hotel / Accommodation-specific ──────────────────────────── */}
+              {isHotel && (
+                <div>
+                  <SectionTitle>🏨 Accommodation Details</SectionTitle>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm font-medium mb-2">Star Rating</p>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => setFormStarRating(n === formStarRating ? 0 : n)}
+                            className="text-2xl transition-colors"
+                            style={{ color: n <= formStarRating ? "#f59e0b" : "#d1d5db" }}
+                          >
+                            ★
+                          </button>
+                        ))}
+                        {formStarRating > 0 && <span className="text-sm self-center ml-2 text-gray-500">{formStarRating}-star</span>}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <Input label="Check-in Time" type="time" value={formCheckIn} onChange={(e) => setFormCheckIn(e.target.value)} />
+                      <Input label="Check-out Time" type="time" value={formCheckOut} onChange={(e) => setFormCheckOut(e.target.value)} />
+                    </div>
+                    <p className="text-sm font-medium">Room Pricing</p>
+                    <div className="grid grid-cols-3 gap-4">
+                      <Input label="Nightly Rate From (₱)" type="number" placeholder="1500" value={formPerNightMin} onChange={(e) => setFormPerNightMin(e.target.value)} startContent={<span className="text-gray-400 text-sm">₱</span>} />
+                      <Input label="Nightly Rate To (₱)" type="number" placeholder="5000" value={formPerNightMax} onChange={(e) => setFormPerNightMax(e.target.value)} startContent={<span className="text-gray-400 text-sm">₱</span>} />
+                      <Input label="Hourly Rate (₱)" type="number" placeholder="Optional" value={formPerHour} onChange={(e) => setFormPerHour(e.target.value)} startContent={<span className="text-gray-400 text-sm">₱</span>} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Contact & Social ─────────────────────────────────────────── */}
               <div>
-                <h4 className="font-medium mb-3">Fees & Visiting Info</h4>
+                <SectionTitle>Contact & Social Media</SectionTitle>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <Input
-                      label="Entrance Fee (Local)"
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={formData.entrance_fee_local}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          entrance_fee_local: e.target.value,
-                        })
-                      }
-                      startContent={<span className="text-gray-500">₱</span>}
-                    />
-                    <Input
-                      label="Entrance Fee (Foreign)"
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={formData.entrance_fee_foreign}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          entrance_fee_foreign: e.target.value,
-                        })
-                      }
-                      startContent={<span className="text-gray-500">$</span>}
-                    />
+                    <Input label="Phone" placeholder="+63 917 123 4567" value={formContact.contact_phone} onChange={(e) => setFormContact({ ...formContact, contact_phone: e.target.value })} />
+                    <Input label="Email" type="email" placeholder="info@example.com" value={formContact.contact_email} onChange={(e) => setFormContact({ ...formContact, contact_email: e.target.value })} />
                   </div>
+                  <Input label="Website URL" placeholder="https://example.com" value={formContact.website_url} onChange={(e) => setFormContact({ ...formContact, website_url: e.target.value })} />
                   <div className="grid grid-cols-2 gap-4">
-                    <Input
-                      label="Average Visit Duration (minutes)"
-                      type="number"
-                      placeholder="120"
-                      value={formData.average_visit_duration}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          average_visit_duration: e.target.value,
-                        })
-                      }
-                    />
-                    <Input
-                      label="Best Time to Visit"
-                      placeholder="e.g. Morning, 6AM-10AM, Dry season"
-                      value={formData.best_time_to_visit}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          best_time_to_visit: e.target.value,
-                        })
-                      }
-                    />
+                    <Input label="Facebook Page URL" placeholder="https://facebook.com/page" value={formContact.facebook_url} onChange={(e) => setFormContact({ ...formContact, facebook_url: e.target.value })} />
+                    <Input label="Instagram URL" placeholder="https://instagram.com/handle" value={formContact.instagram_url} onChange={(e) => setFormContact({ ...formContact, instagram_url: e.target.value })} />
                   </div>
                 </div>
               </div>
 
-              {/* Amenities */}
+              {/* ── Operating Hours ──────────────────────────────────────────── */}
               <div>
-                <h4 className="font-medium mb-3">Amenities</h4>
-                <Textarea
-                  label="Amenities"
-                  placeholder="Comma-separated: Parking, Restroom, Restaurant, WiFi, Gift Shop, Tour Guide..."
-                  value={formData.amenities}
-                  onChange={(e) =>
-                    setFormData({ ...formData, amenities: e.target.value })
-                  }
-                  minRows={2}
-                />
-                {formData.amenities && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {formData.amenities
-                      .split(",")
-                      .map((a) => a.trim())
-                      .filter(Boolean)
-                      .map((amenity, idx) => (
-                        <Chip
-                          key={idx}
+                <div className="flex items-center gap-3 mb-3">
+                  <SectionTitle>Operating Hours</SectionTitle>
+                  <Switch isSelected={formHoursEnabled} onValueChange={setFormHoursEnabled} size="sm">
+                    {formHoursEnabled ? "Enabled" : "Not set"}
+                  </Switch>
+                </div>
+                {formHoursEnabled && (
+                  <div className="space-y-2 rounded-lg p-3" style={{ background: "var(--bg-3)" }}>
+                    {DAYS.map(({ key, label }) => (
+                      <div key={key} className="flex items-center gap-3">
+                        <span className="text-sm w-24 font-medium">{label}</span>
+                        <Switch
+                          isSelected={formHours[key]?.closed ?? false}
+                          onValueChange={(v) => updateDayHour(key, "closed", v)}
                           size="sm"
-                          variant="flat"
-                          color="primary"
+                          color="danger"
                         >
-                          {amenity}
-                        </Chip>
-                      ))}
+                          <span className="text-xs">{formHours[key]?.closed ? "Closed" : "Open"}</span>
+                        </Switch>
+                        {!formHours[key]?.closed && (
+                          <>
+                            <input
+                              type="time"
+                              value={formHours[key]?.open ?? "08:00"}
+                              onChange={(e) => updateDayHour(key, "open", e.target.value)}
+                              className="text-sm px-2 py-1 rounded border"
+                              style={{ borderColor: "var(--border-medium)", background: "var(--bg-2)", color: "var(--text)" }}
+                            />
+                            <span className="text-gray-400 text-xs">to</span>
+                            <input
+                              type="time"
+                              value={formHours[key]?.close ?? "18:00"}
+                              onChange={(e) => updateDayHour(key, "close", e.target.value)}
+                              className="text-sm px-2 py-1 rounded border"
+                              style={{ borderColor: "var(--border-medium)", background: "var(--bg-2)", color: "var(--text)" }}
+                            />
+                          </>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
 
-              {/* Island Destination */}
+              {/* ── Location ─────────────────────────────────────────────────── */}
               <div>
-                <h4 className="font-medium mb-3">Routing Flags</h4>
-                <Switch
-                  isSelected={formIsIsland}
-                  onValueChange={setFormIsIsland}
-                >
+                <SectionTitle>Location</SectionTitle>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input label="Latitude" type="number" step="0.000001" placeholder="10.3157" value={formData.latitude} onChange={(e) => setFormData({ ...formData, latitude: e.target.value })} isRequired />
+                    <Input label="Longitude" type="number" step="0.000001" placeholder="123.8854" value={formData.longitude} onChange={(e) => setFormData({ ...formData, longitude: e.target.value })} isRequired />
+                  </div>
+                  <Input label="Address" placeholder="Full address" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} />
+                </div>
+              </div>
+
+              {/* ── Fees & Visiting Info ─────────────────────────────────────── */}
+              <div>
+                <SectionTitle>Fees &amp; Visiting Info</SectionTitle>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input label="Entrance Fee (Local)" type="number" step="0.01" value={formData.entrance_fee_local} onChange={(e) => setFormData({ ...formData, entrance_fee_local: e.target.value })} startContent={<span className="text-gray-400 text-sm">₱</span>} />
+                    <Input label="Entrance Fee (Foreign)" type="number" step="0.01" value={formData.entrance_fee_foreign} onChange={(e) => setFormData({ ...formData, entrance_fee_foreign: e.target.value })} startContent={<span className="text-gray-400 text-sm">$</span>} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input label="Avg Visit Duration (min)" type="number" value={formData.average_visit_duration} onChange={(e) => setFormData({ ...formData, average_visit_duration: e.target.value })} />
+                    <Input label="Best Time to Visit" placeholder="e.g. Morning, Dry Season" value={formData.best_time_to_visit} onChange={(e) => setFormData({ ...formData, best_time_to_visit: e.target.value })} />
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Amenities ────────────────────────────────────────────────── */}
+              <div>
+                <SectionTitle>Amenities</SectionTitle>
+                <Textarea
+                  label="Amenities"
+                  placeholder="Parking, Restroom, WiFi, Restaurant, Tour Guide, Gift Shop..."
+                  value={formData.amenities}
+                  onChange={(e) => setFormData({ ...formData, amenities: e.target.value })}
+                  minRows={2}
+                  description="Comma-separated list"
+                />
+                {formData.amenities && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {formData.amenities.split(",").map((a) => a.trim()).filter(Boolean).map((a, i) => (
+                      <Chip key={i} size="sm" variant="flat" color="primary">{a}</Chip>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Routing Flags ─────────────────────────────────────────────── */}
+              <div>
+                <SectionTitle>Routing Flags</SectionTitle>
+                <Switch isSelected={formIsIsland} onValueChange={setFormIsIsland}>
                   <span className="font-medium">Island Destination</span>
-                  <span className="text-sm text-gray-500 ml-2">
-                    Routes will go through a pier (ferry travel required)
-                  </span>
+                  <span className="text-sm text-gray-500 ml-2">Routes will go through a pier (ferry travel required)</span>
                 </Switch>
               </div>
+
             </div>
           </ModalBody>
           <ModalFooter>
-            <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
-              content="Discard changes and close"
-              delay={700}
-              showArrow
-              placement="top"
-            >
-              <Button color="danger" variant="flat" onClick={handleCloseModal}>
-                Cancel
-              </Button>
-            </Tooltip>
-            <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
-              content={
-                editingDestination
-                  ? "Save changes to this destination"
-                  : "Create the new destination"
-              }
-              delay={700}
-              showArrow
-              placement="top"
-            >
-              <Button color="primary" onClick={handleSubmit}>
-                {editingDestination ? "Update" : "Create"}
-              </Button>
-            </Tooltip>
+            <Button color="danger" variant="flat" onClick={handleCloseModal}>Cancel</Button>
+            <Button color="primary" onClick={handleSubmit} isLoading={saving}>
+              {editingDestination ? "Update" : "Create"}
+            </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

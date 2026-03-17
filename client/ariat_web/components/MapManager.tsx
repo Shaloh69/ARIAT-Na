@@ -270,55 +270,36 @@ function RoadPolyline({
       map,
     );
 
-    const arrowPattern = isBidirectional
-      ? [
-          {
-            offset: "25%",
-            repeat: "50%",
-            symbol: L.Symbol.arrowHead({
-              pixelSize: 12,
-              polygon: false,
-              pathOptions: { stroke: true, color, weight: 2, opacity: 0.8 },
-            }),
-          },
-          {
-            offset: "75%",
-            repeat: "50%",
-            symbol: L.Symbol.arrowHead({
-              pixelSize: 12,
-              polygon: false,
-              pathOptions: { stroke: true, color, weight: 2, opacity: 0.8 },
-            }),
-          },
-        ]
-      : [
-          {
-            offset: "50%",
-            repeat: 0,
-            symbol: L.Symbol.arrowHead({
-              pixelSize: 15,
-              polygon: false,
-              pathOptions: { stroke: true, color, weight: 3, opacity: 0.9 },
-            }),
-          },
-        ];
+    const arrowSymbol = (size: number) =>
+      L.Symbol.arrowHead({
+        pixelSize: size,
+        polygon: false,
+        pathOptions: { stroke: true, color, weight: 2, opacity: 0.9 },
+      });
 
-    const decorator = (L as any)
-      .polylineDecorator(polyline, {
-        patterns: arrowPattern,
+    const forwardDecorator = (L as any)
+      .polylineDecorator(positions, {
+        patterns: [{ offset: '40%', repeat: '60%', symbol: arrowSymbol(12) }],
       })
       .addTo(map);
 
-    decoratorRef.current = decorator;
+    let reverseDecorator: any = null;
+    if (isBidirectional) {
+      const reversed = [...positions].reverse();
+      reverseDecorator = (L as any)
+        .polylineDecorator(reversed, {
+          patterns: [{ offset: '40%', repeat: '60%', symbol: arrowSymbol(12) }],
+        })
+        .addTo(map);
+    }
+
+    decoratorRef.current = forwardDecorator;
 
     return () => {
       try {
-        if (decoratorRef.current && map.hasLayer(decoratorRef.current)) {
-          map.removeLayer(decoratorRef.current);
-        }
-        if (map.hasLayer(polyline)) {
-          map.removeLayer(polyline);
-        }
+        if (map.hasLayer(forwardDecorator)) map.removeLayer(forwardDecorator);
+        if (reverseDecorator && map.hasLayer(reverseDecorator)) map.removeLayer(reverseDecorator);
+        if (map.hasLayer(polyline)) map.removeLayer(polyline);
       } catch {
         // Ignore cleanup errors during component unmount
       }
@@ -351,21 +332,20 @@ function RoadDecorator({
         pathOptions: { stroke: true, color, weight: 2, opacity: 0.9 },
       });
 
-    // Forward decorator: A→B
-    const forwardAnchor = L.polyline(positions, { opacity: 0, weight: 0 });
+    // Forward decorator: A→B (pass positions array directly — no invisible anchor needed)
     const forwardDecorator = (L as any)
-      .polylineDecorator(forwardAnchor, {
-        patterns: [{ offset: "30%", repeat: "40%", symbol: arrowSymbol(10) }],
+      .polylineDecorator(positions, {
+        patterns: [{ offset: '30%', repeat: '40%', symbol: arrowSymbol(10) }],
       })
       .addTo(map);
 
-    // For two-way roads, add a second decorator on the reversed polyline (B→A)
+    // For two-way roads, add a second decorator on reversed positions (B→A)
     let reverseDecorator: any = null;
     if (isBidirectional) {
-      const reverseAnchor = L.polyline([...positions].reverse(), { opacity: 0, weight: 0 });
+      const reversed = [...positions].reverse();
       reverseDecorator = (L as any)
-        .polylineDecorator(reverseAnchor, {
-          patterns: [{ offset: "30%", repeat: "40%", symbol: arrowSymbol(10) }],
+        .polylineDecorator(reversed, {
+          patterns: [{ offset: '30%', repeat: '40%', symbol: arrowSymbol(10) }],
         })
         .addTo(map);
     }
@@ -1761,8 +1741,9 @@ export default function MapManager({
       {/* Map */}
       <MapContainer
         center={[10.3157, 123.8854]}
-        zoom={13}
+        zoom={11}
         minZoom={9}
+        maxZoom={19}
         maxBounds={[
           [9.35, 123.15],
           [11.35, 124.65],
@@ -1774,6 +1755,8 @@ export default function MapManager({
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          maxNativeZoom={19}
+          maxZoom={19}
         />
 
         <MapClickHandler onMapClick={handleMapClick} mode={mode} />

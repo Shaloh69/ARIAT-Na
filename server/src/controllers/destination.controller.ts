@@ -28,9 +28,13 @@ function formatDestination(dest: any) {
   return {
     ...dest,
     images: safeJsonParse(dest.images, []),
+    menu_images: safeJsonParse(dest.menu_images, []),
     operating_hours: safeJsonParse(dest.operating_hours, null),
     amenities: safeJsonParse(dest.amenities, []),
     tags: safeJsonParse(dest.tags, []),
+    cuisine_types: safeJsonParse(dest.cuisine_types, []),
+    service_types: safeJsonParse(dest.service_types, []),
+    accommodation_pricing: safeJsonParse(dest.accommodation_pricing, null),
   };
 }
 
@@ -236,6 +240,20 @@ export const createDestination = async (
     average_visit_duration = 120,
     best_time_to_visit,
     is_featured = false,
+    is_island = false,
+    family_friendly = false,
+    cluster_id,
+    municipality,
+    budget_level = 'mid',
+    contact_phone,
+    contact_email,
+    website_url,
+    facebook_url,
+    instagram_url,
+    seating_capacity,
+    star_rating,
+    check_in_time,
+    check_out_time,
   } = req.body;
 
   // Validate required fields
@@ -260,16 +278,45 @@ export const createDestination = async (
     try { amenities = JSON.parse(amenities); } catch { amenities = null; }
   }
 
+  let menu_images = req.body.menu_images;
+  if (typeof menu_images === 'string') {
+    try { menu_images = JSON.parse(menu_images); } catch { menu_images = null; }
+  }
+
+  let cuisine_types = req.body.cuisine_types;
+  if (typeof cuisine_types === 'string') {
+    try { cuisine_types = JSON.parse(cuisine_types); } catch { cuisine_types = null; }
+  }
+
+  let service_types = req.body.service_types;
+  if (typeof service_types === 'string') {
+    try { service_types = JSON.parse(service_types); } catch { service_types = null; }
+  }
+
+  let tags = req.body.tags;
+  if (typeof tags === 'string') {
+    try { tags = JSON.parse(tags); } catch { tags = null; }
+  }
+
+  let accommodation_pricing = req.body.accommodation_pricing;
+  if (typeof accommodation_pricing === 'string') {
+    try { accommodation_pricing = JSON.parse(accommodation_pricing); } catch { accommodation_pricing = null; }
+  }
+
   const destinationId = uuidv4();
 
   const sql = `
     INSERT INTO destinations (
       id, name, description, category_id, latitude, longitude,
-      address, images, operating_hours, entrance_fee_local,
+      address, contact_phone, contact_email, website_url, facebook_url, instagram_url,
+      images, menu_images, operating_hours, entrance_fee_local,
       entrance_fee_foreign, average_visit_duration, best_time_to_visit,
-      amenities, is_active, is_featured
+      amenities, cuisine_types, service_types, seating_capacity,
+      accommodation_pricing, star_rating, check_in_time, check_out_time,
+      tags, cluster_id, municipality, budget_level,
+      family_friendly, is_island, is_active, is_featured
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   try {
@@ -281,15 +328,34 @@ export const createDestination = async (
       Number(latitude),
       Number(longitude),
       address || null,
+      contact_phone || null,
+      contact_email || null,
+      website_url || null,
+      facebook_url || null,
+      instagram_url || null,
       images ? JSON.stringify(images) : null,
+      menu_images ? JSON.stringify(menu_images) : null,
       operating_hours ? JSON.stringify(operating_hours) : null,
       Number(entrance_fee_local) || 0,
       Number(entrance_fee_foreign) || 0,
       Number(average_visit_duration) || 120,
       best_time_to_visit || null,
       amenities ? JSON.stringify(amenities) : null,
+      cuisine_types ? JSON.stringify(cuisine_types) : null,
+      service_types ? JSON.stringify(service_types) : null,
+      seating_capacity ? Number(seating_capacity) : null,
+      accommodation_pricing ? JSON.stringify(accommodation_pricing) : null,
+      star_rating ? Number(star_rating) : null,
+      check_in_time || null,
+      check_out_time || null,
+      tags ? JSON.stringify(tags) : null,
+      cluster_id || null,
+      municipality || null,
+      budget_level || 'mid',
+      family_friendly ? 1 : 0,
+      is_island ? 1 : 0,
       true,
-      is_featured,
+      is_featured ? 1 : 0,
     ]);
   } catch (dbError: any) {
     if (dbError.code === 'ER_NO_REFERENCED_ROW_2') {
@@ -334,26 +400,18 @@ export const updateDestination = async (
 
   // Build dynamic update query
   const allowedFields = [
-    'name',
-    'description',
-    'category_id',
-    'latitude',
-    'longitude',
-    'address',
-    'entrance_fee_local',
-    'entrance_fee_foreign',
-    'average_visit_duration',
-    'best_time_to_visit',
-    'is_active',
-    'is_featured',
-    'is_island',
-    'family_friendly',
-    'cluster_id',
-    'municipality',
-    'budget_level',
+    'name', 'description', 'category_id', 'latitude', 'longitude', 'address',
+    'contact_phone', 'contact_email', 'website_url', 'facebook_url', 'instagram_url',
+    'entrance_fee_local', 'entrance_fee_foreign', 'average_visit_duration', 'best_time_to_visit',
+    'is_active', 'is_featured', 'is_island', 'family_friendly',
+    'cluster_id', 'municipality', 'budget_level',
+    'seating_capacity', 'star_rating', 'check_in_time', 'check_out_time',
   ];
 
-  const jsonFields = ['images', 'operating_hours', 'amenities'];
+  const jsonFields = [
+    'images', 'menu_images', 'operating_hours', 'amenities',
+    'cuisine_types', 'service_types', 'tags', 'accommodation_pricing',
+  ];
 
   const updateFields: string[] = [];
   const updateValues: any[] = [];

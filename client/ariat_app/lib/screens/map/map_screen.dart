@@ -441,7 +441,7 @@ class _MapScreenState extends State<MapScreen> {
             initialCenter: _defaultCenter,
             initialZoom: 13,
             minZoom: 8.2,
-            maxZoom: 18,
+            maxZoom: 19,
             cameraConstraint: CameraConstraint.contain(bounds: _cebuBounds),
             onTap: (_, point) => _onMapTap(point),
           ),

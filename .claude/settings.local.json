@@ -36,7 +36,29 @@
       "Bash(powershell -Command \"Set-Location ''D:\\\\Projects-Shem\\\\Thesis\\\\2026\\\\AIRAT-NA\\\\client\\\\ariat_app''; & ''D:\\\\Projects-Shem\\\\Flutter\\\\flutter\\\\bin\\\\flutter.bat'' analyze 2>&1\")",
       "Bash(cmd /c \"D:/Projects-Shem/Flutter/flutter/bin/flutter.bat analyze D:/Projects-Shem/Thesis/2026/AIRAT-NA/client/ariat_app 2>&1\")",
       "Bash(powershell -Command \"& ''D:/Projects-Shem/Flutter/flutter/bin/flutter.bat'' analyze ''D:/Projects-Shem/Thesis/2026/AIRAT-NA/client/ariat_app'' 2>&1\")",
-      "Bash(powershell -Command \"& ''D:\\\\Projects-Shem\\\\Flutter\\\\flutter\\\\bin\\\\flutter.bat'' analyze ''D:\\\\Projects-Shem\\\\Thesis\\\\2026\\\\AIRAT-NA\\\\client\\\\ariat_app'' 2>&1\")"
+      "Bash(powershell -Command \"& ''D:\\\\Projects-Shem\\\\Flutter\\\\flutter\\\\bin\\\\flutter.bat'' analyze ''D:\\\\Projects-Shem\\\\Thesis\\\\2026\\\\AIRAT-NA\\\\client\\\\ariat_app'' 2>&1\")",
+      "Bash(xargs grep:*)",
+      "Read(//c/Projects/Thesis/2026/AIRAT-NA/client/ariat_web/**)",
+      "Read(//d/Projects-Shem/Thesis/2026/AIRAT-NA/client/ariat_web/**)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\(''''config'''',{}\\).get\\(''''distDir'''',''''NOT SET''''\\)\\); print\\(d.get\\(''''appDir'''',''''NOT SET''''\\)[:80]\\)\")",
+      "Bash(timeout 30 npx next dev --port 3000)",
+      "Bash(netstat -ano)",
+      "Bash(xargs -r kill -f)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(node -e \":*)",
+      "Bash(find C:/Projects/Thesis/2026/AIRAT-NA/client/ariat_web -name *.css -o -name tailwind.config* -o -name theme*)",
+      "Bash(find C:/Projects/Thesis/2026/AIRAT-NA/client/ariat_web -name tailwind.config*)",
+      "Read(//c/Projects/Thesis/2026/AIRAT-NA/client/ariat_app/lib/screens/map/**)",
+      "Read(//d/Projects-Shem/Thesis/2026/AIRAT-NA/client/ariat_app/lib/screens/map/**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\client\\ariat_web\\pages\\admin",
+      "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\client\\ariat_web\\pages\\admin",
+      "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\client\\ariat_web\\.next",
+      "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\client\\ariat_web",
+      "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\client\\ariat_web",
+      "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\client\\ariat_app\\lib\\screens\\map",
+      "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\client\\ariat_app\\lib\\screens\\map"
     ]
   }
 }

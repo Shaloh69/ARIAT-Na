@@ -345,18 +345,7 @@ body {
   color: rgba(148, 163, 184, 0.7) !important;
 }
 
-/* Modal select trigger — override global transparent styles */
-[role="dialog"] [data-slot="trigger"] {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-}
-
-[role="dialog"] [data-slot="trigger"] *,
-[role="dialog"] [data-slot="value"],
-[role="dialog"] [data-slot="label"],
-[role="dialog"] [data-slot="selectorIcon"] {
-  color: #e2e8f0 !important;
-}
+/* Modal select trigger — inherits global [data-slot="trigger"] styles */
 
 /* Modal body text and labels */
 [role="dialog"] [data-slot="body"] label,
@@ -383,39 +372,56 @@ body {
   font-weight: 500;
 }
 
-/* HeroUI Select/Dropdown */
-[data-slot="trigger"][class*="heroui-select"],
-[data-slot="listbox-wrapper"] {
-  background: var(--bg-3) !important;
+/* HeroUI Select trigger button */
+[data-slot="trigger"] {
+  background: rgba(255, 255, 255, 0.08) !important;
   border: 1px solid var(--border) !important;
   border-radius: 12px !important;
   backdrop-filter: blur(24px) saturate(1.4) !important;
   -webkit-backdrop-filter: blur(24px) saturate(1.4) !important;
 }
 
-[data-slot="popover"][class*="heroui"] {
-  background: rgba(15, 23, 42, 0.88) !important;
+[data-slot="trigger"] [data-slot="value"],
+[data-slot="trigger"] [data-slot="label"],
+[data-slot="trigger"] [data-slot="selectorIcon"],
+[data-slot="trigger"] [data-slot="placeholder"] {
+  color: #e2e8f0 !important;
+}
+
+/* HeroUI Select/Dropdown popover — solid dark glass, NOT transparent */
+[data-slot="popover"] {
+  background: rgba(15, 23, 42, 0.92) !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
   backdrop-filter: blur(30px) saturate(1.5) !important;
   -webkit-backdrop-filter: blur(30px) saturate(1.5) !important;
   border-radius: 14px !important;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3) !important;
-  color: #f1f5f9 !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+  overflow: hidden !important;
 }
 
-[data-slot="popover"][class*="heroui"] [role="option"],
-[data-slot="popover"][class*="heroui"] li,
-[data-slot="popover"][class*="heroui"] li span {
-  color: #f1f5f9 !important;
+/* Listbox wrapper inside popover */
+[data-slot="listbox-wrapper"],
+[data-slot="listbox"] {
+  background: transparent !important;
 }
 
-[data-slot="popover"][class*="heroui"] [role="option"]:hover,
-[data-slot="popover"][class*="heroui"] [role="option"][data-hover="true"] {
+/* Option items */
+[data-slot="popover"] [role="option"],
+[data-slot="popover"] [data-slot="title"],
+[data-slot="popover"] li,
+[data-slot="popover"] li span {
+  color: #f1f5f9 !important;
+  background: transparent !important;
+}
+
+[data-slot="popover"] [role="option"]:hover,
+[data-slot="popover"] [role="option"][data-hover="true"],
+[data-slot="popover"] [role="option"][data-focus="true"] {
   background: rgba(255, 255, 255, 0.1) !important;
 }
 
-[data-slot="popover"][class*="heroui"] [role="option"][data-selected="true"],
-[data-slot="popover"][class*="heroui"] [role="option"][aria-selected="true"] {
+[data-slot="popover"] [role="option"][data-selected="true"],
+[data-slot="popover"] [role="option"][aria-selected="true"] {
   background: rgba(244, 63, 94, 0.2) !important;
   color: #fda4af !important;
 }

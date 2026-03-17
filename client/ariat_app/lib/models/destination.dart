@@ -25,6 +25,24 @@ class Destination {
   final bool isFeatured;
   final bool isActive;
   final bool isIsland;
+  // Contact & social
+  final String? contactPhone;
+  final String? contactEmail;
+  final String? websiteUrl;
+  final String? facebookUrl;
+  final String? instagramUrl;
+  // Restaurant-specific
+  final List<String> menuImages;
+  final List<String> cuisineTypes;
+  final List<String> serviceTypes;
+  final int? seatingCapacity;
+  // Hotel-specific
+  final int? starRating;
+  final double? perNightMin;
+  final double? perNightMax;
+  final double? perHour;
+  final String? checkInTime;
+  final String? checkOutTime;
 
   Destination({
     required this.id,
@@ -53,6 +71,21 @@ class Destination {
     this.isFeatured = false,
     this.isActive = true,
     this.isIsland = false,
+    this.contactPhone,
+    this.contactEmail,
+    this.websiteUrl,
+    this.facebookUrl,
+    this.instagramUrl,
+    this.menuImages = const [],
+    this.cuisineTypes = const [],
+    this.serviceTypes = const [],
+    this.seatingCapacity,
+    this.starRating,
+    this.perNightMin,
+    this.perNightMax,
+    this.perHour,
+    this.checkInTime,
+    this.checkOutTime,
   });
 
   factory Destination.fromJson(Map<String, dynamic> json) {
@@ -83,6 +116,21 @@ class Destination {
       isFeatured: json['is_featured'] == true || json['is_featured'] == 1,
       isActive: json['is_active'] == true || json['is_active'] == 1,
       isIsland: json['is_island'] == true || json['is_island'] == 1,
+      contactPhone: json['contact_phone'],
+      contactEmail: json['contact_email'],
+      websiteUrl: json['website_url'],
+      facebookUrl: json['facebook_url'],
+      instagramUrl: json['instagram_url'],
+      menuImages: (json['menu_images'] as List?)?.cast<String>() ?? [],
+      cuisineTypes: (json['cuisine_types'] as List?)?.cast<String>() ?? [],
+      serviceTypes: (json['service_types'] as List?)?.cast<String>() ?? [],
+      seatingCapacity: json['seating_capacity'] as int?,
+      starRating: json['star_rating'] as int?,
+      perNightMin: (json['accommodation_pricing']?['per_night_min'] as num?)?.toDouble(),
+      perNightMax: (json['accommodation_pricing']?['per_night_max'] as num?)?.toDouble(),
+      perHour: (json['accommodation_pricing']?['per_hour'] as num?)?.toDouble(),
+      checkInTime: json['check_in_time'],
+      checkOutTime: json['check_out_time'],
     );
   }
 
