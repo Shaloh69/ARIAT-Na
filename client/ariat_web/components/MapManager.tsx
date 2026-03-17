@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -92,6 +92,7 @@ interface RoadGeoJSONFeature {
     road_type: string;
     distance: number;
     estimated_time: number;
+    is_bidirectional: boolean;
   };
   geometry: {
     type: "LineString";
@@ -323,6 +324,62 @@ function RoadPolyline({
       }
     };
   }, [map, positions, color, weight, opacity, isBidirectional]);
+
+  return null;
+}
+
+// Adds directional arrow decorators on top of an existing react-leaflet <Polyline>
+// without rendering a duplicate polyline layer.
+function RoadDecorator({
+  positions,
+  color,
+  isBidirectional,
+}: {
+  positions: [number, number][];
+  color: string;
+  isBidirectional: boolean;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || positions.length < 2) return;
+
+    // Anchor the decorator to a transparent polyline so it follows the road path
+    const anchor = L.polyline(positions, { opacity: 0, weight: 0 });
+
+    const arrowSymbol = (size: number) =>
+      L.Symbol.arrowHead({
+        pixelSize: size,
+        polygon: false,
+        pathOptions: { stroke: true, color, weight: 2, opacity: 0.85 },
+      });
+
+    const patterns = isBidirectional
+      ? [
+          // Forward arrow (A→B) at 30%
+          { offset: "30%", repeat: 0, symbol: arrowSymbol(10) },
+          // Reverse arrow (B→A) drawn by reversing the polyline at 70%
+          { offset: "70%", repeat: 0, symbol: arrowSymbol(10) },
+          // Second forward pass to hint two-way
+          { offset: "15%", repeat: "85%", symbol: arrowSymbol(8) },
+        ]
+      : [
+          // Single mid-point arrow pointing A→B
+          { offset: "50%", repeat: 0, symbol: arrowSymbol(13) },
+        ];
+
+    const decorator = (L as any)
+      .polylineDecorator(anchor, { patterns })
+      .addTo(map);
+
+    return () => {
+      try {
+        map.removeLayer(decorator);
+      } catch {
+        // ignore cleanup errors
+      }
+    };
+  }, [map, positions, color, isBidirectional]);
 
   return null;
 }
@@ -985,6 +1042,7 @@ export default function MapManager({
     roadType: feature.properties.road_type,
     distance: feature.properties.distance,
     estimatedTime: feature.properties.estimated_time,
+    isBidirectional: feature.properties.is_bidirectional !== false,
     positions: feature.geometry.coordinates.map(
       (coord) => [Number(coord[1]), Number(coord[0])] as [number, number],
     ),
@@ -1820,59 +1878,71 @@ export default function MapManager({
         ))}
 
         {/* Saved roads from server */}
-        {savedRoads.map((road) => (
-          <Polyline
-            key={`saved-road-${road.id}`}
-            positions={road.positions}
-            pathOptions={{
-              color: getRoadColor(road.roadType),
-              weight: road.roadType === "ferry" ? 2 : 3,
-              opacity: 0.8,
-              dashArray: road.roadType === "ferry" ? "8 6" : undefined,
-            }}
-          >
-            <Popup>
-              <div style={{ minWidth: "140px" }}>
-                <p
-                  style={{
-                    fontWeight: 600,
-                    fontSize: "13px",
-                    margin: "0 0 4px",
-                  }}
-                >
-                  {road.name}
-                </p>
-                <p
-                  style={{
-                    fontSize: "11px",
-                    color: "#6b7280",
-                    margin: "0 0 2px",
-                  }}
-                >
-                  Type: {road.roadType.replace("_", " ")}
-                </p>
-                <p style={{ fontSize: "11px", color: "#6b7280", margin: "0 0 8px" }}>
-                  {road.distance} km &middot; ~{road.estimatedTime} min
-                </p>
-                {onDeleteRoad && (
-                  <Button
-                    size="sm"
-                    color="danger"
-                    variant="flat"
-                    style={{ fontSize: "11px", minHeight: "24px", height: "24px", padding: "0 8px" }}
-                    onClick={() => {
-                      if (confirm(`Delete road "${road.name}"? This cannot be undone.`)) {
-                        onDeleteRoad(road.id);
-                      }
-                    }}
-                  >
-                    Delete Road
-                  </Button>
-                )}
-              </div>
-            </Popup>
-          </Polyline>
-        ))}
+        {savedRoads.map((road) => {
+          const roadColor = getRoadColor(road.roadType);
+          return (
+            <React.Fragment key={`saved-road-${road.id}`}>
+              <Polyline
+                positions={road.positions}
+                pathOptions={{
+                  color: roadColor,
+                  weight: road.roadType === "ferry" ? 2 : 3,
+                  opacity: 0.8,
+                  dashArray: road.roadType === "ferry" ? "8 6" : undefined,
+                }}
+              >
+                <Popup>
+                  <div style={{ minWidth: "140px" }}>
+                    <p
+                      style={{
+                        fontWeight: 600,
+                        fontSize: "13px",
+                        margin: "0 0 4px",
+                      }}
+                    >
+                      {road.name}
+                    </p>
+                    <p
+                      style={{
+                        fontSize: "11px",
+                        color: "#6b7280",
+                        margin: "0 0 2px",
+                      }}
+                    >
+                      Type: {road.roadType.replace("_", " ")}
+                    </p>
+                    <p style={{ fontSize: "11px", color: "#6b7280", margin: "0 0 2px" }}>
+                      {road.distance} km &middot; ~{road.estimatedTime} min
+                    </p>
+                    <p style={{ fontSize: "11px", color: "#6b7280", margin: "0 0 8px" }}>
+                      Direction: {road.isBidirectional ? "↔ Two-way" : "→ One-way"}
+                    </p>
+                    {onDeleteRoad && (
+                      <Button
+                        size="sm"
+                        color="danger"
+                        variant="flat"
+                        style={{ fontSize: "11px", minHeight: "24px", height: "24px", padding: "0 8px" }}
+                        onClick={() => {
+                          if (confirm(`Delete road "${road.name}"? This cannot be undone.`)) {
+                            onDeleteRoad(road.id);
+                          }
+                        }}
+                      >
+                        Delete Road
+                      </Button>
+                    )}
+                  </div>
+                </Popup>
+              </Polyline>
+              <RoadDecorator
+                positions={road.positions}
+                color={roadColor}
+                isBidirectional={road.isBidirectional}
+              />
+            </React.Fragment>
+          );
+        })}
 
         {/* Road in progress */}
         {roadPoints.length > 0 && (

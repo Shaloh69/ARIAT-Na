@@ -258,10 +258,10 @@ export default function FareConfigsPage() {
                       </code>
                     </td>
                     <td className="py-3 px-4 font-medium">{config.display_name}</td>
-                    <td className="py-3 px-4 text-right font-mono">₱{config.base_fare.toFixed(2)}</td>
-                    <td className="py-3 px-4 text-right font-mono">₱{config.per_km_rate.toFixed(2)}</td>
-                    <td className="py-3 px-4 text-right font-mono">₱{config.minimum_fare.toFixed(2)}</td>
-                    <td className="py-3 px-4 text-right font-mono">{config.peak_hour_multiplier.toFixed(2)}×</td>
+                    <td className="py-3 px-4 text-right font-mono">₱{Number(config.base_fare).toFixed(2)}</td>
+                    <td className="py-3 px-4 text-right font-mono">₱{Number(config.per_km_rate).toFixed(2)}</td>
+                    <td className="py-3 px-4 text-right font-mono">₱{Number(config.minimum_fare).toFixed(2)}</td>
+                    <td className="py-3 px-4 text-right font-mono">{Number(config.peak_hour_multiplier).toFixed(2)}×</td>
                     <td className="py-3 px-4 text-center">
                       <Chip size="sm" color={config.is_active ? "success" : "default"} variant="flat">
                         {config.is_active ? "Active" : "Inactive"}

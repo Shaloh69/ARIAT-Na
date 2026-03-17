@@ -52,8 +52,8 @@ async function resolveOrCreateIntersection(lat: number, lng: number, labelHint: 
   }
   const newId = uuidv4();
   await pool.execute(
-    `INSERT INTO intersections (id, name, latitude, longitude, point_type, is_active)
-     VALUES (?, ?, ?, ?, 'intersection', TRUE)`,
+    `INSERT INTO intersections (id, name, latitude, longitude, point_type)
+     VALUES (?, ?, ?, ?, 'intersection')`,
     [newId, labelHint, lat, lng]
   );
   return newId;
@@ -382,6 +382,7 @@ export const getRoadsGeoJSON = async (
       road_type: road.road_type,
       distance: road.distance,
       estimated_time: road.estimated_time,
+      is_bidirectional: Boolean(road.is_bidirectional),
     },
     geometry: {
       type: 'LineString',
