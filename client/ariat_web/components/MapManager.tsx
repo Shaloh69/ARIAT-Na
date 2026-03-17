@@ -344,40 +344,35 @@ function RoadDecorator({
   useEffect(() => {
     if (!map || positions.length < 2) return;
 
-    // Anchor the decorator to a transparent polyline so it follows the road path
-    const anchor = L.polyline(positions, { opacity: 0, weight: 0 });
-
     const arrowSymbol = (size: number) =>
       L.Symbol.arrowHead({
         pixelSize: size,
         polygon: false,
-        pathOptions: { stroke: true, color, weight: 2, opacity: 0.85 },
+        pathOptions: { stroke: true, color, weight: 2, opacity: 0.9 },
       });
 
-    const patterns = isBidirectional
-      ? [
-          // Forward arrow (A→B) at 30%
-          { offset: "30%", repeat: 0, symbol: arrowSymbol(10) },
-          // Reverse arrow (B→A) drawn by reversing the polyline at 70%
-          { offset: "70%", repeat: 0, symbol: arrowSymbol(10) },
-          // Second forward pass to hint two-way
-          { offset: "15%", repeat: "85%", symbol: arrowSymbol(8) },
-        ]
-      : [
-          // Single mid-point arrow pointing A→B
-          { offset: "50%", repeat: 0, symbol: arrowSymbol(13) },
-        ];
-
-    const decorator = (L as any)
-      .polylineDecorator(anchor, { patterns })
+    // Forward decorator: A→B
+    const forwardAnchor = L.polyline(positions, { opacity: 0, weight: 0 });
+    const forwardDecorator = (L as any)
+      .polylineDecorator(forwardAnchor, {
+        patterns: [{ offset: "30%", repeat: "40%", symbol: arrowSymbol(10) }],
+      })
       .addTo(map);
 
+    // For two-way roads, add a second decorator on the reversed polyline (B→A)
+    let reverseDecorator: any = null;
+    if (isBidirectional) {
+      const reverseAnchor = L.polyline([...positions].reverse(), { opacity: 0, weight: 0 });
+      reverseDecorator = (L as any)
+        .polylineDecorator(reverseAnchor, {
+          patterns: [{ offset: "30%", repeat: "40%", symbol: arrowSymbol(10) }],
+        })
+        .addTo(map);
+    }
+
     return () => {
-      try {
-        map.removeLayer(decorator);
-      } catch {
-        // ignore cleanup errors
-      }
+      try { map.removeLayer(forwardDecorator); } catch { /* ignore */ }
+      try { if (reverseDecorator) map.removeLayer(reverseDecorator); } catch { /* ignore */ }
     };
   }, [map, positions, color, isBidirectional]);
 
@@ -394,6 +389,8 @@ function ZoomAwareDestinationMarker({
   categoryName,
   address,
   isFeatured,
+  interactive = true,
+  showPopup = true,
 }: {
   position: [number, number];
   name: string;
@@ -401,6 +398,8 @@ function ZoomAwareDestinationMarker({
   categoryName?: string;
   address?: string;
   isFeatured: boolean;
+  interactive?: boolean;
+  showPopup?: boolean;
 }) {
   const map = useMap();
   const [zoom, setZoom] = useState(map.getZoom());
@@ -458,8 +457,15 @@ function ZoomAwareDestinationMarker({
   }, [isFeatured]);
 
   return (
-    <Marker position={position} icon={isZoomedIn ? zoomedInIcon : pinIcon}>
-      <Popup>
+    <Marker
+      position={position}
+      icon={isZoomedIn ? zoomedInIcon : pinIcon}
+      interactive={interactive}
+      eventHandlers={{
+        click: (e) => { if (!interactive) { L.DomEvent.stopPropagation(e); } },
+      }}
+    >
+      {showPopup && <Popup>
         <div style={{ minWidth: "180px" }}>
           {image && (
             <img
@@ -513,13 +519,13 @@ function ZoomAwareDestinationMarker({
             </span>
           )}
         </div>
-      </Popup>
+      </Popup>}
     </Marker>
   );
 }
 
-// Snap threshold in degrees (~55 meters at Cebu's latitude)
-const SNAP_THRESHOLD = 0.0005;
+// Snap threshold in degrees (~11 meters at Cebu's latitude) — only snaps when clicking on/near an intersection dot
+const SNAP_THRESHOLD = 0.0001;
 
 export default function MapManager({
   geojsonData,
@@ -849,7 +855,7 @@ export default function MapManager({
       setNewPointName("");
       setNewPointAddress("");
       setPendingPoint(null);
-      setMode("view");
+      // stay on current mode
     } catch (error) {
       toast.error("Failed to save point");
     }
@@ -879,7 +885,7 @@ export default function MapManager({
       setRoadPoints([]);
       setSnappedIndices(new Set());
       setIsBidirectional(true);
-      setMode("view");
+      // stay on current mode
     } catch (error) {
       toast.error("Failed to save road");
     }
@@ -921,7 +927,7 @@ export default function MapManager({
 
       setIsDestModalOpen(false);
       setPendingPoint(null);
-      setMode("view");
+      // stay on current mode
       toast.success("Destination created successfully!");
     } catch (error) {
       toast.error("Failed to create destination");
@@ -935,7 +941,6 @@ export default function MapManager({
     }
     setRoadPoints([]);
     setSnappedIndices(new Set());
-    setMode("view");
     toast.info("Road creation cancelled");
   };
 
@@ -1785,9 +1790,13 @@ export default function MapManager({
               weight: 2,
               fillColor: getCircleMarkerColor(marker.type),
               fillOpacity: 0.9,
+              interactive: mode === "view",
+            }}
+            eventHandlers={{
+              click: (e) => { if (mode !== "view") { L.DomEvent.stopPropagation(e); } },
             }}
           >
-            <Popup>
+            {mode === "view" && <Popup>
               <div style={{ minWidth: "160px" }}>
                 <p className="font-semibold text-sm">{marker.name}</p>
                 <p className="text-xs text-gray-500 mb-2">
@@ -1860,7 +1869,7 @@ export default function MapManager({
                   </div>
                 )}
               </div>
-            </Popup>
+            </Popup>}
           </CircleMarker>
         ))}
 
@@ -1874,6 +1883,8 @@ export default function MapManager({
             categoryName={dest.categoryName}
             address={dest.address}
             isFeatured={dest.isFeatured}
+            interactive={mode === "view"}
+            showPopup={mode === "view"}
           />
         ))}
 
