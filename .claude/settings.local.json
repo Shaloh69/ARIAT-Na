@@ -35,7 +35,8 @@
       "Bash(D:Projects-ShemFlutterflutterbinflutter.bat analyze:*)",
       "Bash(powershell -Command \"Set-Location ''D:\\\\Projects-Shem\\\\Thesis\\\\2026\\\\AIRAT-NA\\\\client\\\\ariat_app''; & ''D:\\\\Projects-Shem\\\\Flutter\\\\flutter\\\\bin\\\\flutter.bat'' analyze 2>&1\")",
       "Bash(cmd /c \"D:/Projects-Shem/Flutter/flutter/bin/flutter.bat analyze D:/Projects-Shem/Thesis/2026/AIRAT-NA/client/ariat_app 2>&1\")",
-      "Bash(powershell -Command \"& ''D:/Projects-Shem/Flutter/flutter/bin/flutter.bat'' analyze ''D:/Projects-Shem/Thesis/2026/AIRAT-NA/client/ariat_app'' 2>&1\")"
+      "Bash(powershell -Command \"& ''D:/Projects-Shem/Flutter/flutter/bin/flutter.bat'' analyze ''D:/Projects-Shem/Thesis/2026/AIRAT-NA/client/ariat_app'' 2>&1\")",
+      "Bash(powershell -Command \"& ''D:\\\\Projects-Shem\\\\Flutter\\\\flutter\\\\bin\\\\flutter.bat'' analyze ''D:\\\\Projects-Shem\\\\Thesis\\\\2026\\\\AIRAT-NA\\\\client\\\\ariat_app'' 2>&1\")"
     ]
   }
 }
