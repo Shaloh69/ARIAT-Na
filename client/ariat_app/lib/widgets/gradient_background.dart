@@ -7,18 +7,14 @@ class GradientBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF0F172A),
-            Color(0xFF1A1030),
-            Color(0xFF0F172A),
-            Color(0xFF0D1A2D),
-          ],
-          stops: [0.0, 0.3, 0.7, 1.0],
+          colors: [c.gradient0, c.gradient1, c.gradient2, c.gradient3],
+          stops: const [0.0, 0.3, 0.7, 1.0],
         ),
       ),
       child: Stack(
@@ -29,7 +25,7 @@ class GradientBackground extends StatelessWidget {
               width: 300, height: 300,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [AppColors.red500.withAlpha(60), Colors.transparent]),
+                gradient: RadialGradient(colors: [c.orbRed, Colors.transparent]),
               ),
             ),
           ),
@@ -39,7 +35,7 @@ class GradientBackground extends StatelessWidget {
               width: 250, height: 250,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [AppColors.purple.withAlpha(40), Colors.transparent]),
+                gradient: RadialGradient(colors: [c.orbPurple, Colors.transparent]),
               ),
             ),
           ),
@@ -49,7 +45,7 @@ class GradientBackground extends StatelessWidget {
               width: 200, height: 200,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [AppColors.blue.withAlpha(35), Colors.transparent]),
+                gradient: RadialGradient(colors: [c.orbBlue, Colors.transparent]),
               ),
             ),
           ),

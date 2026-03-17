@@ -6,6 +6,7 @@ import {
   recalculateRoute,
   checkIfOffCourse,
 } from '../services/pathfinding.service';
+import { calculateMultiModalRoute } from '../services/multimodal.service';
 import { AuthRequest } from '../types';
 
 /**
@@ -203,6 +204,56 @@ export const recalculateRouteFromCurrent = async (req: AuthRequest, res: Respons
     res.status(500).json({
       success: false,
       message: 'Failed to recalculate route',
+    });
+  }
+};
+
+/**
+ * Calculate multi-modal route (bus, taxi, ferry, walk, etc.)
+ * POST /routes/calculate-multimodal
+ */
+export const calculateMultiModalRouteHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { start_lat, start_lon, end_lat, end_lon, transport_mode, optimize_for = 'distance' } = req.body;
+
+    if (start_lat === undefined || start_lat === null ||
+        start_lon === undefined || start_lon === null ||
+        end_lat === undefined || end_lat === null ||
+        end_lon === undefined || end_lon === null) {
+      res.status(400).json({
+        success: false,
+        message: 'start_lat, start_lon, end_lat, and end_lon are required',
+      });
+      return;
+    }
+
+    const validModes = ['walk', 'tricycle', 'jeepney', 'bus', 'bus_ac', 'taxi', 'private_car', 'hired_van', 'motorbike', 'habal_habal', 'ferry', 'bus_commute'];
+    if (!transport_mode || !validModes.includes(transport_mode)) {
+      res.status(400).json({
+        success: false,
+        message: `transport_mode is required and must be one of: ${validModes.join(', ')}`,
+      });
+      return;
+    }
+
+    const result = await calculateMultiModalRoute(
+      parseFloat(start_lat),
+      parseFloat(start_lon),
+      parseFloat(end_lat),
+      parseFloat(end_lon),
+      transport_mode,
+      optimize_for
+    );
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error calculating multi-modal route:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Multi-modal route calculation failed.',
     });
   }
 };

@@ -21,6 +21,10 @@ import roadRoutes from './routes/road.routes';
 import routeRoutes from './routes/route.routes';
 import uploadRoutes from './routes/upload.routes';
 import adminProfileRoutes from './routes/admin-profile.routes';
+import aiRoutes from './routes/ai.routes';
+import clusterRoutes from './routes/cluster.routes';
+import guideRoutes from './routes/guide.routes';
+import fareConfigRoutes from './routes/fareconfig.routes';
 
 // Create Express application
 const app: Application = express();
@@ -92,6 +96,10 @@ app.use(`${apiPrefix}/roads`, roadRoutes);
 app.use(`${apiPrefix}/routes`, routeRoutes);
 app.use(`${apiPrefix}/upload`, uploadRoutes);
 app.use(`${apiPrefix}/admin`, adminProfileRoutes);
+app.use(`${apiPrefix}/ai`, aiRoutes);
+app.use(`${apiPrefix}/clusters`, clusterRoutes);
+app.use(`${apiPrefix}/guides`, guideRoutes);
+app.use(`${apiPrefix}/fare-configs`, fareConfigRoutes);
 
 // =====================================================
 // ERROR HANDLING

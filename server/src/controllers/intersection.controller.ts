@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { AuthRequest, AppError } from '../types';
 import { pool } from '../config/database';
+import { invalidateGraphCache } from '../services/pathfinding.service';
 
 /**
  * Get all intersections
@@ -109,6 +110,7 @@ export const createIntersection = async (
     'SELECT * FROM intersections WHERE id = ?',
     [intersectionId]
   );
+  invalidateGraphCache();
 
   res.status(201).json({
     success: true,
@@ -175,6 +177,7 @@ export const updateIntersection = async (
     'SELECT * FROM intersections WHERE id = ?',
     [id]
   );
+  invalidateGraphCache();
 
   res.json({
     success: true,
@@ -201,6 +204,7 @@ export const deleteIntersection = async (
   if (result.affectedRows === 0) {
     throw new AppError('Intersection not found', 404);
   }
+  invalidateGraphCache();
 
   res.json({
     success: true,

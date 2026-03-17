@@ -97,6 +97,7 @@ class _DestinationsScreenState extends State<DestinationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return GradientBackground(
       child: SafeArea(
         child: Column(
@@ -104,29 +105,29 @@ class _DestinationsScreenState extends State<DestinationsScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: const Text('Explore', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: AppColors.textStrong))
+              child: Text('Explore', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: c.textStrong))
                   .animate().fadeIn(duration: 400.ms),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: TextBox(
                 controller: _searchController,
                 placeholder: 'Search destinations...',
-                prefix: const Padding(
+                prefix: Padding(
                   padding: EdgeInsets.only(left: 10),
-                  child: Icon(FluentIcons.search, size: 16, color: AppColors.textFaint),
+                  child: Icon(FluentIcons.search, size: 16, color: c.textFaint),
                 ),
                 onSubmitted: _onSearch,
-                style: const TextStyle(color: AppColors.textStrong),
+                style: TextStyle(color: c.textStrong),
                 decoration: WidgetStateProperty.all(BoxDecoration(
-                  color: AppColors.surfaceElevated,
+                  color: c.surfaceElevated,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withAlpha(20)),
+                  border: Border.all(color: c.borderLight),
                 )),
               ),
             ).animate().fadeIn(delay: 100.ms, duration: 400.ms),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             if (_categories.isNotEmpty)
               SizedBox(
                 height: 36,
@@ -139,20 +140,20 @@ class _DestinationsScreenState extends State<DestinationsScreen> {
                   ],
                 ),
               ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Expanded(
               child: _loading
-                  ? const Center(child: ProgressRing())
+                  ? Center(child: ProgressRing())
                   : _destinations.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(FluentIcons.search, size: 40, color: AppColors.textFaint),
-                              const SizedBox(height: 12),
-                              const Text('No destinations found', style: TextStyle(color: AppColors.textMuted, fontSize: 15)),
-                              const SizedBox(height: 4),
-                              const Text('Try a different search or category', style: TextStyle(color: AppColors.textFaint, fontSize: 12)),
+                              Icon(FluentIcons.search, size: 40, color: c.textFaint),
+                              SizedBox(height: 12),
+                              Text('No destinations found', style: TextStyle(color: c.textMuted, fontSize: 15)),
+                              SizedBox(height: 4),
+                              Text('Try a different search or category', style: TextStyle(color: c.textFaint, fontSize: 12)),
                             ],
                           ),
                         )
@@ -167,7 +168,7 @@ class _DestinationsScreenState extends State<DestinationsScreen> {
                           child: ListView.separated(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                             itemCount: _destinations.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 12),
+                            separatorBuilder: (_, __) => SizedBox(height: 12),
                             itemBuilder: (context, index) {
                               final dest = _destinations[index];
                               return _DestListItem(destination: dest)
@@ -183,20 +184,21 @@ class _DestinationsScreenState extends State<DestinationsScreen> {
   }
 
   Widget _chipFilter(String label, String? catId) {
+    final c = context.appColors;
     final isSelected = _selectedCategory == catId;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: GestureDetector(
         onTap: () => _onCategoryFilter(catId),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.red500 : AppColors.surfaceElevated,
+            color: isSelected ? AppColors.red500 : c.surfaceElevated,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: isSelected ? AppColors.red500 : Colors.white.withAlpha(20)),
+            border: Border.all(color: isSelected ? AppColors.red500 : c.borderLight),
           ),
-          child: Text(label, style: TextStyle(fontSize: 12, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400, color: isSelected ? Colors.white : AppColors.textMuted)),
+          child: Text(label, style: TextStyle(fontSize: 12, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400, color: isSelected ? Colors.white : c.textMuted)),
         ),
       ),
     );
@@ -209,6 +211,7 @@ class _DestListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return GestureDetector(
       onTap: () {
         Navigator.of(context).push(FluentPageRoute(
@@ -226,42 +229,42 @@ class _DestListItem extends StatelessWidget {
                   ? CachedNetworkImage(
                       imageUrl: destination.primaryImage!,
                       width: 80, height: 80, fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(width: 80, height: 80, color: AppColors.surfaceElevated),
-                      errorWidget: (_, __, ___) => Container(width: 80, height: 80, color: AppColors.surfaceElevated, child: const Icon(FluentIcons.photo2, color: AppColors.textFaint)),
+                      placeholder: (_, __) => Container(width: 80, height: 80, color: c.surfaceElevated),
+                      errorWidget: (_, __, ___) => Container(width: 80, height: 80, color: c.surfaceElevated, child: Icon(FluentIcons.photo2, color: c.textFaint)),
                     )
-                  : Container(width: 80, height: 80, color: AppColors.surfaceElevated, child: const Icon(FluentIcons.photo2, color: AppColors.textFaint)),
+                  : Container(width: 80, height: 80, color: c.surfaceElevated, child: Icon(FluentIcons.photo2, color: c.textFaint)),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(destination.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textStrong), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 3),
+                  Text(destination.name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.textStrong), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  SizedBox(height: 3),
                   if (destination.address != null)
-                    Text(destination.address!, style: const TextStyle(fontSize: 11, color: AppColors.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 6),
+                    Text(destination.address!, style: TextStyle(fontSize: 11, color: c.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  SizedBox(height: 6),
                   Row(
                     children: [
                       if (destination.categoryName != null)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                           decoration: BoxDecoration(color: AppColors.red500.withAlpha(20), borderRadius: BorderRadius.circular(4)),
-                          child: Text(destination.categoryName!, style: const TextStyle(fontSize: 9, color: AppColors.red400)),
+                          child: Text(destination.categoryName!, style: TextStyle(fontSize: 9, color: AppColors.red400)),
                         ),
-                      const Spacer(),
+                      Spacer(),
                       if (destination.rating > 0) ...[
                         Icon(FluentIcons.favorite_star_fill, size: 11, color: AppColors.amber),
-                        const SizedBox(width: 2),
-                        Text(destination.rating.toStringAsFixed(1), style: const TextStyle(fontSize: 11, color: AppColors.text, fontWeight: FontWeight.w500)),
+                        SizedBox(width: 2),
+                        Text(destination.rating.toStringAsFixed(1), style: TextStyle(fontSize: 11, color: c.text, fontWeight: FontWeight.w500)),
                       ],
                     ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 4),
-            const Icon(FluentIcons.chevron_right, size: 14, color: AppColors.textFaint),
+            SizedBox(width: 4),
+            Icon(FluentIcons.chevron_right, size: 14, color: c.textFaint),
           ],
         ),
       ),

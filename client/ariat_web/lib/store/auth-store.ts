@@ -1,7 +1,7 @@
-import { create } from 'zustand';
-import { apiClient } from '../api';
-import { API_ENDPOINTS } from '../constants';
-import type { Admin, LoginCredentials } from '@/types/api';
+import { create } from "zustand";
+import { apiClient } from "../api";
+import { API_ENDPOINTS } from "../constants";
+import type { Admin, LoginCredentials } from "@/types/api";
 
 interface AuthState {
   admin: Admin | null;
@@ -25,10 +25,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: async (credentials) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await apiClient.post<{ admin: Admin; accessToken: string; refreshToken: string }>(
-        API_ENDPOINTS.ADMIN_LOGIN,
-        credentials
-      );
+      const response = await apiClient.post<{
+        admin: Admin;
+        accessToken: string;
+        refreshToken: string;
+      }>(API_ENDPOINTS.ADMIN_LOGIN, credentials);
 
       if (response.success && response.data) {
         const { admin, accessToken, refreshToken } = response.data;
@@ -37,21 +38,27 @@ export const useAuthStore = create<AuthState>((set) => ({
           admin,
           isAuthenticated: true,
           isLoading: false,
-          error: null
+          error: null,
         });
       } else {
-        throw new Error(response.error || 'Login failed');
+        throw new Error(response.error || "Login failed");
       }
     } catch (error: any) {
       const serverMessage = error.response?.data?.error;
-      let errorMessage = 'Login failed. Please try again.';
+      let errorMessage = "Login failed. Please try again.";
 
-      if (serverMessage === 'Invalid email or password') {
-        errorMessage = 'Incorrect email or password. Please check your credentials and try again.';
-      } else if (serverMessage === 'Account has been deactivated') {
-        errorMessage = 'Your account has been deactivated. Please contact an administrator.';
-      } else if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
-        errorMessage = 'Unable to connect to the server. Please check your connection and try again.';
+      if (serverMessage === "Invalid email or password") {
+        errorMessage =
+          "Incorrect email or password. Please check your credentials and try again.";
+      } else if (serverMessage === "Account has been deactivated") {
+        errorMessage =
+          "Your account has been deactivated. Please contact an administrator.";
+      } else if (
+        error.code === "ERR_NETWORK" ||
+        error.message === "Network Error"
+      ) {
+        errorMessage =
+          "Unable to connect to the server. Please check your connection and try again.";
       } else if (serverMessage) {
         errorMessage = serverMessage;
       }
@@ -59,7 +66,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({
         error: errorMessage,
         isLoading: false,
-        isAuthenticated: false
+        isAuthenticated: false,
       });
       throw new Error(errorMessage);
     }
@@ -72,13 +79,13 @@ export const useAuthStore = create<AuthState>((set) => ({
         await apiClient.post(API_ENDPOINTS.LOGOUT, { refreshToken });
       }
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
     } finally {
       apiClient.clearTokens();
       set({
         admin: null,
         isAuthenticated: false,
-        error: null
+        error: null,
       });
     }
   },
@@ -97,14 +104,14 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({
           admin: response.data,
           isAuthenticated: true,
-          isLoading: false
+          isLoading: false,
         });
       } else {
         apiClient.clearTokens();
         set({
           admin: null,
           isAuthenticated: false,
-          isLoading: false
+          isLoading: false,
         });
       }
     } catch (error) {
@@ -112,7 +119,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({
         admin: null,
         isAuthenticated: false,
-        isLoading: false
+        isLoading: false,
       });
     }
   },

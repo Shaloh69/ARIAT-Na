@@ -9,6 +9,25 @@ import { pool } from '../config/database';
 import { RowDataPacket } from 'mysql2';
 import * as turf from '@turf/turf';
 
+// ---------------------------------------------------------------------------
+// In-memory graph cache — avoids re-querying the DB on every route request.
+// Invalidated whenever roads or intersections are mutated.
+// ---------------------------------------------------------------------------
+interface GraphCache {
+  intersections: Map<string, Intersection>;
+  adjacencyList: Map<string, Array<{ road: Road; neighbor: string }>>;
+  roadPaths: Map<string, [number, number][]>;
+  builtAt: number;
+}
+
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes safety-net TTL
+let _graphCache: GraphCache | null = null;
+
+/** Call this whenever a road or intersection is created, updated, or deleted. */
+export function invalidateGraphCache(): void {
+  _graphCache = null;
+}
+
 interface Intersection extends RowDataPacket {
   id: string;
   name: string;
@@ -261,6 +280,10 @@ async function buildGraph(): Promise<{
   adjacencyList: Map<string, Array<{ road: Road; neighbor: string }>>;
   roadPaths: Map<string, [number, number][]>; // original road ID → path geometry [lat, lng]
 }> {
+  if (_graphCache && Date.now() - _graphCache.builtAt < CACHE_TTL_MS) {
+    return _graphCache;
+  }
+
   // Get all intersections
   const [intersections] = await pool.execute<Intersection[]>(
     'SELECT id, name, latitude, longitude, point_type FROM intersections'
@@ -391,7 +414,8 @@ async function buildGraph(): Promise<{
     }
   }
 
-  return { intersections: intersectionMap, adjacencyList, roadPaths };
+  _graphCache = { intersections: intersectionMap, adjacencyList, roadPaths, builtAt: Date.now() };
+  return _graphCache;
 }
 
 /**

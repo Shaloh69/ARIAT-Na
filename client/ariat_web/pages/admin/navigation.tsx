@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import AdminLayout from '@/layouts/admin';
-import Head from 'next/head';
-import { Card, CardBody, CardHeader } from '@heroui/card';
-import { Chip } from '@heroui/chip';
+import { useState, useEffect } from "react";
+import AdminLayout from "@/layouts/admin";
+import Head from "next/head";
+import { Card, CardBody, CardHeader } from "@heroui/card";
+import { Chip } from "@heroui/chip";
 
 export default function NavigationDashboardPage() {
   const [activeSessions, setActiveSessions] = useState<number>(0);
@@ -24,10 +24,16 @@ export default function NavigationDashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Real-time Navigation</h1>
-            <p className="text-gray-600 dark:text-gray-400">Monitor active navigation sessions</p>
+            <p className="text-gray-600 dark:text-gray-400">
+              Monitor active navigation sessions
+            </p>
           </div>
-          <Chip size="lg" color={isConnected ? 'success' : 'danger'} variant="flat">
-            {isConnected ? '🟢 WebSocket Connected' : '🔴 Disconnected'}
+          <Chip
+            size="lg"
+            color={isConnected ? "success" : "danger"}
+            variant="flat"
+          >
+            {isConnected ? "🟢 WebSocket Connected" : "🔴 Disconnected"}
           </Chip>
         </div>
 
@@ -35,22 +41,30 @@ export default function NavigationDashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card>
             <CardBody className="text-center py-8">
-              <p className="text-4xl font-bold text-primary mb-2">{activeSessions}</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Active Sessions</p>
+              <p className="text-4xl font-bold text-primary mb-2">
+                {activeSessions}
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Active Sessions
+              </p>
             </CardBody>
           </Card>
 
           <Card>
             <CardBody className="text-center py-8">
               <p className="text-4xl font-bold text-success mb-2">0</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">On-Course Users</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                On-Course Users
+              </p>
             </CardBody>
           </Card>
 
           <Card>
             <CardBody className="text-center py-8">
               <p className="text-4xl font-bold text-warning mb-2">0</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Off-Course Alerts</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Off-Course Alerts
+              </p>
             </CardBody>
           </Card>
         </div>
@@ -65,13 +79,17 @@ export default function NavigationDashboardPage() {
               <div>
                 <p className="text-sm text-gray-500 mb-1">Server URL</p>
                 <code className="text-sm bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
-                  {process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:5000'}
+                  {process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:5000"}
                 </code>
               </div>
               <div>
                 <p className="text-sm text-gray-500 mb-1">Status</p>
-                <Chip size="sm" color={isConnected ? 'success' : 'danger'} variant="flat">
-                  {isConnected ? 'Connected' : 'Disconnected'}
+                <Chip
+                  size="sm"
+                  color={isConnected ? "success" : "danger"}
+                  variant="flat"
+                >
+                  {isConnected ? "Connected" : "Disconnected"}
                 </Chip>
               </div>
             </div>
@@ -80,12 +98,18 @@ export default function NavigationDashboardPage() {
               <h4 className="font-medium mb-3">Available Events</h4>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { event: 'navigation:start', desc: 'Begin navigation' },
-                  { event: 'navigation:location-update', desc: 'Location update' },
-                  { event: 'navigation:route-recalculated', desc: 'Route recalc' },
-                  { event: 'navigation:progress', desc: 'Progress update' },
-                  { event: 'navigation:instruction', desc: 'Turn instruction' },
-                  { event: 'navigation:end', desc: 'End navigation' },
+                  { event: "navigation:start", desc: "Begin navigation" },
+                  {
+                    event: "navigation:location-update",
+                    desc: "Location update",
+                  },
+                  {
+                    event: "navigation:route-recalculated",
+                    desc: "Route recalc",
+                  },
+                  { event: "navigation:progress", desc: "Progress update" },
+                  { event: "navigation:instruction", desc: "Turn instruction" },
+                  { event: "navigation:end", desc: "End navigation" },
                 ].map((item) => (
                   <div
                     key={item.event}
@@ -103,7 +127,9 @@ export default function NavigationDashboardPage() {
         {/* Active Sessions */}
         <Card>
           <CardHeader>
-            <h3 className="text-lg font-semibold">Active Navigation Sessions</h3>
+            <h3 className="text-lg font-semibold">
+              Active Navigation Sessions
+            </h3>
           </CardHeader>
           <CardBody>
             {activeSessions === 0 ? (
@@ -127,9 +153,12 @@ export default function NavigationDashboardPage() {
                     d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
                   />
                 </svg>
-                <p className="text-gray-600 dark:text-gray-400 mb-2">No active navigation sessions</p>
+                <p className="text-gray-600 dark:text-gray-400 mb-2">
+                  No active navigation sessions
+                </p>
                 <p className="text-sm text-gray-500">
-                  Sessions will appear here when users start navigation from the Flutter app
+                  Sessions will appear here when users start navigation from the
+                  Flutter app
                 </p>
               </div>
             ) : (
@@ -143,7 +172,9 @@ export default function NavigationDashboardPage() {
         {/* Implementation Guide */}
         <Card>
           <CardHeader>
-            <h3 className="text-lg font-semibold">Flutter App Integration Guide</h3>
+            <h3 className="text-lg font-semibold">
+              Flutter App Integration Guide
+            </h3>
           </CardHeader>
           <CardBody>
             <div className="space-y-3">
@@ -157,7 +188,7 @@ export default function NavigationDashboardPage() {
               <div>
                 <p className="font-medium mb-2">2. Connect to Server</p>
                 <pre className="text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-x-auto">
-{`import 'package:socket_io_client/socket_io_client.dart';
+                  {`import 'package:socket_io_client/socket_io_client.dart';
 
 Socket socket = io('http://your-server:5000', <String, dynamic>{
   'transports': ['websocket'],
@@ -173,7 +204,7 @@ socket.onConnect((_) {
               <div>
                 <p className="font-medium mb-2">3. Start Navigation</p>
                 <pre className="text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-x-auto">
-{`socket.emit('navigation:start', {
+                  {`socket.emit('navigation:start', {
   'sessionId': uuid(),
   'route': routeData,
   'destination': {'lat': 10.32, 'lon': 123.89},
@@ -185,7 +216,7 @@ socket.onConnect((_) {
               <div>
                 <p className="font-medium mb-2">4. Send Location Updates</p>
                 <pre className="text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-x-auto">
-{`// Send every 2-5 seconds
+                  {`// Send every 2-5 seconds
 socket.emit('navigation:location-update', {
   'sessionId': sessionId,
   'latitude': currentLat,
@@ -199,7 +230,7 @@ socket.emit('navigation:location-update', {
               <div>
                 <p className="font-medium mb-2">5. Listen for Updates</p>
                 <pre className="text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-x-auto">
-{`socket.on('navigation:route-recalculated', (data) {
+                  {`socket.on('navigation:route-recalculated', (data) {
   // Update route with new path
   updateRoute(data['newRoute']);
 });

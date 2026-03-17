@@ -1,17 +1,24 @@
-import { useState, useEffect } from 'react';
-import AdminLayout from '@/layouts/admin';
-import Head from 'next/head';
-import { Card, CardBody, CardHeader } from '@heroui/card';
-import { Button } from '@heroui/button';
-import { Input, Textarea } from '@heroui/input';
-import { Select, SelectItem } from '@heroui/select';
-import { Checkbox } from '@heroui/checkbox';
-import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@heroui/modal';
-import { Chip } from '@heroui/chip';
-import { toast } from '@/lib/toast';
-import { modalClassNames } from '@/lib/modal-styles';
-import { apiClient } from '@/lib/api';
-import { API_ENDPOINTS } from '@/lib/constants';
+import { useState, useEffect } from "react";
+import AdminLayout from "@/layouts/admin";
+import Head from "next/head";
+import { Card, CardBody, CardHeader } from "@heroui/card";
+import { Button } from "@heroui/button";
+import { Input, Textarea } from "@heroui/input";
+import { Select, SelectItem } from "@heroui/select";
+import { Checkbox } from "@heroui/checkbox";
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@heroui/modal";
+import { Chip } from "@heroui/chip";
+import { Tooltip } from "@heroui/tooltip";
+import { toast } from "@/lib/toast";
+import { modalClassNames } from "@/lib/modal-styles";
+import { apiClient } from "@/lib/api";
+import { API_ENDPOINTS } from "@/lib/constants";
 
 interface Road {
   id: string;
@@ -36,14 +43,16 @@ interface Intersection {
 
 export default function RoadsPage() {
   const [roads, setRoads] = useState<Road[]>([]);
-  const [intersections, setIntersections] = useState<Map<string, Intersection>>(new Map());
+  const [intersections, setIntersections] = useState<Map<string, Intersection>>(
+    new Map(),
+  );
   const [loading, setLoading] = useState(true);
   const [editingRoad, setEditingRoad] = useState<Road | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editForm, setEditForm] = useState({
-    name: '',
-    description: '',
-    road_type: 'local_road',
+    name: "",
+    description: "",
+    road_type: "local_road",
     is_bidirectional: true,
   });
 
@@ -73,7 +82,7 @@ export default function RoadsPage() {
         setIntersections(map);
       }
     } catch (error) {
-      toast.error('Failed to fetch roads');
+      toast.error("Failed to fetch roads");
     } finally {
       setLoading(false);
     }
@@ -81,29 +90,34 @@ export default function RoadsPage() {
 
   const handleToggleActive = async (road: Road) => {
     try {
-      const response = await apiClient.put(`${API_ENDPOINTS.ROADS}/${road.id}`, {
-        is_active: !road.is_active,
-      });
+      const response = await apiClient.put(
+        `${API_ENDPOINTS.ROADS}/${road.id}`,
+        {
+          is_active: !road.is_active,
+        },
+      );
       if (response.success) {
-        toast.success(`Road ${road.is_active ? 'deactivated' : 'activated'} successfully`);
+        toast.success(
+          `Road ${road.is_active ? "deactivated" : "activated"} successfully`,
+        );
         fetchData();
       }
     } catch (error) {
-      toast.error('Failed to update road');
+      toast.error("Failed to update road");
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this road?')) return;
+    if (!confirm("Are you sure you want to delete this road?")) return;
 
     try {
       const response = await apiClient.delete(`${API_ENDPOINTS.ROADS}/${id}`);
       if (response.success) {
-        toast.success('Road deleted successfully');
+        toast.success("Road deleted successfully");
         fetchData();
       }
     } catch (error) {
-      toast.error('Failed to delete road');
+      toast.error("Failed to delete road");
     }
   };
 
@@ -111,7 +125,7 @@ export default function RoadsPage() {
     setEditingRoad(road);
     setEditForm({
       name: road.name,
-      description: road.description || '',
+      description: road.description || "",
       road_type: road.road_type,
       is_bidirectional: road.is_bidirectional,
     });
@@ -120,42 +134,45 @@ export default function RoadsPage() {
 
   const handleSaveEdit = async () => {
     if (!editingRoad || !editForm.name.trim()) {
-      toast.error('Road name is required');
+      toast.error("Road name is required");
       return;
     }
 
     try {
-      const response = await apiClient.put(`${API_ENDPOINTS.ROADS}/${editingRoad.id}`, {
-        name: editForm.name,
-        description: editForm.description || undefined,
-        road_type: editForm.road_type,
-        is_bidirectional: editForm.is_bidirectional,
-      });
+      const response = await apiClient.put(
+        `${API_ENDPOINTS.ROADS}/${editingRoad.id}`,
+        {
+          name: editForm.name,
+          description: editForm.description || undefined,
+          road_type: editForm.road_type,
+          is_bidirectional: editForm.is_bidirectional,
+        },
+      );
       if (response.success) {
-        toast.success('Road updated successfully');
+        toast.success("Road updated successfully");
         setIsEditModalOpen(false);
         setEditingRoad(null);
         fetchData();
       }
     } catch (error) {
-      toast.error('Failed to update road');
+      toast.error("Failed to update road");
     }
   };
 
   const getRoadTypeColor = (type: string) => {
     const colors: Record<string, any> = {
-      highway: 'primary',
-      main_road: 'secondary',
-      local_road: 'default',
+      highway: "primary",
+      main_road: "secondary",
+      local_road: "default",
     };
-    return colors[type] || 'default';
+    return colors[type] || "default";
   };
 
   const getRoadTypeName = (type: string) => {
     const names: Record<string, string> = {
-      highway: 'Highway',
-      main_road: 'Main Road',
-      local_road: 'Local Road',
+      highway: "Highway",
+      main_road: "Main Road",
+      local_road: "Local Road",
     };
     return names[type] || type;
   };
@@ -174,12 +191,32 @@ export default function RoadsPage() {
               Manage road network ({roads.length} total roads)
             </p>
           </div>
-          <Button color="primary" onClick={() => (window.location.href = '/admin/map')}>
-            <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-            </svg>
-            Add Road on Map
-          </Button>
+          <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+            content="Open Map Manager to draw a new road on the map"
+            delay={700}
+            showArrow
+            placement="left"
+          >
+            <Button
+              color="primary"
+              onClick={() => (window.location.href = "/admin/map")}
+            >
+              <svg
+                className="h-5 w-5 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                />
+              </svg>
+              Add Road on Map
+            </Button>
+          </Tooltip>
         </div>
 
         {loading ? (
@@ -191,12 +228,29 @@ export default function RoadsPage() {
         ) : roads.length === 0 ? (
           <Card>
             <CardBody className="text-center py-12">
-              <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              <svg
+                className="mx-auto h-12 w-12 text-gray-400 mb-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                />
               </svg>
-              <p className="text-gray-600 dark:text-gray-400 mb-2">No roads yet</p>
-              <p className="text-sm text-gray-500 mb-4">Create roads using the Map Manager</p>
-              <Button color="primary" onClick={() => (window.location.href = '/admin/map')}>
+              <p className="text-gray-600 dark:text-gray-400 mb-2">
+                No roads yet
+              </p>
+              <p className="text-sm text-gray-500 mb-4">
+                Create roads using the Map Manager
+              </p>
+              <Button
+                color="primary"
+                onClick={() => (window.location.href = "/admin/map")}
+              >
                 Go to Map Manager
               </Button>
             </CardBody>
@@ -204,23 +258,38 @@ export default function RoadsPage() {
         ) : (
           <div className="space-y-4">
             {roads.map((road) => {
-              const startIntersection = intersections.get(road.start_intersection_id);
-              const endIntersection = intersections.get(road.end_intersection_id);
+              const startIntersection = intersections.get(
+                road.start_intersection_id,
+              );
+              const endIntersection = intersections.get(
+                road.end_intersection_id,
+              );
 
               return (
-                <Card key={road.id} className="hover:shadow-lg transition-shadow">
+                <Card
+                  key={road.id}
+                  className="hover:shadow-lg transition-shadow"
+                >
                   <CardHeader className="flex-row items-center justify-between pb-2">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-lg">{road.name}</h3>
-                        <Chip size="sm" color={getRoadTypeColor(road.road_type)} variant="flat">
+                        <Chip
+                          size="sm"
+                          color={getRoadTypeColor(road.road_type)}
+                          variant="flat"
+                        >
                           {getRoadTypeName(road.road_type)}
                         </Chip>
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Chip size="sm" color={road.is_active ? 'success' : 'default'} variant="flat">
-                        {road.is_active ? 'Active' : 'Inactive'}
+                      <Chip
+                        size="sm"
+                        color={road.is_active ? "success" : "default"}
+                        variant="flat"
+                      >
+                        {road.is_active ? "Active" : "Inactive"}
                       </Chip>
                       {road.is_bidirectional ? (
                         <Chip size="sm" color="primary" variant="flat">
@@ -235,45 +304,91 @@ export default function RoadsPage() {
                   </CardHeader>
                   <CardBody className="pt-2">
                     {road.description && (
-                      <p className="text-sm text-gray-500 mb-3">{road.description}</p>
+                      <p className="text-sm text-gray-500 mb-3">
+                        {road.description}
+                      </p>
                     )}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                       <div>
-                        <p className="text-xs text-gray-500 mb-1">Start Point</p>
+                        <p className="text-xs text-gray-500 mb-1">
+                          Start Point
+                        </p>
                         <p className="text-sm font-medium">
-                          {startIntersection?.name || 'Unknown'}
+                          {startIntersection?.name || "Unknown"}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">End Point</p>
                         <p className="text-sm font-medium">
-                          {endIntersection?.name || 'Unknown'}
+                          {endIntersection?.name || "Unknown"}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Distance</p>
-                        <p className="text-sm font-medium">{Number(road.distance).toFixed(2)} km</p>
+                        <p className="text-sm font-medium">
+                          {Number(road.distance).toFixed(2)} km
+                        </p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500 mb-1">Estimated Time</p>
-                        <p className="text-sm font-medium">{road.estimated_time} min</p>
+                        <p className="text-xs text-gray-500 mb-1">
+                          Estimated Time
+                        </p>
+                        <p className="text-sm font-medium">
+                          {road.estimated_time} min
+                        </p>
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" color="primary" variant="flat" onClick={() => handleOpenEdit(road)}>
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        color={road.is_active ? 'warning' : 'success'}
-                        variant="flat"
-                        onClick={() => handleToggleActive(road)}
+                      <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                        content="Edit road name, type and direction settings"
+                        delay={700}
+                        showArrow
+                        placement="top"
                       >
-                        {road.is_active ? 'Deactivate' : 'Activate'}
-                      </Button>
-                      <Button size="sm" color="danger" variant="flat" onClick={() => handleDelete(road.id)}>
-                        Delete
-                      </Button>
+                        <Button
+                          size="sm"
+                          color="primary"
+                          variant="flat"
+                          onClick={() => handleOpenEdit(road)}
+                        >
+                          Edit
+                        </Button>
+                      </Tooltip>
+                      <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                        content={
+                          road.is_active
+                            ? "Disable this road in pathfinding calculations"
+                            : "Enable this road for pathfinding calculations"
+                        }
+                        delay={700}
+                        showArrow
+                        placement="top"
+                      >
+                        <Button
+                          size="sm"
+                          color={road.is_active ? "warning" : "success"}
+                          variant="flat"
+                          onClick={() => handleToggleActive(road)}
+                        >
+                          {road.is_active ? "Deactivate" : "Activate"}
+                        </Button>
+                      </Tooltip>
+                      <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                        content="Permanently delete this road from the network"
+                        delay={700}
+                        showArrow
+                        placement="top"
+                        color="danger"
+                      >
+                        <Button
+                          size="sm"
+                          color="danger"
+                          variant="flat"
+                          onClick={() => handleDelete(road.id)}
+                        >
+                          Delete
+                        </Button>
+                      </Tooltip>
                     </div>
                   </CardBody>
                 </Card>
@@ -283,7 +398,12 @@ export default function RoadsPage() {
         )}
       </div>
       {/* Edit Road Modal */}
-      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} size="lg" classNames={modalClassNames}>
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        size="lg"
+        classNames={modalClassNames}
+      >
         <ModalContent>
           <ModalHeader>Edit Road</ModalHeader>
           <ModalBody>
@@ -291,20 +411,26 @@ export default function RoadsPage() {
               <Input
                 label="Road Name"
                 value={editForm.name}
-                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, name: e.target.value })
+                }
                 isRequired
               />
               <Textarea
                 label="Description"
                 placeholder="Optional description"
                 value={editForm.description}
-                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, description: e.target.value })
+                }
                 minRows={2}
               />
               <Select
                 label="Road Type"
                 selectedKeys={[editForm.road_type]}
-                onChange={(e) => setEditForm({ ...editForm, road_type: e.target.value })}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, road_type: e.target.value })
+                }
               >
                 <SelectItem key="highway">Highway</SelectItem>
                 <SelectItem key="main_road">Main Road</SelectItem>
@@ -312,19 +438,39 @@ export default function RoadsPage() {
               </Select>
               <Checkbox
                 isSelected={editForm.is_bidirectional}
-                onValueChange={(val) => setEditForm({ ...editForm, is_bidirectional: val })}
+                onValueChange={(val) =>
+                  setEditForm({ ...editForm, is_bidirectional: val })
+                }
               >
                 Two-way road (bidirectional)
               </Checkbox>
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button color="danger" variant="flat" onClick={() => setIsEditModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button color="primary" onClick={handleSaveEdit}>
-              Save Changes
-            </Button>
+            <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+              content="Discard changes and close"
+              delay={700}
+              showArrow
+              placement="top"
+            >
+              <Button
+                color="danger"
+                variant="flat"
+                onClick={() => setIsEditModalOpen(false)}
+              >
+                Cancel
+              </Button>
+            </Tooltip>
+            <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+              content="Save road name, type and direction settings"
+              delay={700}
+              showArrow
+              placement="top"
+            >
+              <Button color="primary" onClick={handleSaveEdit}>
+                Save Changes
+              </Button>
+            </Tooltip>
           </ModalFooter>
         </ModalContent>
       </Modal>

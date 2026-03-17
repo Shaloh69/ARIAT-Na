@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/auth_service.dart';
 import '../../services/connectivity_service.dart';
+import '../../services/theme_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
@@ -60,8 +61,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     final auth = context.watch<AuthService>();
     final isOnline = context.watch<ConnectivityService>().isOnline;
+    final themeService = context.watch<ThemeService>();
     final user = auth.user;
     if (user == null) return const SizedBox.shrink();
 
@@ -76,39 +79,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               Container(
                 width: 90, height: 90,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: const LinearGradient(
+                  gradient: LinearGradient(
                     colors: [AppColors.red500, AppColors.purple],
                     begin: Alignment.topLeft, end: Alignment.bottomRight,
                   ),
-                  boxShadow: [BoxShadow(color: AppColors.red500.withAlpha(60), blurRadius: 20, offset: const Offset(0, 6))],
+                  boxShadow: [BoxShadow(color: AppColors.red500.withAlpha(60), blurRadius: 20, offset: Offset(0, 6))],
                 ),
                 child: Center(
-                  child: Text(initials, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w700, color: Colors.white)),
+                  child: Text(initials, style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700, color: Colors.white)),
                 ),
-              ).animate().fadeIn(duration: 500.ms).scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1), duration: 500.ms),
+              ).animate().fadeIn(duration: 500.ms).scale(begin: Offset(0.8, 0.8), end: Offset(1, 1), duration: 500.ms),
 
-              const SizedBox(height: 14),
-              Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textStrong))
+              SizedBox(height: 14),
+              Text(name, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: c.textStrong))
                   .animate().fadeIn(delay: 100.ms, duration: 400.ms),
-              const SizedBox(height: 4),
-              Text(email, style: const TextStyle(fontSize: 13, color: AppColors.textMuted))
+              SizedBox(height: 4),
+              Text(email, style: TextStyle(fontSize: 13, color: c.textMuted))
                   .animate().fadeIn(delay: 200.ms, duration: 400.ms),
 
               if (auth.isOfflineSession) ...[
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(color: AppColors.amber.withAlpha(20), borderRadius: BorderRadius.circular(6)),
-                  child: const Text('Offline session', style: TextStyle(fontSize: 11, color: AppColors.amber, fontWeight: FontWeight.w500)),
+                  child: Text('Offline session', style: TextStyle(fontSize: 11, color: AppColors.amber, fontWeight: FontWeight.w500)),
                 ),
               ],
 
-              const SizedBox(height: 32),
+              SizedBox(height: 32),
 
               GlassCard(
                 padding: const EdgeInsets.all(20),
@@ -117,8 +120,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Row(
                       children: [
-                        const Text('Profile Info', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textStrong)),
-                        const Spacer(),
+                        Text('Profile Info', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textStrong)),
+                        Spacer(),
                         if (isOnline)
                           GestureDetector(
                             onTap: () {
@@ -131,58 +134,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: _editing ? AppColors.green.withAlpha(20) : AppColors.surfaceElevated,
+                                color: _editing ? AppColors.green.withAlpha(20) : c.surfaceElevated,
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: _editing ? AppColors.green.withAlpha(60) : Colors.white.withAlpha(15)),
+                                border: Border.all(color: _editing ? AppColors.green.withAlpha(60) : c.borderSubtle),
                               ),
                               child: _saving
-                                  ? const SizedBox(width: 14, height: 14, child: ProgressRing(strokeWidth: 2))
+                                  ? SizedBox(width: 14, height: 14, child: ProgressRing(strokeWidth: 2))
                                   : Text(
                                       _editing ? 'Save' : 'Edit',
-                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: _editing ? AppColors.green : AppColors.text),
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: _editing ? AppColors.green : c.text),
                                     ),
                             ),
                           ),
                       ],
                     ),
-                    const SizedBox(height: 20),
+                    SizedBox(height: 20),
                     _profileField('Full Name', _editing ? null : name, controller: _editing ? _nameController : null, icon: FluentIcons.contact),
-                    const SizedBox(height: 14),
+                    SizedBox(height: 14),
                     _profileField('Email', email, icon: FluentIcons.mail),
-                    const SizedBox(height: 14),
+                    SizedBox(height: 14),
                     _profileField('Phone', _editing ? null : (phone.isNotEmpty ? phone : 'Not set'), controller: _editing ? _phoneController : null, icon: FluentIcons.phone),
                     if (_editing) ...[
-                      const SizedBox(height: 16),
+                      SizedBox(height: 16),
                       GestureDetector(
                         onTap: () {
                           setState(() => _editing = false);
                           _nameController.text = name;
                           _phoneController.text = phone;
                         },
-                        child: const Text('Cancel', style: TextStyle(fontSize: 12, color: AppColors.textFaint)),
+                        child: Text('Cancel', style: TextStyle(fontSize: 12, color: c.textFaint)),
                       ),
                     ],
                   ],
                 ),
               ).animate().fadeIn(delay: 300.ms, duration: 500.ms),
 
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
+
+              // Appearance
+              GlassCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Appearance', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textStrong)),
+                    SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Icon(
+                          themeService.isDark ? FluentIcons.clear_night : FluentIcons.brightness,
+                          size: 16, color: c.textMuted,
+                        ),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            themeService.isDark ? 'Dark Mode' : 'Light Mode',
+                            style: TextStyle(fontSize: 14, color: c.text),
+                          ),
+                        ),
+                        ToggleSwitch(
+                          checked: themeService.isDark,
+                          onChanged: (_) => context.read<ThemeService>().toggleTheme(),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(delay: 400.ms, duration: 500.ms),
+
+              SizedBox(height: 20),
 
               GlassCard(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textStrong)),
-                    const SizedBox(height: 16),
-                    _actionTile('Sign Out', FluentIcons.sign_out, const Color(0xFFDC2626), () async {
+                    Text('Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textStrong)),
+                    SizedBox(height: 16),
+                    _actionTile('Sign Out', FluentIcons.sign_out, Color(0xFFDC2626), () async {
                       await auth.logout();
                       if (!context.mounted) return;
                       AppToast.info(context, 'Signed out');
                     }),
                   ],
                 ),
-              ).animate().fadeIn(delay: 400.ms, duration: 500.ms),
+              ).animate().fadeIn(delay: 500.ms, duration: 500.ms),
             ],
           ),
         ),
@@ -191,28 +227,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _profileField(String label, String? value, {TextEditingController? controller, required IconData icon}) {
+    final c = context.appColors;
     return Row(
       children: [
-        Icon(icon, size: 16, color: AppColors.textFaint),
-        const SizedBox(width: 12),
+        Icon(icon, size: 16, color: c.textFaint),
+        SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textFaint, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 4),
+              Text(label, style: TextStyle(fontSize: 11, color: c.textFaint, fontWeight: FontWeight.w500)),
+              SizedBox(height: 4),
               if (controller != null)
                 TextBox(
                   controller: controller,
-                  style: const TextStyle(color: AppColors.textStrong, fontSize: 14),
+                  style: TextStyle(color: c.textStrong, fontSize: 14),
                   decoration: WidgetStateProperty.all(BoxDecoration(
-                    color: AppColors.surfaceElevated,
+                    color: c.surfaceElevated,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white.withAlpha(20)),
+                    border: Border.all(color: c.borderLight),
                   )),
                 )
               else
-                Text(value ?? '', style: const TextStyle(fontSize: 14, color: AppColors.text)),
+                Text(value ?? '', style: TextStyle(fontSize: 14, color: c.text)),
             ],
           ),
         ),
@@ -233,9 +270,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Row(
           children: [
             Icon(icon, size: 16, color: color),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: color)),
-            const Spacer(),
+            Spacer(),
             Icon(FluentIcons.chevron_right, size: 12, color: color.withAlpha(150)),
           ],
         ),

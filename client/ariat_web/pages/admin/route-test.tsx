@@ -1,14 +1,15 @@
-import { useState } from 'react';
-import AdminLayout from '@/layouts/admin';
-import Head from 'next/head';
-import { Card, CardBody, CardHeader } from '@heroui/card';
-import { Button } from '@heroui/button';
-import { Input } from '@heroui/input';
-import { Select, SelectItem } from '@heroui/select';
-import { Chip } from '@heroui/chip';
-import { toast } from '@/lib/toast';
-import { apiClient } from '@/lib/api';
-import { API_ENDPOINTS } from '@/lib/constants';
+import { useState } from "react";
+import AdminLayout from "@/layouts/admin";
+import Head from "next/head";
+import { Card, CardBody, CardHeader } from "@heroui/card";
+import { Button } from "@heroui/button";
+import { Input } from "@heroui/input";
+import { Select, SelectItem } from "@heroui/select";
+import { Chip } from "@heroui/chip";
+import { Tooltip } from "@heroui/tooltip";
+import { toast } from "@/lib/toast";
+import { apiClient } from "@/lib/api";
+import { API_ENDPOINTS } from "@/lib/constants";
 
 interface RouteResult {
   path: Array<{
@@ -35,7 +36,7 @@ interface RouteResult {
     to: string;
   }>;
   virtualConnections?: Array<{
-    type: 'start' | 'end';
+    type: "start" | "end";
     from: { lat: number; lon: number; name?: string };
     to: { lat: number; lon: number; name: string };
     distance: number;
@@ -45,41 +46,51 @@ interface RouteResult {
 
 export default function RouteTestPage() {
   const [loading, setLoading] = useState(false);
-  const [testType, setTestType] = useState<'gps' | 'intersection'>('gps');
+  const [testType, setTestType] = useState<"gps" | "intersection">("gps");
   const [gpsForm, setGpsForm] = useState({
-    start_lat: '10.3157',
-    start_lon: '123.8854',
-    end_lat: '10.3200',
-    end_lon: '123.8900',
+    start_lat: "10.3157",
+    start_lon: "123.8854",
+    end_lat: "10.3200",
+    end_lon: "123.8900",
   });
-  const [optimizeFor, setOptimizeFor] = useState<'distance' | 'time'>('distance');
+  const [optimizeFor, setOptimizeFor] = useState<"distance" | "time">(
+    "distance",
+  );
   const [result, setResult] = useState<RouteResult | null>(null);
 
   const handleCalculateRoute = async () => {
-    if (testType === 'gps') {
-      if (!gpsForm.start_lat || !gpsForm.start_lon || !gpsForm.end_lat || !gpsForm.end_lon) {
-        toast.error('Please fill in all GPS coordinates');
+    if (testType === "gps") {
+      if (
+        !gpsForm.start_lat ||
+        !gpsForm.start_lon ||
+        !gpsForm.end_lat ||
+        !gpsForm.end_lon
+      ) {
+        toast.error("Please fill in all GPS coordinates");
         return;
       }
 
       try {
         setLoading(true);
-        const response = await apiClient.post<RouteResult>(`${API_ENDPOINTS.ROUTES}/calculate-gps`, {
-          start_lat: parseFloat(gpsForm.start_lat),
-          start_lon: parseFloat(gpsForm.start_lon),
-          end_lat: parseFloat(gpsForm.end_lat),
-          end_lon: parseFloat(gpsForm.end_lon),
-          optimize_for: optimizeFor,
-        });
+        const response = await apiClient.post<RouteResult>(
+          `${API_ENDPOINTS.ROUTES}/calculate-gps`,
+          {
+            start_lat: parseFloat(gpsForm.start_lat),
+            start_lon: parseFloat(gpsForm.start_lon),
+            end_lat: parseFloat(gpsForm.end_lat),
+            end_lon: parseFloat(gpsForm.end_lon),
+            optimize_for: optimizeFor,
+          },
+        );
 
         if (response.success && response.data) {
           setResult(response.data);
-          toast.success('Route calculated successfully!');
+          toast.success("Route calculated successfully!");
         } else {
-          toast.error('No route found');
+          toast.error("No route found");
         }
       } catch (error) {
-        toast.error('Failed to calculate route');
+        toast.error("Failed to calculate route");
       } finally {
         setLoading(false);
       }
@@ -89,10 +100,10 @@ export default function RouteTestPage() {
   const handleClear = () => {
     setResult(null);
     setGpsForm({
-      start_lat: '10.3157',
-      start_lon: '123.8854',
-      end_lat: '10.3200',
-      end_lon: '123.8900',
+      start_lat: "10.3157",
+      start_lon: "123.8854",
+      end_lat: "10.3200",
+      end_lon: "123.8900",
     });
   };
 
@@ -122,7 +133,9 @@ export default function RouteTestPage() {
               <Select
                 label="Optimization"
                 selectedKeys={[optimizeFor]}
-                onChange={(e) => setOptimizeFor(e.target.value as 'distance' | 'time')}
+                onChange={(e) =>
+                  setOptimizeFor(e.target.value as "distance" | "time")
+                }
               >
                 <SelectItem key="distance">Shortest Distance</SelectItem>
                 <SelectItem key="time">Fastest Time</SelectItem>
@@ -139,7 +152,9 @@ export default function RouteTestPage() {
                     step="0.000001"
                     placeholder="10.3157"
                     value={gpsForm.start_lat}
-                    onChange={(e) => setGpsForm({ ...gpsForm, start_lat: e.target.value })}
+                    onChange={(e) =>
+                      setGpsForm({ ...gpsForm, start_lat: e.target.value })
+                    }
                   />
                   <Input
                     label="Longitude"
@@ -147,7 +162,9 @@ export default function RouteTestPage() {
                     step="0.000001"
                     placeholder="123.8854"
                     value={gpsForm.start_lon}
-                    onChange={(e) => setGpsForm({ ...gpsForm, start_lon: e.target.value })}
+                    onChange={(e) =>
+                      setGpsForm({ ...gpsForm, start_lon: e.target.value })
+                    }
                   />
                 </div>
 
@@ -161,7 +178,9 @@ export default function RouteTestPage() {
                     step="0.000001"
                     placeholder="10.3200"
                     value={gpsForm.end_lat}
-                    onChange={(e) => setGpsForm({ ...gpsForm, end_lat: e.target.value })}
+                    onChange={(e) =>
+                      setGpsForm({ ...gpsForm, end_lat: e.target.value })
+                    }
                   />
                   <Input
                     label="Longitude"
@@ -169,23 +188,39 @@ export default function RouteTestPage() {
                     step="0.000001"
                     placeholder="123.8900"
                     value={gpsForm.end_lon}
-                    onChange={(e) => setGpsForm({ ...gpsForm, end_lon: e.target.value })}
+                    onChange={(e) =>
+                      setGpsForm({ ...gpsForm, end_lon: e.target.value })
+                    }
                   />
                 </div>
               </div>
 
               <div className="flex gap-2 pt-4">
-                <Button
-                  color="primary"
-                  onClick={handleCalculateRoute}
-                  isLoading={loading}
-                  className="flex-1"
+                <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                  content="Run A* pathfinding between the specified GPS coordinates"
+                  delay={700}
+                  showArrow
+                  placement="top"
                 >
-                  Calculate Route
-                </Button>
-                <Button color="default" variant="flat" onClick={handleClear}>
-                  Clear
-                </Button>
+                  <Button
+                    color="primary"
+                    onClick={handleCalculateRoute}
+                    isLoading={loading}
+                    className="flex-1"
+                  >
+                    Calculate Route
+                  </Button>
+                </Tooltip>
+                <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                  content="Reset coordinates to defaults and clear results"
+                  delay={700}
+                  showArrow
+                  placement="top"
+                >
+                  <Button color="default" variant="flat" onClick={handleClear}>
+                    Clear
+                  </Button>
+                </Tooltip>
               </div>
             </CardBody>
           </Card>
@@ -211,40 +246,58 @@ export default function RouteTestPage() {
                       d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
                     />
                   </svg>
-                  <p className="text-gray-500">Calculate a route to see results</p>
+                  <p className="text-gray-500">
+                    Calculate a route to see results
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {/* Summary */}
                   <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Total Distance</p>
-                      <p className="text-2xl font-bold">{Number(result.totalDistance).toFixed(2)} km</p>
+                      <p className="text-xs text-gray-500 mb-1">
+                        Total Distance
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {Number(result.totalDistance).toFixed(2)} km
+                      </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Estimated Time</p>
-                      <p className="text-2xl font-bold">{result.estimatedTime} min</p>
+                      <p className="text-xs text-gray-500 mb-1">
+                        Estimated Time
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {result.estimatedTime} min
+                      </p>
                     </div>
                   </div>
 
                   {/* Virtual Connections */}
-                  {result.virtualConnections && result.virtualConnections.length > 0 && (
-                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                      <p className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">
-                        Virtual Connections (Walking)
-                      </p>
-                      {result.virtualConnections.map((vc, idx) => (
-                        <div key={idx} className="text-xs text-blue-800 dark:text-blue-300">
-                          {vc.type === 'start' ? '🚶 Walk to' : '🚶 Walk from'} {vc.to.name} (
-                          {Number(vc.distance).toFixed(2)} km)
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {result.virtualConnections &&
+                    result.virtualConnections.length > 0 && (
+                      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <p className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">
+                          Virtual Connections (Walking)
+                        </p>
+                        {result.virtualConnections.map((vc, idx) => (
+                          <div
+                            key={idx}
+                            className="text-xs text-blue-800 dark:text-blue-300"
+                          >
+                            {vc.type === "start"
+                              ? "🚶 Walk to"
+                              : "🚶 Walk from"}{" "}
+                            {vc.to.name} ({Number(vc.distance).toFixed(2)} km)
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                   {/* Turn-by-turn directions */}
                   <div>
-                    <h4 className="font-medium mb-2">Turn-by-Turn Directions</h4>
+                    <h4 className="font-medium mb-2">
+                      Turn-by-Turn Directions
+                    </h4>
                     <div className="space-y-2">
                       {result.steps.map((step, idx) => (
                         <div
@@ -255,7 +308,9 @@ export default function RouteTestPage() {
                             {idx + 1}
                           </div>
                           <div className="flex-1">
-                            <p className="font-medium text-sm">{step.instruction}</p>
+                            <p className="font-medium text-sm">
+                              {step.instruction}
+                            </p>
                             <p className="text-xs text-gray-500 mt-1">
                               {step.from} → {step.to}
                             </p>
@@ -275,7 +330,9 @@ export default function RouteTestPage() {
 
                   {/* Path Details */}
                   <div>
-                    <h4 className="font-medium mb-2">Route Path ({result.path.length} points)</h4>
+                    <h4 className="font-medium mb-2">
+                      Route Path ({result.path.length} points)
+                    </h4>
                     <div className="max-h-40 overflow-y-auto space-y-1">
                       {result.path.map((point, idx) => (
                         <div
@@ -284,8 +341,8 @@ export default function RouteTestPage() {
                         >
                           <span>{point.name}</span>
                           <span className="text-xs text-gray-500">
-                            {idx === 0 && '🚩 Start'}
-                            {idx === result.path.length - 1 && '🏁 End'}
+                            {idx === 0 && "🚩 Start"}
+                            {idx === result.path.length - 1 && "🏁 End"}
                           </span>
                         </div>
                       ))}

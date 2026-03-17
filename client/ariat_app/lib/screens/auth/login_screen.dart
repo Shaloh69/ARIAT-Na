@@ -55,6 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     final isOnline = context.watch<ConnectivityService>().isOnline;
 
     return GradientBackground(
@@ -69,21 +70,21 @@ class _LoginScreenState extends State<LoginScreen> {
                 Image.asset('assets/logo.png', width: 80, height: 80)
                     .animate()
                     .fadeIn(duration: 600.ms)
-                    .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1), duration: 600.ms, curve: Curves.easeOut),
-                const SizedBox(height: 12),
-                const Text(
+                    .scale(begin: Offset(0.8, 0.8), end: Offset(1, 1), duration: 600.ms, curve: Curves.easeOut),
+                SizedBox(height: 12),
+                Text(
                   'AIRAT-NA',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: AppColors.textStrong, letterSpacing: 2),
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: c.textStrong, letterSpacing: 2),
                 ).animate().fadeIn(delay: 200.ms, duration: 500.ms),
-                const SizedBox(height: 4),
-                const Text(
+                SizedBox(height: 4),
+                Text(
                   'Tourist Navigation',
-                  style: TextStyle(fontSize: 14, color: AppColors.textMuted),
+                  style: TextStyle(fontSize: 14, color: c.textMuted),
                 ).animate().fadeIn(delay: 300.ms, duration: 500.ms),
 
                 // Offline indicator
                 if (!isOnline) ...[
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
@@ -91,7 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: AppColors.amber.withAlpha(60)),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(FluentIcons.cloud_not_synced, size: 14, color: AppColors.amber),
@@ -101,7 +102,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ],
-                const SizedBox(height: 40),
+                SizedBox(height: 40),
 
                 // Login card
                 GlassCard(
@@ -109,41 +110,41 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Sign In', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: AppColors.textStrong)),
-                      const SizedBox(height: 4),
-                      const Text('Welcome back, explorer', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
-                      const SizedBox(height: 24),
+                      Text('Sign In', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: c.textStrong)),
+                      SizedBox(height: 4),
+                      Text('Welcome back, explorer', style: TextStyle(fontSize: 13, color: c.textMuted)),
+                      SizedBox(height: 24),
 
-                      const Text('Email', style: TextStyle(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 6),
+                      Text('Email', style: TextStyle(fontSize: 12, color: c.textMuted, fontWeight: FontWeight.w500)),
+                      SizedBox(height: 6),
                       TextBox(
                         controller: _emailController,
                         placeholder: 'you@example.com',
                         keyboardType: TextInputType.emailAddress,
-                        style: const TextStyle(color: AppColors.textStrong),
+                        style: TextStyle(color: c.textStrong),
                         decoration: WidgetStateProperty.all(BoxDecoration(
-                          color: AppColors.surfaceElevated,
+                          color: c.surfaceElevated,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.white.withAlpha(25)),
+                          border: Border.all(color: c.borderMedium),
                         )),
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: 16),
 
-                      const Text('Password', style: TextStyle(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 6),
+                      Text('Password', style: TextStyle(fontSize: 12, color: c.textMuted, fontWeight: FontWeight.w500)),
+                      SizedBox(height: 6),
                       PasswordBox(
                         controller: _passwordController,
                         placeholder: 'Enter your password',
                         revealMode: _obscurePassword ? PasswordRevealMode.hidden : PasswordRevealMode.visible,
-                        style: const TextStyle(color: AppColors.textStrong),
+                        style: TextStyle(color: c.textStrong),
                         decoration: WidgetStateProperty.all(BoxDecoration(
-                          color: AppColors.surfaceElevated,
+                          color: c.surfaceElevated,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.white.withAlpha(25)),
+                          border: Border.all(color: c.borderMedium),
                         )),
                         onSubmitted: (_) => _login(),
                       ),
-                      const SizedBox(height: 24),
+                      SizedBox(height: 24),
 
                       SizedBox(
                         width: double.infinity,
@@ -158,27 +159,27 @@ class _LoginScreenState extends State<LoginScreen> {
                             padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 14)),
                           ),
                           child: _loading
-                              ? const SizedBox(width: 18, height: 18, child: ProgressRing(strokeWidth: 2))
-                              : const Text('Sign In', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                              ? SizedBox(width: 18, height: 18, child: ProgressRing(strokeWidth: 2))
+                              : Text('Sign In', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                         ),
                       ),
                     ],
                   ),
                 ).animate().fadeIn(delay: 400.ms, duration: 600.ms).slideY(begin: 0.1, end: 0, duration: 600.ms),
 
-                const SizedBox(height: 24),
+                SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("Don't have an account? ", style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                    Text("Don't have an account? ", style: TextStyle(color: c.textMuted, fontSize: 13)),
                     HyperlinkButton(
                       onPressed: isOnline
-                          ? () => Navigator.of(context).push(FluentPageRoute(builder: (_) => const RegisterScreen()))
+                          ? () => Navigator.of(context).push(FluentPageRoute(builder: (_) => RegisterScreen()))
                           : () => AppToast.warning(context, 'Registration requires internet'),
                       child: Text(
                         'Sign Up',
                         style: TextStyle(
-                          color: isOnline ? AppColors.red400 : AppColors.textFaint,
+                          color: isOnline ? AppColors.red400 : c.textFaint,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),

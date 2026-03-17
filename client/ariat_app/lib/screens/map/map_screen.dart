@@ -9,11 +9,16 @@ import '../../services/connectivity_service.dart';
 import '../../services/location_service.dart';
 import '../../models/destination.dart';
 import '../../models/route_result.dart';
+import '../../models/transport_leg.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/toast_overlay.dart';
+import 'itinerary_bottom_sheet.dart';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  /// When provided, the map opens in route-planning mode with this destination
+  /// pre-loaded as the first stop (user can then set their start point).
+  final Destination? destination;
+  const MapScreen({super.key, this.destination});
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
@@ -27,8 +32,12 @@ class _MapScreenState extends State<MapScreen> {
   bool _routeLoading = false;
   String? _routeError;
   String _optimizeFor = 'distance';
+  String _transportMode = 'private_car';
+  List<MultiModalRoute> _multiModalLegs = [];
   bool _showRoutePanel = false;
   bool _isNavigating = false;
+  bool _isAiItinerary = false;
+  bool _aiGenerating = false;
 
   // Cebu Province (OSM relation:1506936) bounding box:
   // minlat=9.3223413, minlon=123.2352650, maxlat=11.6238718, maxlon=124.6671822
@@ -42,6 +51,17 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _loadDestinations();
+    if (widget.destination != null) {
+      final dest = widget.destination!;
+      _showRoutePanel = true;
+      _routeStops = [
+        _RouteStop(
+          position: LatLng(dest.latitude, dest.longitude),
+          name: dest.name,
+          destId: dest.id,
+        ),
+      ];
+    }
   }
 
   Future<void> _loadDestinations() async {
@@ -113,6 +133,8 @@ class _MapScreenState extends State<MapScreen> {
     if (stops.isNotEmpty) _calculateRoute(stops);
   }
 
+  static const _multiModalModes = {'bus_commute', 'bus', 'jeepney', 'taxi', 'ferry', 'habal_habal', 'tricycle', 'walk'};
+
   Future<void> _calculateRoute(List<_RouteStop> stops) async {
     if (_routeStart == null || stops.isEmpty) return;
 
@@ -128,44 +150,83 @@ class _MapScreenState extends State<MapScreen> {
       _routeError = null;
     });
 
+    final useMultiModal = _multiModalModes.contains(_transportMode);
+
     try {
       final api = context.read<ApiService>();
-      final legs = <RouteResult>[];
       final waypoints = [_routeStart!, ...stops.map((s) => s.position)];
 
-      for (int i = 0; i < waypoints.length - 1; i++) {
-        final from = waypoints[i];
-        final to = waypoints[i + 1];
-        final res = await api.post('/routes/calculate-gps', body: {
-          'start_lat': from.latitude,
-          'start_lon': from.longitude,
-          'end_lat': to.latitude,
-          'end_lon': to.longitude,
-          'optimize_for': _optimizeFor,
-        }, auth: true);
+      if (useMultiModal) {
+        final mmLegs = <MultiModalRoute>[];
+        for (int i = 0; i < waypoints.length - 1; i++) {
+          final from = waypoints[i];
+          final to = waypoints[i + 1];
+          final res = await api.post('/routes/calculate-multimodal', body: {
+            'start_lat': from.latitude,
+            'start_lon': from.longitude,
+            'end_lat': to.latitude,
+            'end_lon': to.longitude,
+            'transport_mode': _transportMode,
+            'optimize_for': _optimizeFor,
+          }, auth: true);
 
-        if (res['success'] == true && res['data'] != null) {
-          legs.add(RouteResult.fromJson(res['data']));
-        } else {
-          final fromName = i == 0 ? 'Start' : stops[i - 1].name;
-          final toName = stops[i].name;
-          setState(() {
-            _routeError = 'No route: $fromName → $toName';
-            _routeLegs = legs;
-            _routeLoading = false;
-          });
-          return;
+          if (res['success'] == true && res['data'] != null) {
+            mmLegs.add(MultiModalRoute.fromJson(res['data'] as Map<String, dynamic>));
+          } else {
+            final fromName = i == 0 ? 'Start' : stops[i - 1].name;
+            final toName = stops[i].name;
+            setState(() {
+              _routeError = 'No route: $fromName → $toName';
+              _multiModalLegs = mmLegs;
+              _routeLoading = false;
+            });
+            return;
+          }
         }
+        final totalDist = mmLegs.fold<double>(0, (s, l) => s + l.totalDistance);
+        final totalTime = mmLegs.fold<int>(0, (s, l) => s + l.totalDuration);
+        final totalFare = mmLegs.fold<double>(0, (s, l) => s + l.totalFare);
+        setState(() {
+          _multiModalLegs = mmLegs;
+          _routeLegs = [];
+          _routeLoading = false;
+        });
+        if (mounted) AppToast.success(context, '${totalDist.toStringAsFixed(2)} km · ~$totalTime min · ₱${totalFare.toStringAsFixed(0)}');
+      } else {
+        final legs = <RouteResult>[];
+        for (int i = 0; i < waypoints.length - 1; i++) {
+          final from = waypoints[i];
+          final to = waypoints[i + 1];
+          final res = await api.post('/routes/calculate-gps', body: {
+            'start_lat': from.latitude,
+            'start_lon': from.longitude,
+            'end_lat': to.latitude,
+            'end_lon': to.longitude,
+            'optimize_for': _optimizeFor,
+          }, auth: true);
+
+          if (res['success'] == true && res['data'] != null) {
+            legs.add(RouteResult.fromJson(res['data']));
+          } else {
+            final fromName = i == 0 ? 'Start' : stops[i - 1].name;
+            final toName = stops[i].name;
+            setState(() {
+              _routeError = 'No route: $fromName → $toName';
+              _routeLegs = legs;
+              _routeLoading = false;
+            });
+            return;
+          }
+        }
+        final totalDist = legs.fold<double>(0, (s, l) => s + l.totalDistance);
+        final totalTime = legs.fold<int>(0, (s, l) => s + l.estimatedTime);
+        setState(() {
+          _routeLegs = legs;
+          _multiModalLegs = [];
+          _routeLoading = false;
+        });
+        if (mounted) AppToast.success(context, '${totalDist.toStringAsFixed(2)} km · ~$totalTime min');
       }
-
-      final totalDist = legs.fold<double>(0, (s, l) => s + l.totalDistance);
-      final totalTime = legs.fold<int>(0, (s, l) => s + l.estimatedTime);
-
-      setState(() {
-        _routeLegs = legs;
-        _routeLoading = false;
-      });
-      if (mounted) AppToast.success(context, '${totalDist.toStringAsFixed(2)} km, ~$totalTime min');
     } catch (e) {
       setState(() {
         _routeError = e.toString().replaceFirst('Exception: ', '');
@@ -218,8 +279,141 @@ class _MapScreenState extends State<MapScreen> {
       _routeStart = null;
       _routeStops = [];
       _routeLegs = [];
+      _multiModalLegs = [];
+      _routeError = null;
+      _isAiItinerary = false;
+    });
+  }
+
+  Future<void> _generateAiItinerary() async {
+    final isOnline = context.read<ConnectivityService>().isOnline;
+    if (!isOnline) {
+      AppToast.warning(context, 'AI itinerary requires internet connection');
+      return;
+    }
+
+    final params = await showItinerarySheet(context);
+    if (params == null || !mounted) return;
+
+    final locationService = context.read<LocationService>();
+    final userPos = locationService.currentPosition;
+    if (userPos == null) {
+      AppToast.warning(context, 'Could not get your current location');
+      return;
+    }
+
+    setState(() {
+      _aiGenerating = true;
+      _showRoutePanel = true;
       _routeError = null;
     });
+
+    try {
+      final api = context.read<ApiService>();
+      final res = await api.post('/ai/itinerary/generate', body: {
+        'start': {'lat': userPos.latitude, 'lon': userPos.longitude},
+        ...params.toJson(),
+      }, auth: true);
+
+      if (!mounted) return;
+
+      if (res['success'] == true && res['data'] != null) {
+        final data = res['data'] as Map<String, dynamic>;
+        final rawStops = (data['stops'] as List?) ?? [];
+        final rawLegs = (data['legs'] as List?) ?? [];
+
+        if (rawStops.isEmpty) {
+          AppToast.warning(context, 'No destinations found matching your criteria');
+          setState(() => _aiGenerating = false);
+          return;
+        }
+
+        final stops = rawStops.map((s) {
+          final dest = s['destination'] as Map<String, dynamic>;
+          return _RouteStop(
+            position: LatLng(
+              (dest['latitude'] as num).toDouble(),
+              (dest['longitude'] as num).toDouble(),
+            ),
+            name: dest['name'] as String,
+            destId: dest['id'] as String?,
+          );
+        }).toList();
+
+        final legs = rawLegs.map((l) => RouteResult.fromJson(l as Map<String, dynamic>)).toList();
+
+        setState(() {
+          _routeStart = LatLng(userPos.latitude, userPos.longitude);
+          _routeStops = stops;
+          _routeLegs = legs;
+          _transportMode = params.transportMode;
+          _isAiItinerary = true;
+          _aiGenerating = false;
+        });
+
+        final dist = (data['totalDistance'] as num?)?.toStringAsFixed(2) ?? '?';
+        final time = data['estimatedTotalTime'] ?? '?';
+        AppToast.success(context, '${stops.length} stops • $dist km • ~$time min total');
+      } else {
+        setState(() => _aiGenerating = false);
+        AppToast.error(context, res['message'] as String? ?? 'Generation failed');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _aiGenerating = false;
+        _routeError = e.toString().replaceFirst('Exception: ', '');
+      });
+      AppToast.error(context, 'AI itinerary generation failed');
+    }
+  }
+
+  Future<void> _saveItinerary() async {
+    if (_routeStops.isEmpty) return;
+
+    try {
+      final api = context.read<ApiService>();
+      final totalDist = _routeLegs.fold<double>(0, (s, l) => s + l.totalDistance);
+      final totalTime = _routeLegs.fold<int>(0, (s, l) => s + l.estimatedTime);
+
+      final stops = _routeStops.map((s) => {
+        'destination_id': s.destId,
+        'name': s.name,
+      }).toList();
+
+      final res = await api.post('/ai/itinerary/save', body: {
+        'title': 'My Itinerary (${DateTime.now().day}/${DateTime.now().month})',
+        'stops': stops,
+        'total_distance': totalDist,
+        'estimated_time': totalTime,
+        'start_latitude': _routeStart?.latitude,
+        'start_longitude': _routeStart?.longitude,
+        'optimize_for': _optimizeFor,
+      }, auth: true);
+
+      if (!mounted) return;
+      if (res['success'] == true) {
+        AppToast.success(context, 'Itinerary saved!');
+      } else {
+        AppToast.error(context, res['message'] as String? ?? 'Save failed');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.error(context, 'Could not save itinerary');
+    }
+  }
+
+  Color _modeColor(String mode) {
+    switch (mode) {
+      case 'walk': return const Color(0xFF9ca3af);
+      case 'bus':
+      case 'jeepney': return const Color(0xFF2563eb);
+      case 'tricycle':
+      case 'habal_habal': return const Color(0xFF16a34a);
+      case 'ferry': return const Color(0xFF7c3aed);
+      case 'taxi': return const Color(0xFFf59e0b);
+      default: return const Color(0xFFdc2626);
+    }
   }
 
   List<LatLng> _routePolyline(RouteResult leg) {
@@ -231,6 +425,7 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     final locationService = context.watch<LocationService>();
     final userPos = locationService.currentPosition;
 
@@ -271,7 +466,7 @@ class _MapScreenState extends State<MapScreen> {
                       border: Border.all(color: Colors.white, width: 2),
                       boxShadow: [BoxShadow(color: AppColors.red500.withAlpha(100), blurRadius: 8)],
                     ),
-                    child: const Icon(FluentIcons.poi, color: Colors.white, size: 16),
+                    child: Icon(FluentIcons.poi, color: Colors.white, size: 16),
                   ),
                 ),
               )).toList(),
@@ -288,7 +483,7 @@ class _MapScreenState extends State<MapScreen> {
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white, width: 2),
                     ),
-                    child: const Icon(FluentIcons.location, color: Colors.white, size: 14),
+                    child: Icon(FluentIcons.location, color: Colors.white, size: 14),
                   ),
                 ),
               ]),
@@ -304,18 +499,18 @@ class _MapScreenState extends State<MapScreen> {
                     width: 28, height: 28,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: isLast ? const Color(0xFFDC2626) : AppColors.purple,
+                        color: isLast ? Color(0xFFDC2626) : AppColors.purple,
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 2),
                       ),
                       child: Center(
-                        child: Text('${idx + 1}', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+                        child: Text('${idx + 1}', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
                       ),
                     ),
                   );
                 }).toList(),
               ),
-            // Route polylines
+            // Route polylines — standard
             if (_routeLegs.isNotEmpty)
               PolylineLayer(
                 polylines: _routeLegs.asMap().entries.map((e) {
@@ -326,6 +521,19 @@ class _MapScreenState extends State<MapScreen> {
                     color: colors[e.key % colors.length].withAlpha(200),
                   );
                 }).toList(),
+              ),
+            // Route polylines — multimodal (color-coded per mode)
+            if (_multiModalLegs.isNotEmpty)
+              PolylineLayer(
+                polylines: _multiModalLegs.expand((mm) => mm.legs).map((leg) {
+                  final pts = leg.geometry.map((c) => LatLng(c[0], c[1])).toList();
+                  if (pts.length < 2) return null;
+                  return Polyline(
+                    points: pts,
+                    strokeWidth: 5,
+                    color: _modeColor(leg.mode).withAlpha(210),
+                  );
+                }).whereType<Polyline>().toList(),
               ),
             // User location marker
             if (userPos != null && _isNavigating)
@@ -346,6 +554,47 @@ class _MapScreenState extends State<MapScreen> {
           ],
         ),
 
+        // AI Itinerary button (hidden while navigating to avoid overlap with nav indicator)
+        if (!_isNavigating)
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 10,
+          left: 14,
+          child: GestureDetector(
+            onTap: _aiGenerating ? null : _generateAiItinerary,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _isAiItinerary ? AppColors.purple : c.surfaceCard.withAlpha(220),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: c.borderLight),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_aiGenerating)
+                        SizedBox(
+                          width: 14, height: 14,
+                          child: ProgressRing(strokeWidth: 2),
+                        )
+                      else
+                        Icon(FluentIcons.lightbulb, size: 16,
+                          color: _isAiItinerary ? Colors.white : c.text),
+                      SizedBox(width: 6),
+                      Text('AI Plan',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                          color: _isAiItinerary ? Colors.white : c.text)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+
         // Route toggle button
         Positioned(
           top: MediaQuery.of(context).padding.top + 10,
@@ -359,16 +608,16 @@ class _MapScreenState extends State<MapScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: _showRoutePanel ? AppColors.red500 : AppColors.surfaceCard.withAlpha(220),
+                    color: _showRoutePanel ? AppColors.red500 : c.surfaceCard.withAlpha(220),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withAlpha(20)),
+                    border: Border.all(color: c.borderLight),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(FluentIcons.map_directions, size: 16, color: _showRoutePanel ? Colors.white : AppColors.text),
-                      const SizedBox(width: 6),
-                      Text('Route', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _showRoutePanel ? Colors.white : AppColors.text)),
+                      Icon(FluentIcons.map_directions, size: 16, color: _showRoutePanel ? Colors.white : c.text),
+                      SizedBox(width: 6),
+                      Text('Route', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _showRoutePanel ? Colors.white : c.text)),
                     ],
                   ),
                 ),
@@ -392,7 +641,7 @@ class _MapScreenState extends State<MapScreen> {
                     color: AppColors.green.withAlpha(220),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(FluentIcons.location, size: 14, color: Colors.white),
@@ -417,9 +666,9 @@ class _MapScreenState extends State<MapScreen> {
                   constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
                   padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceCard.withAlpha(230),
+                    color: c.surfaceCard.withAlpha(230),
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                    border: Border(top: BorderSide(color: Colors.white.withAlpha(20))),
+                    border: Border(top: BorderSide(color: c.borderLight)),
                   ),
                   child: SingleChildScrollView(child: _buildRoutePanel()),
                 ),
@@ -431,8 +680,18 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildRoutePanel() {
-    final totalDist = _routeLegs.fold<double>(0, (s, l) => s + l.totalDistance);
-    final totalTime = _routeLegs.fold<int>(0, (s, l) => s + l.estimatedTime);
+    final c = context.appColors;
+    final isMultiModal = _multiModalLegs.isNotEmpty;
+    final totalDist = isMultiModal
+        ? _multiModalLegs.fold<double>(0, (s, l) => s + l.totalDistance)
+        : _routeLegs.fold<double>(0, (s, l) => s + l.totalDistance);
+    final totalTime = isMultiModal
+        ? _multiModalLegs.fold<int>(0, (s, l) => s + l.totalDuration)
+        : _routeLegs.fold<int>(0, (s, l) => s + l.estimatedTime);
+    final totalFare = isMultiModal
+        ? _multiModalLegs.fold<double>(0, (s, l) => s + l.totalFare)
+        : 0.0;
+    final hasRoute = _routeLegs.isNotEmpty || _multiModalLegs.isNotEmpty;
     final isOnline = context.watch<ConnectivityService>().isOnline;
 
     return Column(
@@ -442,38 +701,59 @@ class _MapScreenState extends State<MapScreen> {
         Center(
           child: Container(
             width: 36, height: 4,
-            decoration: BoxDecoration(color: Colors.white.withAlpha(40), borderRadius: BorderRadius.circular(2)),
+            decoration: BoxDecoration(color: c.borderStrong, borderRadius: BorderRadius.circular(2)),
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
 
         Row(
           children: [
-            const Text('Itinerary Planner', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: AppColors.textStrong)),
-            const Spacer(),
+            Text('Itinerary Planner', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: c.textStrong)),
+            Spacer(),
             if (_routeStart != null)
               GestureDetector(
                 onTap: _clearRoute,
-                child: const Text('Clear', style: TextStyle(fontSize: 12, color: Color(0xFFDC2626), fontWeight: FontWeight.w500)),
+                child: Text('Clear', style: TextStyle(fontSize: 12, color: Color(0xFFDC2626), fontWeight: FontWeight.w500)),
               ),
           ],
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
 
-        // Optimize toggle
-        Row(
-          children: [
-            _optimizeChip('distance', 'Shortest'),
-            const SizedBox(width: 8),
-            _optimizeChip('time', 'Fastest'),
-          ],
+        // Transport mode chips
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _transportChip('private_car', 'Car', FluentIcons.car),
+              SizedBox(width: 6),
+              _transportChip('bus_commute', 'Bus', FluentIcons.bus_solid),
+              SizedBox(width: 6),
+              _transportChip('taxi', 'Taxi', FluentIcons.taxi),
+              SizedBox(width: 6),
+              _transportChip('ferry', 'Ferry', FluentIcons.airplane),
+              SizedBox(width: 6),
+              _transportChip('walk', 'Walk', FluentIcons.location),
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 10),
+
+        // Optimize toggle (only for private car)
+        if (_transportMode == 'private_car') ...[
+          Row(
+            children: [
+              _optimizeChip('distance', 'Shortest'),
+              SizedBox(width: 8),
+              _optimizeChip('time', 'Fastest'),
+            ],
+          ),
+          SizedBox(height: 12),
+        ],
 
         // Destination picker
         if (_routeStart != null && _destinations.isNotEmpty) ...[
-          const Text('Add to itinerary:', style: TextStyle(fontSize: 11, color: AppColors.textFaint)),
-          const SizedBox(height: 6),
+          Text('Add to itinerary:', style: TextStyle(fontSize: 11, color: c.textFaint)),
+          SizedBox(height: 6),
           SizedBox(
             height: 36,
             child: ListView(
@@ -485,23 +765,23 @@ class _MapScreenState extends State<MapScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceElevated,
+                      color: c.surfaceElevated,
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: Colors.white.withAlpha(15)),
+                      border: Border.all(color: c.borderSubtle),
                     ),
-                    child: Text(d.name, style: const TextStyle(fontSize: 11, color: AppColors.text)),
+                    child: Text(d.name, style: TextStyle(fontSize: 11, color: c.text)),
                   ),
                 ),
               )).toList(),
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
         ],
 
         // Stops list with reorder
         if (_routeStops.isNotEmpty) ...[
-          const Text('Stops:', style: TextStyle(fontSize: 11, color: AppColors.textFaint)),
-          const SizedBox(height: 4),
+          Text('Stops:', style: TextStyle(fontSize: 11, color: c.textFaint)),
+          SizedBox(height: 4),
           ...List.generate(_routeStops.length, (i) {
             final stop = _routeStops[i];
             final isLast = i == _routeStops.length - 1;
@@ -516,44 +796,44 @@ class _MapScreenState extends State<MapScreen> {
                         if (i > 0)
                           GestureDetector(
                             onTap: () => _reorderStop(i, i - 1),
-                            child: const Icon(FluentIcons.chevron_up_small, size: 12, color: AppColors.textFaint),
+                            child: Icon(FluentIcons.chevron_up_small, size: 12, color: c.textFaint),
                           ),
                         if (i < _routeStops.length - 1)
                           GestureDetector(
                             onTap: () => _reorderStop(i, i + 2),
-                            child: const Icon(FluentIcons.chevron_down_small, size: 12, color: AppColors.textFaint),
+                            child: Icon(FluentIcons.chevron_down_small, size: 12, color: c.textFaint),
                           ),
                       ],
                     ),
-                  const SizedBox(width: 6),
+                  SizedBox(width: 6),
                   Container(
                     width: 20, height: 20,
                     decoration: BoxDecoration(
-                      color: isLast ? const Color(0xFFDC2626) : AppColors.purple,
+                      color: isLast ? Color(0xFFDC2626) : AppColors.purple,
                       shape: BoxShape.circle,
                     ),
-                    child: Center(child: Text('${i + 1}', style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w700))),
+                    child: Center(child: Text('${i + 1}', style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w700))),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(stop.name, style: const TextStyle(fontSize: 12, color: AppColors.text), overflow: TextOverflow.ellipsis)),
+                  SizedBox(width: 8),
+                  Expanded(child: Text(stop.name, style: TextStyle(fontSize: 12, color: c.text), overflow: TextOverflow.ellipsis)),
                   if (i < _routeLegs.length)
                     Padding(
                       padding: const EdgeInsets.only(right: 6),
                       child: Text(
                         '${_routeLegs[i].totalDistance.toStringAsFixed(1)}km',
-                        style: const TextStyle(fontSize: 10, color: AppColors.textFaint),
+                        style: TextStyle(fontSize: 10, color: c.textFaint),
                       ),
                     ),
                   if (!_isNavigating)
                     GestureDetector(
                       onTap: () => _removeStop(i),
-                      child: const Icon(FluentIcons.chrome_close, size: 12, color: Color(0xFFDC2626)),
+                      child: Icon(FluentIcons.chrome_close, size: 12, color: Color(0xFFDC2626)),
                     ),
                 ],
               ),
             );
           }),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
         ],
 
         // Status / info
@@ -561,7 +841,7 @@ class _MapScreenState extends State<MapScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: AppColors.blue.withAlpha(20), borderRadius: BorderRadius.circular(10)),
-            child: const Row(
+            child: Row(
               children: [
                 Icon(FluentIcons.touch_pointer, size: 16, color: AppColors.blue),
                 SizedBox(width: 8),
@@ -573,7 +853,7 @@ class _MapScreenState extends State<MapScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: AppColors.blue.withAlpha(20), borderRadius: BorderRadius.circular(10)),
-            child: const Row(
+            child: Row(
               children: [
                 Icon(FluentIcons.add, size: 16, color: AppColors.blue),
                 SizedBox(width: 8),
@@ -582,11 +862,11 @@ class _MapScreenState extends State<MapScreen> {
             ),
           )
         else if (_routeLoading)
-          const Padding(
+          Padding(
             padding: EdgeInsets.all(12),
             child: Center(child: ProgressRing(strokeWidth: 2)),
           )
-        else if (_routeLegs.isNotEmpty) ...[
+        else if (hasRoute) ...[
           // Results summary
           Container(
             padding: const EdgeInsets.all(12),
@@ -595,23 +875,53 @@ class _MapScreenState extends State<MapScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 Column(children: [
-                  Text('${totalDist.toStringAsFixed(2)} km', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textStrong)),
-                  const Text('Distance', style: TextStyle(fontSize: 10, color: AppColors.textFaint)),
+                  Text('${totalDist.toStringAsFixed(2)} km', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c.textStrong)),
+                  Text('Distance', style: TextStyle(fontSize: 10, color: c.textFaint)),
                 ]),
-                Container(width: 1, height: 28, color: Colors.white.withAlpha(15)),
+                Container(width: 1, height: 28, color: c.borderSubtle),
                 Column(children: [
-                  Text('$totalTime min', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textStrong)),
-                  const Text('Time', style: TextStyle(fontSize: 10, color: AppColors.textFaint)),
+                  Text('$totalTime min', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c.textStrong)),
+                  Text('Time', style: TextStyle(fontSize: 10, color: c.textFaint)),
                 ]),
-                Container(width: 1, height: 28, color: Colors.white.withAlpha(15)),
+                Container(width: 1, height: 28, color: c.borderSubtle),
+                if (isMultiModal && totalFare > 0) ...[
+                  Column(children: [
+                    Text('₱${totalFare.toStringAsFixed(0)}', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.amber)),
+                    Text('Fare', style: TextStyle(fontSize: 10, color: c.textFaint)),
+                  ]),
+                  Container(width: 1, height: 28, color: c.borderSubtle),
+                ],
                 Column(children: [
-                  Text('${_routeStops.length}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textStrong)),
-                  Text(_routeStops.length == 1 ? 'Stop' : 'Stops', style: const TextStyle(fontSize: 10, color: AppColors.textFaint)),
+                  Text('${_routeStops.length}', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c.textStrong)),
+                  Text(_routeStops.length == 1 ? 'Stop' : 'Stops', style: TextStyle(fontSize: 10, color: c.textFaint)),
                 ]),
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          // Multimodal leg detail
+          if (isMultiModal) ...[
+            SizedBox(height: 8),
+            ..._multiModalLegs.expand((mm) => mm.legs).map((leg) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: [
+                  Container(
+                    width: 8, height: 8,
+                    decoration: BoxDecoration(color: _modeColor(leg.mode), shape: BoxShape.circle),
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(child: Text(leg.instruction, style: TextStyle(fontSize: 11, color: c.text), overflow: TextOverflow.ellipsis)),
+                  SizedBox(width: 8),
+                  Text('${leg.duration}m', style: TextStyle(fontSize: 10, color: c.textFaint)),
+                  if (leg.fare > 0) ...[
+                    SizedBox(width: 6),
+                    Text('₱${leg.fare.toStringAsFixed(0)}', style: TextStyle(fontSize: 10, color: AppColors.amber, fontWeight: FontWeight.w600)),
+                  ],
+                ],
+              ),
+            )),
+          ],
+          SizedBox(height: 10),
 
           // Navigate button
           SizedBox(
@@ -620,7 +930,7 @@ class _MapScreenState extends State<MapScreen> {
               onPressed: _isNavigating ? _stopNavigation : _startNavigation,
               style: ButtonStyle(
                 backgroundColor: WidgetStateProperty.all(
-                  _isNavigating ? const Color(0xFFDC2626) : AppColors.green,
+                  _isNavigating ? Color(0xFFDC2626) : AppColors.green,
                 ),
                 shape: WidgetStateProperty.all(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                 padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 12)),
@@ -629,23 +939,49 @@ class _MapScreenState extends State<MapScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(_isNavigating ? FluentIcons.stop : FluentIcons.location, size: 16, color: Colors.white),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Text(
                     _isNavigating ? 'Stop Navigation' : 'Start Navigation',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
                   ),
                 ],
               ),
             ),
           ),
+          if (_isAiItinerary) ...[
+            SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: Button(
+                onPressed: _saveItinerary,
+                style: ButtonStyle(
+                  backgroundColor: WidgetStateProperty.all(AppColors.purple.withAlpha(30)),
+                  shape: WidgetStateProperty.all(RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: AppColors.purple.withAlpha(80)),
+                  )),
+                  padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 11)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(FluentIcons.save, size: 14, color: AppColors.purple),
+                    SizedBox(width: 8),
+                    Text('Save Itinerary',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.purple)),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
 
         if (!isOnline && _routeStops.isNotEmpty && _routeLegs.isEmpty) ...[
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(color: AppColors.amber.withAlpha(20), borderRadius: BorderRadius.circular(10)),
-            child: const Row(
+            child: Row(
               children: [
                 Icon(FluentIcons.cloud_not_synced, size: 14, color: AppColors.amber),
                 SizedBox(width: 8),
@@ -656,15 +992,15 @@ class _MapScreenState extends State<MapScreen> {
         ],
 
         if (_routeError != null) ...[
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: const Color(0xFFDC2626).withAlpha(20), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: Color(0xFFDC2626).withAlpha(20), borderRadius: BorderRadius.circular(10)),
             child: Row(
               children: [
-                const Icon(FluentIcons.error_badge, size: 14, color: Color(0xFFDC2626)),
-                const SizedBox(width: 8),
-                Expanded(child: Text(_routeError!, style: const TextStyle(fontSize: 11, color: Color(0xFFFCA5A5)))),
+                Icon(FluentIcons.error_badge, size: 14, color: Color(0xFFDC2626)),
+                SizedBox(width: 8),
+                Expanded(child: Text(_routeError!, style: TextStyle(fontSize: 11, color: Color(0xFFFCA5A5)))),
               ],
             ),
           ),
@@ -675,7 +1011,35 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  Widget _transportChip(String value, String label, IconData icon) {
+    final c = context.appColors;
+    final selected = _transportMode == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() => _transportMode = value);
+        if (_routeStops.isNotEmpty) _calculateRoute(_routeStops);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.red500 : c.surfaceElevated,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: selected ? AppColors.red500 : c.borderSubtle),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: selected ? Colors.white : c.textMuted),
+            SizedBox(width: 4),
+            Text(label, style: TextStyle(fontSize: 11, fontWeight: selected ? FontWeight.w600 : FontWeight.w400, color: selected ? Colors.white : c.textMuted)),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _optimizeChip(String value, String label) {
+    final c = context.appColors;
     final isSelected = _optimizeFor == value;
     return GestureDetector(
       onTap: () {
@@ -685,11 +1049,11 @@ class _MapScreenState extends State<MapScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.red500 : AppColors.surfaceElevated,
+          color: isSelected ? AppColors.red500 : c.surfaceElevated,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSelected ? AppColors.red500 : Colors.white.withAlpha(15)),
+          border: Border.all(color: isSelected ? AppColors.red500 : c.borderSubtle),
         ),
-        child: Text(label, style: TextStyle(fontSize: 12, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400, color: isSelected ? Colors.white : AppColors.textMuted)),
+        child: Text(label, style: TextStyle(fontSize: 12, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400, color: isSelected ? Colors.white : c.textMuted)),
       ),
     );
   }

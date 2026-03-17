@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
-import AdminLayout from '@/layouts/admin';
-import Head from 'next/head';
-import { Card, CardBody, CardHeader } from '@heroui/card';
-import { Button } from '@heroui/button';
-import { Input } from '@heroui/input';
-import { toast } from '@/lib/toast';
-import { apiClient } from '@/lib/api';
-import { API_ENDPOINTS } from '@/lib/constants';
-import { useAuthStore } from '@/lib/store/auth-store';
+import { useState, useEffect } from "react";
+import AdminLayout from "@/layouts/admin";
+import Head from "next/head";
+import { Card, CardBody, CardHeader } from "@heroui/card";
+import { Button } from "@heroui/button";
+import { Input } from "@heroui/input";
+import { Tooltip } from "@heroui/tooltip";
+import { toast } from "@/lib/toast";
+import { apiClient } from "@/lib/api";
+import { API_ENDPOINTS } from "@/lib/constants";
+import { useAuthStore } from "@/lib/store/auth-store";
 
 interface AdminProfile {
   id: string;
@@ -25,14 +26,14 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
 
   // Profile form
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
 
   // Password form
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
 
   // Image upload
@@ -45,14 +46,16 @@ export default function SettingsPage() {
   const loadProfile = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get<AdminProfile>(API_ENDPOINTS.ADMIN_PROFILE);
+      const response = await apiClient.get<AdminProfile>(
+        API_ENDPOINTS.ADMIN_PROFILE,
+      );
       if (response.success && response.data) {
         setProfile(response.data);
         setFullName(response.data.full_name);
         setEmail(response.data.email);
       }
     } catch (error) {
-      toast.error('Failed to load profile');
+      toast.error("Failed to load profile");
     } finally {
       setLoading(false);
     }
@@ -60,30 +63,36 @@ export default function SettingsPage() {
 
   const handleUpdateProfile = async () => {
     if (!fullName.trim()) {
-      toast.error('Full name is required');
+      toast.error("Full name is required");
       return;
     }
     if (!email.trim()) {
-      toast.error('Email is required');
+      toast.error("Email is required");
       return;
     }
 
     try {
       setProfileSaving(true);
-      const response = await apiClient.put<AdminProfile>(API_ENDPOINTS.ADMIN_PROFILE, {
-        full_name: fullName.trim(),
-        email: email.trim(),
-      });
+      const response = await apiClient.put<AdminProfile>(
+        API_ENDPOINTS.ADMIN_PROFILE,
+        {
+          full_name: fullName.trim(),
+          email: email.trim(),
+        },
+      );
 
       if (response.success && response.data) {
         setProfile(response.data);
-        toast.success('Profile updated successfully');
+        toast.success("Profile updated successfully");
         await fetchAdminProfile();
       } else {
-        throw new Error('Failed to update profile');
+        throw new Error("Failed to update profile");
       }
     } catch (error: any) {
-      const message = error.response?.data?.error || error.message || 'Failed to update profile';
+      const message =
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to update profile";
       toast.error(message);
     } finally {
       setProfileSaving(false);
@@ -92,40 +101,46 @@ export default function SettingsPage() {
 
   const handleChangePassword = async () => {
     if (!currentPassword) {
-      toast.error('Current password is required');
+      toast.error("Current password is required");
       return;
     }
     if (!newPassword) {
-      toast.error('New password is required');
+      toast.error("New password is required");
       return;
     }
     if (newPassword.length < 8) {
-      toast.error('New password must be at least 8 characters');
+      toast.error("New password must be at least 8 characters");
       return;
     }
     if (newPassword !== confirmPassword) {
-      toast.error('Passwords do not match');
+      toast.error("Passwords do not match");
       return;
     }
 
     try {
       setPasswordSaving(true);
-      const response = await apiClient.put(API_ENDPOINTS.ADMIN_CHANGE_PASSWORD, {
-        current_password: currentPassword,
-        new_password: newPassword,
-      });
+      const response = await apiClient.put(
+        API_ENDPOINTS.ADMIN_CHANGE_PASSWORD,
+        {
+          current_password: currentPassword,
+          new_password: newPassword,
+        },
+      );
 
       if (response.success) {
-        toast.success('Password changed successfully');
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
+        toast.success("Password changed successfully");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
         await loadProfile();
       } else {
-        throw new Error('Failed to change password');
+        throw new Error("Failed to change password");
       }
     } catch (error: any) {
-      const message = error.response?.data?.error || error.message || 'Failed to change password';
+      const message =
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to change password";
       toast.error(message);
     } finally {
       setPasswordSaving(false);
@@ -136,34 +151,38 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file');
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be less than 5MB');
+      toast.error("Image must be less than 5MB");
       return;
     }
 
     try {
       setImageUploading(true);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append("file", file);
 
       const response = await apiClient.post<{ profile_image_url: string }>(
         API_ENDPOINTS.ADMIN_PROFILE_IMAGE,
         formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
+        { headers: { "Content-Type": "multipart/form-data" } },
       );
 
       if (response.success && response.data) {
-        setProfile((prev) => prev ? { ...prev, profile_image_url: response.data!.profile_image_url } : prev);
-        toast.success('Profile image updated');
+        setProfile((prev) =>
+          prev
+            ? { ...prev, profile_image_url: response.data!.profile_image_url }
+            : prev,
+        );
+        toast.success("Profile image updated");
         await fetchAdminProfile();
       }
     } catch (error: any) {
-      const message = error.response?.data?.error || 'Failed to upload image';
+      const message = error.response?.data?.error || "Failed to upload image";
       toast.error(message);
     } finally {
       setImageUploading(false);
@@ -173,14 +192,18 @@ export default function SettingsPage() {
   const handleDeleteImage = async () => {
     try {
       setImageUploading(true);
-      const response = await apiClient.delete(API_ENDPOINTS.ADMIN_PROFILE_IMAGE);
+      const response = await apiClient.delete(
+        API_ENDPOINTS.ADMIN_PROFILE_IMAGE,
+      );
       if (response.success) {
-        setProfile((prev) => prev ? { ...prev, profile_image_url: null } : prev);
-        toast.success('Profile image removed');
+        setProfile((prev) =>
+          prev ? { ...prev, profile_image_url: null } : prev,
+        );
+        toast.success("Profile image removed");
         await fetchAdminProfile();
       }
     } catch (error: any) {
-      const message = error.response?.data?.error || 'Failed to delete image';
+      const message = error.response?.data?.error || "Failed to delete image";
       toast.error(message);
     } finally {
       setImageUploading(false);
@@ -228,47 +251,62 @@ export default function SettingsPage() {
                   <div
                     className="flex h-20 w-20 items-center justify-center rounded-full text-2xl font-bold"
                     style={{
-                      backgroundColor: 'rgba(244, 63, 94, 0.1)',
-                      color: 'var(--red-600)',
+                      backgroundColor: "rgba(244, 63, 94, 0.1)",
+                      color: "var(--red-600)",
                     }}
                   >
-                    {profile?.full_name?.charAt(0).toUpperCase() || 'A'}
+                    {profile?.full_name?.charAt(0).toUpperCase() || "A"}
                   </div>
                 )}
               </div>
               <div className="space-y-2">
                 <div className="flex gap-2">
-                  <label>
-                    <Button
-                      as="span"
-                      size="sm"
-                      color="primary"
-                      isLoading={imageUploading}
-                      className="cursor-pointer"
-                    >
-                      Upload Image
-                    </Button>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleImageUpload}
-                      disabled={imageUploading}
-                    />
-                  </label>
+                  <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                    content="Upload a new profile photo (JPG, PNG or GIF — max 5MB)"
+                    delay={700}
+                    showArrow
+                    placement="top"
+                  >
+                    <label>
+                      <Button
+                        as="span"
+                        size="sm"
+                        color="primary"
+                        isLoading={imageUploading}
+                        className="cursor-pointer"
+                      >
+                        Upload Image
+                      </Button>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageUpload}
+                        disabled={imageUploading}
+                      />
+                    </label>
+                  </Tooltip>
                   {profile?.profile_image_url && (
-                    <Button
-                      size="sm"
+                    <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                      content="Remove your current profile photo"
+                      delay={700}
+                      showArrow
+                      placement="top"
                       color="danger"
-                      variant="flat"
-                      isLoading={imageUploading}
-                      onClick={handleDeleteImage}
                     >
-                      Remove
-                    </Button>
+                      <Button
+                        size="sm"
+                        color="danger"
+                        variant="flat"
+                        isLoading={imageUploading}
+                        onClick={handleDeleteImage}
+                      >
+                        Remove
+                      </Button>
+                    </Tooltip>
                   )}
                 </div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                   JPG, PNG or GIF. Max 5MB.
                 </p>
               </div>
@@ -297,19 +335,32 @@ export default function SettingsPage() {
             />
             <div className="flex items-center gap-4">
               <div className="flex-1">
-                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                  Role: <span className="font-medium" style={{ color: 'var(--text-strong)' }}>{profile?.role?.replace('_', ' ').toUpperCase()}</span>
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                  Role:{" "}
+                  <span
+                    className="font-medium"
+                    style={{ color: "var(--text-strong)" }}
+                  >
+                    {profile?.role?.replace("_", " ").toUpperCase()}
+                  </span>
                 </p>
               </div>
             </div>
             <div className="flex justify-end pt-2">
-              <Button
-                color="primary"
-                onClick={handleUpdateProfile}
-                isLoading={profileSaving}
+              <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                content="Save your display name and email address"
+                delay={700}
+                showArrow
+                placement="left"
               >
-                Save Changes
-              </Button>
+                <Button
+                  color="primary"
+                  onClick={handleUpdateProfile}
+                  isLoading={profileSaving}
+                >
+                  Save Changes
+                </Button>
+              </Tooltip>
             </div>
           </CardBody>
         </Card>
@@ -320,8 +371,12 @@ export default function SettingsPage() {
             <div>
               <h3 className="text-lg font-semibold">Change Password</h3>
               {profile?.is_default_password && (
-                <p className="text-sm mt-1" style={{ color: 'var(--amber-500)' }}>
-                  You are using the default password. Please change it for security.
+                <p
+                  className="text-sm mt-1"
+                  style={{ color: "var(--amber-500)" }}
+                >
+                  You are using the default password. Please change it for
+                  security.
                 </p>
               )}
             </div>
@@ -349,13 +404,20 @@ export default function SettingsPage() {
               placeholder="Confirm new password"
             />
             <div className="flex justify-end pt-2">
-              <Button
-                color="primary"
-                onClick={handleChangePassword}
-                isLoading={passwordSaving}
+              <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                content="Update your account password (min 8 characters)"
+                delay={700}
+                showArrow
+                placement="left"
               >
-                Change Password
-              </Button>
+                <Button
+                  color="primary"
+                  onClick={handleChangePassword}
+                  isLoading={passwordSaving}
+                >
+                  Change Password
+                </Button>
+              </Tooltip>
             </div>
           </CardBody>
         </Card>
@@ -368,17 +430,29 @@ export default function SettingsPage() {
           <CardBody>
             <div className="space-y-3">
               <div className="flex justify-between">
-                <span style={{ color: 'var(--text-muted)' }}>Account ID</span>
+                <span style={{ color: "var(--text-muted)" }}>Account ID</span>
                 <span className="font-mono text-sm">{profile?.id}</span>
               </div>
               <div className="flex justify-between">
-                <span style={{ color: 'var(--text-muted)' }}>Created</span>
-                <span>{profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'N/A'}</span>
+                <span style={{ color: "var(--text-muted)" }}>Created</span>
+                <span>
+                  {profile?.created_at
+                    ? new Date(profile.created_at).toLocaleDateString()
+                    : "N/A"}
+                </span>
               </div>
               <div className="flex justify-between">
-                <span style={{ color: 'var(--text-muted)' }}>Default Password</span>
-                <span style={{ color: profile?.is_default_password ? 'var(--amber-500)' : 'var(--green-600)' }}>
-                  {profile?.is_default_password ? 'Yes - Please change' : 'No'}
+                <span style={{ color: "var(--text-muted)" }}>
+                  Default Password
+                </span>
+                <span
+                  style={{
+                    color: profile?.is_default_password
+                      ? "var(--amber-500)"
+                      : "var(--green-600)",
+                  }}
+                >
+                  {profile?.is_default_password ? "Yes - Please change" : "No"}
                 </span>
               </div>
             </div>

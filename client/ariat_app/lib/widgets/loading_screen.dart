@@ -35,7 +35,13 @@ class LoadingScreen extends StatelessWidget {
             ),
             if (message != null) ...[
               const SizedBox(height: 20),
-              Text(message!, style: const TextStyle(color: AppColors.textMuted, fontSize: 14)),
+              Text(
+                message!,
+                style: TextStyle(
+                  color: context.appColors.textMuted,
+                  fontSize: 14,
+                ),
+              ),
             ],
           ],
         ),

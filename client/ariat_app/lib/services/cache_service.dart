@@ -15,7 +15,7 @@ class CacheService {
     final dbPath = p.join(await getDatabasesPath(), 'ariat_cache.db');
     return openDatabase(
       dbPath,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE destinations(
@@ -47,6 +47,25 @@ class CacheService {
             refresh_token TEXT NOT NULL
           )
         ''');
+        await db.execute('''
+          CREATE TABLE clusters(
+            id TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 3) {
+          // Add clusters table introduced in revamp
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS clusters(
+              id TEXT PRIMARY KEY,
+              data TEXT NOT NULL,
+              updated_at INTEGER NOT NULL
+            )
+          ''');
+        }
       },
     );
   }
@@ -129,6 +148,27 @@ class CacheService {
     return DateTime.fromMillisecondsSinceEpoch(results.first['updated_at'] as int);
   }
 
+  // --- Clusters ---
+  Future<void> cacheClusters(List<Map<String, dynamic>> clusters) async {
+    final db = await database;
+    final batch = db.batch();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final cl in clusters) {
+      batch.insert('clusters', {
+        'id': cl['id'] ?? '',
+        'data': jsonEncode(cl),
+        'updated_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<List<Map<String, dynamic>>> getCachedClusters() async {
+    final db = await database;
+    final results = await db.query('clusters', orderBy: 'updated_at DESC');
+    return results.map((r) => jsonDecode(r['data'] as String) as Map<String, dynamic>).toList();
+  }
+
   // --- Auth cache (offline login) ---
   Future<void> cacheAuthData({
     required String email,
@@ -170,5 +210,6 @@ class CacheService {
     await db.delete('destinations');
     await db.delete('categories');
     await db.delete('map_cache');
+    await db.delete('clusters');
   }
 }

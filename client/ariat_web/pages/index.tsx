@@ -1,13 +1,13 @@
-import { useEffect } from 'react';
-import { useRouter } from 'next/router';
-import Head from 'next/head';
-import AnimatedBackground from '@/components/animated-background';
+import { useEffect } from "react";
+import { useRouter } from "next/router";
+import Head from "next/head";
+import AnimatedBackground from "@/components/animated-background";
 
 export default function IndexPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/admin/dashboard');
+    router.replace("/admin/dashboard");
   }, [router]);
 
   return (
@@ -26,10 +26,12 @@ export default function IndexPage() {
             />
             <div
               className="absolute inset-[-8px] rounded-full border-3 border-transparent animate-spin"
-              style={{ borderTopColor: '#f43f5e', borderRightColor: '#fda4af' }}
+              style={{ borderTopColor: "#f43f5e", borderRightColor: "#fda4af" }}
             />
           </div>
-          <p style={{ color: 'var(--text-muted)' }}>Redirecting to Admin Console...</p>
+          <p style={{ color: "var(--text-muted)" }}>
+            Redirecting to Admin Console...
+          </p>
         </div>
       </div>
     </>

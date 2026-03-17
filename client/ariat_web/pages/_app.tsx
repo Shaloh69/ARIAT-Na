@@ -9,18 +9,21 @@ import { useState } from "react";
 
 import { fontSans, fontMono } from "@/config/fonts";
 import "@/styles/globals.css";
-import 'leaflet/dist/leaflet.css';
+import "leaflet/dist/leaflet.css";
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
-  const [queryClient] = useState(() => new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: 60 * 1000, // 1 minute
-        refetchOnWindowFocus: false,
-      },
-    },
-  }));
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 60 * 1000, // 1 minute
+            refetchOnWindowFocus: false,
+          },
+        },
+      }),
+  );
 
   return (
     <QueryClientProvider client={queryClient}>

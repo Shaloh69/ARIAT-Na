@@ -33,6 +33,7 @@ dependencies:
 
   # Auth
   crypto: ^3.0.6
+  flutter_secure_storage: ^9.2.2
 
   # Location & Notifications
   geolocator: ^13.0.2

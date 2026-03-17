@@ -1,0 +1,56 @@
+import { Request, Response } from 'express';
+import { pool } from '../config/database';
+import { RowDataPacket } from 'mysql2';
+
+export const getClusters = async (_req: Request, res: Response): Promise<void> => {
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    `SELECT cl.*, COUNT(d.id) AS destination_count
+     FROM clusters cl
+     LEFT JOIN destinations d ON d.cluster_id = cl.id AND d.is_active = TRUE
+     WHERE cl.is_active = TRUE
+     GROUP BY cl.id
+     ORDER BY cl.display_order ASC`
+  );
+  res.json({ success: true, data: rows });
+};
+
+export const getClusterById = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    `SELECT cl.*, COUNT(d.id) AS destination_count
+     FROM clusters cl
+     LEFT JOIN destinations d ON d.cluster_id = cl.id AND d.is_active = TRUE
+     WHERE cl.id = ? OR cl.slug = ?
+     GROUP BY cl.id`,
+    [id, id]
+  );
+  if ((rows as any[]).length === 0) {
+    res.status(404).json({ success: false, error: 'Cluster not found' });
+    return;
+  }
+  const cluster = rows[0] as any;
+
+  // Fetch featured destinations for this cluster
+  const [featuredRows] = await pool.execute<RowDataPacket[]>(
+    `SELECT d.id, d.name, d.latitude, d.longitude, d.images, d.rating,
+            d.average_visit_duration, d.entrance_fee_local, d.budget_level,
+            c.name AS category_name, c.slug AS category_slug
+     FROM destinations d
+     LEFT JOIN categories c ON d.category_id = c.id
+     WHERE d.cluster_id = ? AND d.is_active = TRUE
+     ORDER BY d.is_featured DESC, d.popularity_score DESC, d.rating DESC
+     LIMIT 6`,
+    [cluster.id]
+  );
+
+  const featured_places = (featuredRows as any[]).map((p) => ({
+    ...p,
+    images: (() => {
+      if (p.images === null || p.images === undefined) return [];
+      if (typeof p.images === 'object') return p.images;
+      try { return JSON.parse(p.images); } catch { return []; }
+    })(),
+  }));
+
+  res.json({ success: true, data: { ...cluster, featured_places } });
+};

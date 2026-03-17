@@ -1,17 +1,22 @@
-import { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardBody } from "@heroui/card";
-import AdminLayout from '@/layouts/admin';
-import { apiClient } from '@/lib/api';
-import { API_ENDPOINTS } from '@/lib/constants';
-import type { GeoJSONFeatureCollection } from '@/types/api';
-import type { RouteResult, NewDestination, CategoryOption, DestinationsGeoJSON } from '@/components/MapManager';
-import { toast } from '@/lib/toast';
-import Head from 'next/head';
+import AdminLayout from "@/layouts/admin";
+import { apiClient } from "@/lib/api";
+import { API_ENDPOINTS } from "@/lib/constants";
+import type { GeoJSONFeatureCollection } from "@/types/api";
+import type {
+  RouteResult,
+  NewDestination,
+  CategoryOption,
+  DestinationsGeoJSON,
+} from "@/components/MapManager";
+import { toast } from "@/lib/toast";
+import Head from "next/head";
 
 // Dynamic import to avoid SSR issues with Leaflet
-const MapManager = dynamic(() => import('@/components/MapManager'), {
+const MapManager = dynamic(() => import("@/components/MapManager"), {
   ssr: false,
   loading: () => (
     <div className="flex h-full items-center justify-center">
@@ -24,10 +29,10 @@ const MapManager = dynamic(() => import('@/components/MapManager'), {
           />
           <div
             className="absolute inset-[-6px] rounded-full border-3 border-transparent animate-spin"
-            style={{ borderTopColor: '#f43f5e', borderRightColor: '#fda4af' }}
+            style={{ borderTopColor: "#f43f5e", borderRightColor: "#fda4af" }}
           />
         </div>
-        <p style={{ color: 'var(--text-muted)' }}>Loading map...</p>
+        <p style={{ color: "var(--text-muted)" }}>Loading map...</p>
       </div>
     </div>
   ),
@@ -37,45 +42,61 @@ export default function MapPage() {
   const [categories, setCategories] = useState<CategoryOption[]>([]);
 
   // Fetch intersection GeoJSON data
-  const { data: geojsonData, isLoading, refetch } = useQuery<GeoJSONFeatureCollection>({
-    queryKey: ['geojson'],
+  const {
+    data: geojsonData,
+    isLoading,
+    refetch,
+  } = useQuery<GeoJSONFeatureCollection>({
+    queryKey: ["geojson"],
     queryFn: async () => {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1'}${API_ENDPOINTS.INTERSECTIONS_GEOJSON}`);
-      if (!response.ok) throw new Error('Failed to fetch GeoJSON');
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1"}${API_ENDPOINTS.INTERSECTIONS_GEOJSON}`,
+      );
+      if (!response.ok) throw new Error("Failed to fetch GeoJSON");
       return response.json();
     },
   });
 
   // Fetch road GeoJSON data
   const { data: roadsGeojsonData, refetch: refetchRoads } = useQuery({
-    queryKey: ['roads-geojson'],
+    queryKey: ["roads-geojson"],
     queryFn: async () => {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1'}${API_ENDPOINTS.ROADS_GEOJSON}`);
-      if (!response.ok) throw new Error('Failed to fetch roads GeoJSON');
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1"}${API_ENDPOINTS.ROADS_GEOJSON}`,
+      );
+      if (!response.ok) throw new Error("Failed to fetch roads GeoJSON");
       return response.json();
     },
   });
 
   // Fetch destinations GeoJSON data for map display
-  const { data: destinationsGeojsonData, refetch: refetchDestinations } = useQuery<DestinationsGeoJSON>({
-    queryKey: ['destinations-geojson'],
-    queryFn: async () => {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1'}${API_ENDPOINTS.DESTINATIONS_GEOJSON}`);
-      if (!response.ok) throw new Error('Failed to fetch destinations GeoJSON');
-      return response.json();
-    },
-  });
+  const { data: destinationsGeojsonData, refetch: refetchDestinations } =
+    useQuery<DestinationsGeoJSON>({
+      queryKey: ["destinations-geojson"],
+      queryFn: async () => {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1"}${API_ENDPOINTS.DESTINATIONS_GEOJSON}`,
+        );
+        if (!response.ok)
+          throw new Error("Failed to fetch destinations GeoJSON");
+        return response.json();
+      },
+    });
 
   // Fetch categories for destination creation
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await apiClient.get<CategoryOption[]>(API_ENDPOINTS.CATEGORIES);
+        const response = await apiClient.get<CategoryOption[]>(
+          API_ENDPOINTS.CATEGORIES,
+        );
         if (response.success && response.data) {
           setCategories(response.data);
         }
       } catch {
-        toast.warning('Could not load categories — destination creation may be limited');
+        toast.warning(
+          "Could not load categories — destination creation may be limited",
+        );
       }
     };
     fetchCategories();
@@ -87,12 +108,17 @@ export default function MapPage() {
 
       if (response.success) {
         await refetch();
-        toast.success(`${point.point_type.replace('_', ' ')} added successfully!`);
+        toast.success(
+          `${point.point_type.replace("_", " ")} added successfully!`,
+        );
       } else {
-        throw new Error(response.error || 'Failed to save point');
+        throw new Error(response.error || "Failed to save point");
       }
     } catch (error: any) {
-      const msg = error?.response?.data?.message || error.message || 'Failed to save point';
+      const msg =
+        error?.response?.data?.message ||
+        error.message ||
+        "Failed to save point";
       toast.error(msg);
       throw error;
     }
@@ -101,17 +127,25 @@ export default function MapPage() {
   const handleSaveRoad = async (road: any) => {
     try {
       // Find start and end intersections
-      const allIntersections = await apiClient.get<any[]>(API_ENDPOINTS.INTERSECTIONS);
+      const allIntersections = await apiClient.get<any[]>(
+        API_ENDPOINTS.INTERSECTIONS,
+      );
 
-      if (!allIntersections.success || !allIntersections.data || !Array.isArray(allIntersections.data)) {
-        toast.error('Could not load intersections. Please try again.');
+      if (
+        !allIntersections.success ||
+        !allIntersections.data ||
+        !Array.isArray(allIntersections.data)
+      ) {
+        toast.error("Could not load intersections. Please try again.");
         return;
       }
 
       const intersections: any[] = allIntersections.data;
 
       if (intersections.length === 0) {
-        toast.error('No intersections found. Please add intersection points first.');
+        toast.error(
+          "No intersections found. Please add intersection points first.",
+        );
         return;
       }
 
@@ -126,7 +160,7 @@ export default function MapPage() {
           const lat = Number(int.latitude);
           const lng = Number(int.longitude);
           const dist = Math.sqrt(
-            Math.pow(lat - point[0], 2) + Math.pow(lng - point[1], 2)
+            Math.pow(lat - point[0], 2) + Math.pow(lng - point[1], 2),
           );
           if (dist < minDist) {
             minDist = dist;
@@ -140,7 +174,9 @@ export default function MapPage() {
       const endIntersection = findNearest(endPoint, intersections);
 
       if (!startIntersection || !endIntersection) {
-        toast.error('Could not find nearby intersections. Please add intersection points first.');
+        toast.error(
+          "Could not find nearby intersections. Please add intersection points first.",
+        );
         return;
       }
 
@@ -158,12 +194,15 @@ export default function MapPage() {
 
       if (response.success) {
         await refetchRoads();
-        toast.success('Road saved successfully!');
+        toast.success("Road saved successfully!");
       } else {
-        throw new Error(response.error || 'Failed to save road');
+        throw new Error(response.error || "Failed to save road");
       }
     } catch (error: any) {
-      const msg = error?.response?.data?.message || error.message || 'Failed to save road';
+      const msg =
+        error?.response?.data?.message ||
+        error.message ||
+        "Failed to save road";
       toast.error(msg);
       throw error;
     }
@@ -179,12 +218,15 @@ export default function MapPage() {
 
       if (response.success) {
         await refetchDestinations();
-        toast.success('Destination created successfully!');
+        toast.success("Destination created successfully!");
       } else {
-        throw new Error(response.error || 'Failed to create destination');
+        throw new Error(response.error || "Failed to create destination");
       }
     } catch (error: any) {
-      const msg = error?.response?.data?.message || error.message || 'Failed to create destination';
+      const msg =
+        error?.response?.data?.message ||
+        error.message ||
+        "Failed to create destination";
       toast.error(msg);
       throw error;
     }
@@ -195,23 +237,29 @@ export default function MapPage() {
     startLon: number,
     endLat: number,
     endLon: number,
-    optimizeFor: string
+    optimizeFor: string,
   ): Promise<RouteResult | null> => {
     try {
-      const response = await apiClient.post<RouteResult>(`${API_ENDPOINTS.ROUTES}/calculate-gps`, {
-        start_lat: startLat,
-        start_lon: startLon,
-        end_lat: endLat,
-        end_lon: endLon,
-        optimize_for: optimizeFor,
-      });
+      const response = await apiClient.post<RouteResult>(
+        `${API_ENDPOINTS.ROUTES}/calculate-gps`,
+        {
+          start_lat: startLat,
+          start_lon: startLon,
+          end_lat: endLat,
+          end_lon: endLon,
+          optimize_for: optimizeFor,
+        },
+      );
 
       if (response.success && response.data) {
         return response.data;
       }
       return null;
     } catch (error: any) {
-      const msg = error?.response?.data?.message || error.message || 'Failed to calculate route';
+      const msg =
+        error?.response?.data?.message ||
+        error.message ||
+        "Failed to calculate route";
       toast.error(msg);
       throw error;
     }
@@ -219,15 +267,39 @@ export default function MapPage() {
 
   const handleDeletePoint = async (id: string) => {
     try {
-      const response = await apiClient.delete(`${API_ENDPOINTS.INTERSECTIONS}/${id}`);
+      const response = await apiClient.delete(
+        `${API_ENDPOINTS.INTERSECTIONS}/${id}`,
+      );
       if (response.success) {
         await refetch();
-        toast.success('Point deleted');
+        toast.success("Point deleted");
       } else {
-        throw new Error(response.error || 'Failed to delete point');
+        throw new Error(response.error || "Failed to delete point");
       }
     } catch (error: any) {
-      const msg = error?.response?.data?.message || error.message || 'Failed to delete point';
+      const msg =
+        error?.response?.data?.message ||
+        error.message ||
+        "Failed to delete point";
+      toast.error(msg);
+      throw error;
+    }
+  };
+
+  const handleDeleteRoad = async (id: string) => {
+    try {
+      const response = await apiClient.delete(`${API_ENDPOINTS.ROADS}/${id}`);
+      if (response.success) {
+        await refetchRoads();
+        toast.success("Road deleted");
+      } else {
+        throw new Error(response.error || "Failed to delete road");
+      }
+    } catch (error: any) {
+      const msg =
+        error?.response?.data?.message ||
+        error.message ||
+        "Failed to delete road";
       toast.error(msg);
       throw error;
     }
@@ -235,15 +307,21 @@ export default function MapPage() {
 
   const handleUpdatePoint = async (id: string, data: { name: string }) => {
     try {
-      const response = await apiClient.put(`${API_ENDPOINTS.INTERSECTIONS}/${id}`, data);
+      const response = await apiClient.put(
+        `${API_ENDPOINTS.INTERSECTIONS}/${id}`,
+        data,
+      );
       if (response.success) {
         await refetch();
-        toast.success('Point updated');
+        toast.success("Point updated");
       } else {
-        throw new Error(response.error || 'Failed to update point');
+        throw new Error(response.error || "Failed to update point");
       }
     } catch (error: any) {
-      const msg = error?.response?.data?.message || error.message || 'Failed to update point';
+      const msg =
+        error?.response?.data?.message ||
+        error.message ||
+        "Failed to update point";
       toast.error(msg);
       throw error;
     }
@@ -267,10 +345,15 @@ export default function MapPage() {
                 />
                 <div
                   className="absolute inset-[-6px] rounded-full border-3 border-transparent animate-spin"
-                  style={{ borderTopColor: '#f43f5e', borderRightColor: '#fda4af' }}
+                  style={{
+                    borderTopColor: "#f43f5e",
+                    borderRightColor: "#fda4af",
+                  }}
                 />
               </div>
-              <p style={{ color: 'var(--text-muted)' }}>Loading intersection data...</p>
+              <p style={{ color: "var(--text-muted)" }}>
+                Loading intersection data...
+              </p>
             </div>
           </CardBody>
         </Card>
@@ -287,6 +370,7 @@ export default function MapPage() {
               onSaveDestination={handleSaveDestination}
               onCalculateRoute={handleCalculateRoute}
               onDeletePoint={handleDeletePoint}
+              onDeleteRoad={handleDeleteRoad}
               onUpdatePoint={handleUpdatePoint}
             />
           </CardBody>

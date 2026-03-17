@@ -6,6 +6,7 @@ import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/location_service.dart';
 import 'services/notification_service.dart';
+import 'services/theme_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/app_shell.dart';
@@ -29,6 +30,7 @@ class _AriatNaAppState extends State<AriatNaApp> {
   late final ConnectivityService _connectivityService;
   late final LocationService _locationService;
   late final ApiService _apiService;
+  final ThemeService _themeService = ThemeService();
 
   @override
   void initState() {
@@ -58,16 +60,17 @@ class _AriatNaAppState extends State<AriatNaApp> {
         ChangeNotifierProvider.value(value: _authService),
         ChangeNotifierProvider.value(value: _connectivityService),
         ChangeNotifierProvider.value(value: _locationService),
+        ChangeNotifierProvider.value(value: _themeService),
         Provider.value(value: _apiService),
         Provider.value(value: _cacheService),
       ],
-      child: Consumer<AuthService>(
-        builder: (context, auth, _) {
+      child: Consumer2<AuthService, ThemeService>(
+        builder: (context, auth, themeService, _) {
           _apiService.baseUrl = auth.baseUrl;
 
           return FluentApp(
             title: 'AIRAT-NA',
-            theme: buildAppTheme(),
+            theme: themeService.isDark ? buildAppTheme() : buildLightTheme(),
             debugShowCheckedModeBanner: false,
             home: auth.isLoading
                 ? const LoadingScreen(message: 'Loading...')

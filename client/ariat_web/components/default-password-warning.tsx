@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Card, CardBody } from '@heroui/card';
-import { Button } from '@heroui/button';
-import { useRouter } from 'next/router';
-import { useAuthStore } from '@/lib/store/auth-store';
+import { useState, useEffect } from "react";
+import { Card, CardBody } from "@heroui/card";
+import { Button } from "@heroui/button";
+import { useRouter } from "next/router";
+import { useAuthStore } from "@/lib/store/auth-store";
 
 export default function DefaultPasswordWarning() {
   const router = useRouter();
@@ -42,10 +42,13 @@ export default function DefaultPasswordWarning() {
             </svg>
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-warning">Security Warning: Using Default Credentials</h3>
+            <h3 className="text-lg font-semibold text-warning">
+              Security Warning: Using Default Credentials
+            </h3>
             <p className="text-sm text-default-600 mt-1">
-              You are currently using the default password. For security reasons, please change your password
-              and update your profile information immediately.
+              You are currently using the default password. For security
+              reasons, please change your password and update your profile
+              information immediately.
             </p>
           </div>
         </div>
@@ -54,15 +57,11 @@ export default function DefaultPasswordWarning() {
             size="sm"
             color="warning"
             variant="flat"
-            onPress={() => router.push('/admin/settings')}
+            onPress={() => router.push("/admin/settings")}
           >
             Update Profile
           </Button>
-          <Button
-            size="sm"
-            variant="light"
-            onPress={() => setDismissed(true)}
-          >
+          <Button size="sm" variant="light" onPress={() => setDismissed(true)}>
             Dismiss
           </Button>
         </div>

@@ -5,6 +5,7 @@ import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/cache_service.dart';
+import '../../services/theme_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
@@ -63,7 +64,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     final isOnline = context.watch<ConnectivityService>().isOnline;
+    final themeService = context.watch<ThemeService>();
 
     return GradientBackground(
       child: SafeArea(
@@ -72,10 +75,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 8),
-              const Text('Settings', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: AppColors.textStrong))
+              SizedBox(height: 8),
+              Text('Settings', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: c.textStrong))
                   .animate().fadeIn(duration: 400.ms),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
+
+              // Appearance (theme toggle)
+              GlassCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(FluentIcons.brightness, size: 16, color: AppColors.amber),
+                        SizedBox(width: 8),
+                        Text('Appearance', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textStrong)),
+                      ],
+                    ),
+                    SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Icon(
+                          themeService.isDark ? FluentIcons.clear_night : FluentIcons.sunny,
+                          size: 16,
+                          color: c.textMuted,
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          themeService.isDark ? 'Dark Mode' : 'Light Mode',
+                          style: TextStyle(fontSize: 14, color: c.text),
+                        ),
+                        Spacer(),
+                        ToggleSwitch(
+                          checked: themeService.isDark,
+                          onChanged: (_) => context.read<ThemeService>().toggleTheme(),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(duration: 400.ms),
+
+              SizedBox(height: 16),
 
               // Connection status
               GlassCard(
@@ -90,12 +132,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         boxShadow: [BoxShadow(color: (isOnline ? AppColors.green : AppColors.amber).withAlpha(100), blurRadius: 8)],
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
                     Text(
                       isOnline ? 'Connected to Internet' : 'Offline Mode',
                       style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isOnline ? AppColors.green : AppColors.amber),
                     ),
-                    const Spacer(),
+                    Spacer(),
                     Icon(
                       isOnline ? FluentIcons.cloud : FluentIcons.cloud_not_synced,
                       size: 18,
@@ -105,7 +147,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ).animate().fadeIn(delay: 50.ms, duration: 400.ms),
 
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Server connection
               GlassCard(
@@ -113,29 +155,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
                       children: [
                         Icon(FluentIcons.server, size: 16, color: AppColors.red400),
                         SizedBox(width: 8),
-                        Text('Server Connection', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textStrong)),
+                        Text('Server Connection', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textStrong)),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    const Text('Configure the API server URL', style: TextStyle(fontSize: 12, color: AppColors.textFaint)),
-                    const SizedBox(height: 14),
-                    const Text('API Base URL', style: TextStyle(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
-                    const SizedBox(height: 6),
+                    SizedBox(height: 6),
+                    Text('Configure the API server URL', style: TextStyle(fontSize: 12, color: c.textFaint)),
+                    SizedBox(height: 14),
+                    Text('API Base URL', style: TextStyle(fontSize: 12, color: c.textMuted, fontWeight: FontWeight.w500)),
+                    SizedBox(height: 6),
                     TextBox(
                       controller: _urlController,
                       placeholder: 'http://10.0.2.2:5000/api/v1',
-                      style: const TextStyle(color: AppColors.textStrong, fontSize: 13),
+                      style: TextStyle(color: c.textStrong, fontSize: 13),
                       decoration: WidgetStateProperty.all(BoxDecoration(
-                        color: AppColors.surfaceElevated,
+                        color: c.surfaceElevated,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white.withAlpha(25)),
+                        border: Border.all(color: c.borderMedium),
                       )),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
@@ -146,17 +188,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               shape: WidgetStateProperty.all(RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                               padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 10)),
                             ),
-                            child: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            child: Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        SizedBox(width: 10),
                         Button(
                           onPressed: () => _urlController.text = AuthService.defaultBaseUrl,
                           style: ButtonStyle(
                             shape: WidgetStateProperty.all(RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                             padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 10, horizontal: 14)),
                           ),
-                          child: const Text('Reset', style: TextStyle(fontSize: 13)),
+                          child: Text('Reset', style: TextStyle(fontSize: 13)),
                         ),
                       ],
                     ),
@@ -164,7 +206,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ).animate().fadeIn(delay: 100.ms, duration: 500.ms),
 
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Cache management
               GlassCard(
@@ -172,16 +214,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
                       children: [
                         Icon(FluentIcons.database, size: 16, color: AppColors.cyan),
                         SizedBox(width: 8),
-                        Text('Offline Cache', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textStrong)),
+                        Text('Offline Cache', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textStrong)),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    const Text('Cached data is used when you are offline', style: TextStyle(fontSize: 12, color: AppColors.textFaint)),
-                    const SizedBox(height: 14),
+                    SizedBox(height: 6),
+                    Text('Cached data is used when you are offline', style: TextStyle(fontSize: 12, color: c.textFaint)),
+                    SizedBox(height: 14),
                     SizedBox(
                       width: double.infinity,
                       child: Button(
@@ -190,14 +232,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           shape: WidgetStateProperty.all(RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                           padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 10)),
                         ),
-                        child: const Text('Clear Cache', style: TextStyle(fontSize: 13)),
+                        child: Text('Clear Cache', style: TextStyle(fontSize: 13)),
                       ),
                     ),
                   ],
                 ),
               ).animate().fadeIn(delay: 150.ms, duration: 500.ms),
 
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // About
               GlassCard(
@@ -205,27 +247,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
                       children: [
                         Icon(FluentIcons.info, size: 16, color: AppColors.blue),
                         SizedBox(width: 8),
-                        Text('About', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textStrong)),
+                        Text('About', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textStrong)),
                       ],
                     ),
-                    const SizedBox(height: 14),
+                    SizedBox(height: 14),
                     _aboutRow('App Name', 'AIRAT-NA'),
                     _aboutRow('Version', '1.0.0'),
                     _aboutRow('Platform', 'Flutter + FluentUI'),
                     _aboutRow('Offline Support', 'Enabled'),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     Row(
                       children: [
                         Image.asset('assets/logo.png', width: 28, height: 28),
-                        const SizedBox(width: 10),
-                        const Expanded(
+                        SizedBox(width: 10),
+                        Expanded(
                           child: Text(
                             'AIRAT-NA Tourist Navigation - Your guide to exploring amazing destinations.',
-                            style: TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.4),
+                            style: TextStyle(fontSize: 12, color: c.textMuted, height: 1.4),
                           ),
                         ),
                       ],
@@ -234,17 +276,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ).animate().fadeIn(delay: 200.ms, duration: 500.ms),
 
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Danger zone
               GlassCard(
                 padding: const EdgeInsets.all(20),
-                borderColor: const Color(0xFFDC2626).withAlpha(30),
+                borderColor: Color(0xFFDC2626).withAlpha(30),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Danger Zone', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFFFCA5A5))),
-                    const SizedBox(height: 14),
+                    Text('Danger Zone', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFFFCA5A5))),
+                    SizedBox(height: 14),
                     SizedBox(
                       width: double.infinity,
                       child: Button(
@@ -254,18 +296,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           AppToast.info(context, 'Signed out');
                         },
                         style: ButtonStyle(
-                          backgroundColor: WidgetStateProperty.all(const Color(0xFFDC2626).withAlpha(20)),
-                          shape: WidgetStateProperty.all(RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: const Color(0xFFDC2626).withAlpha(40)))),
+                          backgroundColor: WidgetStateProperty.all(Color(0xFFDC2626).withAlpha(20)),
+                          shape: WidgetStateProperty.all(RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: Color(0xFFDC2626).withAlpha(40)))),
                           padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 12)),
                         ),
-                        child: const Text('Sign Out', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFFFCA5A5))),
+                        child: Text('Sign Out', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFFFCA5A5))),
                       ),
                     ),
                   ],
                 ),
               ).animate().fadeIn(delay: 300.ms, duration: 500.ms),
 
-              const SizedBox(height: 30),
+              SizedBox(height: 30),
             ],
           ),
         ),
@@ -274,13 +316,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _aboutRow(String label, String value) {
+    final c = context.appColors;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 13, color: AppColors.textMuted)),
-          Text(value, style: const TextStyle(fontSize: 13, color: AppColors.text, fontWeight: FontWeight.w500)),
+          Text(label, style: TextStyle(fontSize: 13, color: c.textMuted)),
+          Text(value, style: TextStyle(fontSize: 13, color: c.text, fontWeight: FontWeight.w500)),
         ],
       ),
     );

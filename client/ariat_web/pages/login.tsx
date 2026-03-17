@@ -1,23 +1,24 @@
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
-import { Button } from '@heroui/button';
-import { Input } from '@heroui/input';
-import { Card, CardBody, CardHeader } from '@heroui/card';
-import { useAuthStore } from '@/lib/store/auth-store';
-import { toast } from '@/lib/toast';
-import Head from 'next/head';
-import AnimatedBackground from '@/components/animated-background';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
+import { Button } from "@heroui/button";
+import { Input } from "@heroui/input";
+import { Card, CardBody, CardHeader } from "@heroui/card";
+import { useAuthStore } from "@/lib/store/auth-store";
+import { toast } from "@/lib/toast";
+import Head from "next/head";
+import AnimatedBackground from "@/components/animated-background";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, isLoading, isAuthenticated, error, clearError } = useAuthStore();
+  const { login, isLoading, isAuthenticated, error, clearError } =
+    useAuthStore();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   useEffect(() => {
     if (isAuthenticated) {
-      router.push('/admin/dashboard');
+      router.push("/admin/dashboard");
     }
   }, [isAuthenticated, router]);
 
@@ -32,14 +33,14 @@ export default function LoginPage() {
     e.preventDefault();
 
     if (!email || !password) {
-      toast.error('Please enter email and password');
+      toast.error("Please enter email and password");
       return;
     }
 
     try {
       await login({ email, password });
-      toast.success('Login successful!');
-      router.push('/admin/dashboard');
+      toast.success("Login successful!");
+      router.push("/admin/dashboard");
     } catch (error: any) {
       // Error is already handled by the store and toast
     }
@@ -56,11 +57,17 @@ export default function LoginPage() {
         <Card className="w-full max-w-md">
           <CardHeader className="flex flex-col gap-3 px-6 pt-6">
             <div className="flex items-center justify-center">
-              <img src="/android-chrome-192x192.png" alt="AIRAT-NA" className="h-16 w-16 object-contain" />
+              <img
+                src="/android-chrome-192x192.png"
+                alt="AIRAT-NA"
+                className="h-16 w-16 object-contain"
+              />
             </div>
             <div className="text-center">
               <h1 className="text-2xl font-bold">AIRAT-NA Admin</h1>
-              <p className="text-sm text-default-500">Sign in to manage the travel platform</p>
+              <p className="text-sm text-default-500">
+                Sign in to manage the travel platform
+              </p>
             </div>
           </CardHeader>
 
@@ -105,10 +112,8 @@ export default function LoginPage() {
                 isLoading={isLoading}
                 className="w-full"
               >
-                {isLoading ? 'Signing in...' : 'Sign In'}
+                {isLoading ? "Signing in..." : "Sign In"}
               </Button>
-
-
             </form>
           </CardBody>
         </Card>

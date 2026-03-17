@@ -4,7 +4,7 @@ export interface Admin {
   email: string;
   full_name: string;
   profile_image_url?: string;
-  role: 'super_admin' | 'admin' | 'moderator';
+  role: "super_admin" | "admin" | "moderator";
   is_default_password?: boolean;
   created_at: string;
 }
@@ -97,14 +97,19 @@ export interface Intersection {
   is_destination: boolean;
   destination_id?: string;
   address?: string;
-  point_type?: 'tourist_spot' | 'bus_terminal' | 'bus_stop' | 'pier' | 'intersection';
+  point_type?:
+    | "tourist_spot"
+    | "bus_terminal"
+    | "bus_stop"
+    | "pier"
+    | "intersection";
   created_at: string;
   updated_at: string;
 }
 
 // GeoJSON Types
 export interface GeoJSONPoint {
-  type: 'Feature';
+  type: "Feature";
   properties: {
     name: string;
     id: string;
@@ -112,14 +117,14 @@ export interface GeoJSONPoint {
     point_type?: string;
   };
   geometry: {
-    type: 'Point';
+    type: "Point";
     coordinates: [number, number]; // [lng, lat]
   };
   id: number | string;
 }
 
 export interface GeoJSONFeatureCollection {
-  type: 'FeatureCollection';
+  type: "FeatureCollection";
   features: GeoJSONPoint[];
 }
 
@@ -131,7 +136,7 @@ export interface Road {
   end_intersection_id: string;
   distance: number;
   path: [number, number][]; // Array of [lat, lng]
-  road_type: 'highway' | 'main_road' | 'local_road';
+  road_type: "highway" | "main_road" | "local_road";
   is_active: boolean;
   created_at: string;
   updated_at: string;

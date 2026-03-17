@@ -5,6 +5,7 @@ import {
   getNearestIntersection,
   recalculateRouteFromCurrent,
   checkOffCourse,
+  calculateMultiModalRouteHandler,
 } from '../controllers/route.controller';
 import { authenticate } from '../middleware/auth.middleware';
 
@@ -37,6 +38,13 @@ router.post('/recalculate', authenticate, recalculateRouteFromCurrent);
  * Body: { current_lat, current_lon, planned_path, planned_roads, threshold? }
  */
 router.post('/check-off-course', authenticate, checkOffCourse);
+
+/**
+ * POST /routes/calculate-multimodal
+ * Calculate multi-modal route (bus commute, taxi, ferry, walk, etc.)
+ * Body: { start_lat, start_lon, end_lat, end_lon, transport_mode, optimize_for? }
+ */
+router.post('/calculate-multimodal', authenticate, calculateMultiModalRouteHandler);
 
 /**
  * GET /routes/nearest

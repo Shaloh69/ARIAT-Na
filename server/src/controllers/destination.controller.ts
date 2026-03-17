@@ -30,6 +30,7 @@ function formatDestination(dest: any) {
     images: safeJsonParse(dest.images, []),
     operating_hours: safeJsonParse(dest.operating_hours, null),
     amenities: safeJsonParse(dest.amenities, []),
+    tags: safeJsonParse(dest.tags, []),
   };
 }
 
@@ -49,6 +50,11 @@ export const getDestinations = async (
     minRating,
     q,
     active = 'true',
+    cluster,
+    municipality,
+    tags,
+    budget_level,
+    family_friendly,
   } = req.query;
 
   const offset = (Number(page) - 1) * Number(limit);
@@ -79,6 +85,34 @@ export const getDestinations = async (
   if (q) {
     conditions.push('MATCH(d.name, d.description, d.address) AGAINST(?)');
     params.push(q);
+  }
+
+  if (cluster) {
+    conditions.push('d.cluster_id = ?');
+    params.push(cluster);
+  }
+
+  if (municipality) {
+    conditions.push('d.municipality = ?');
+    params.push(municipality);
+  }
+
+  if (tags) {
+    const tagList = String(tags).split(',').map((t) => t.trim()).filter(Boolean);
+    tagList.forEach((tag) => {
+      conditions.push('JSON_CONTAINS(d.tags, JSON_QUOTE(?))');
+      params.push(tag);
+    });
+  }
+
+  if (budget_level) {
+    conditions.push('d.budget_level = ?');
+    params.push(budget_level);
+  }
+
+  if (family_friendly === 'true') {
+    conditions.push('d.family_friendly = ?');
+    params.push(true);
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -149,9 +183,35 @@ export const getDestinationById = async (
 
   const destination = destinations[0];
 
+  // Fetch nearby places within 5 km using Haversine formula
+  const NEARBY_RADIUS_KM = 5;
+  const [nearbyRows]: any = await pool.execute(
+    `SELECT d.id, d.name, d.latitude, d.longitude, d.address, d.images,
+            d.rating, d.average_visit_duration, d.entrance_fee_local,
+            d.budget_level, d.cluster_id,
+            c.name AS category_name, c.slug AS category_slug,
+            (6371 * ACOS(
+              COS(RADIANS(?)) * COS(RADIANS(d.latitude)) *
+              COS(RADIANS(d.longitude) - RADIANS(?)) +
+              SIN(RADIANS(?)) * SIN(RADIANS(d.latitude))
+            )) AS distance_km
+     FROM destinations d
+     LEFT JOIN categories c ON d.category_id = c.id
+     WHERE d.id != ? AND d.is_active = TRUE
+     HAVING distance_km < ?
+     ORDER BY distance_km ASC
+     LIMIT 6`,
+    [destination.latitude, destination.longitude, destination.latitude, id, NEARBY_RADIUS_KM]
+  );
+
+  const nearby_places = (nearbyRows as any[]).map((n: any) => ({
+    ...n,
+    images: safeJsonParse(n.images, []),
+  }));
+
   res.json({
     success: true,
-    data: formatDestination(destination),
+    data: { ...formatDestination(destination), nearby_places },
   });
 };
 
@@ -286,6 +346,11 @@ export const updateDestination = async (
     'best_time_to_visit',
     'is_active',
     'is_featured',
+    'is_island',
+    'family_friendly',
+    'cluster_id',
+    'municipality',
+    'budget_level',
   ];
 
   const jsonFields = ['images', 'operating_hours', 'amenities'];

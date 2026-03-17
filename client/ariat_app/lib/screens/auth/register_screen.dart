@@ -77,20 +77,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
     TextInputType? keyboardType,
     bool isPassword = false,
   }) {
+    final c = context.appColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
-        const SizedBox(height: 6),
+        Text(label, style: TextStyle(fontSize: 12, color: c.textMuted, fontWeight: FontWeight.w500)),
+        SizedBox(height: 6),
         if (isPassword)
           PasswordBox(
             controller: controller,
             placeholder: placeholder ?? '',
-            style: const TextStyle(color: AppColors.textStrong),
+            style: TextStyle(color: c.textStrong),
             decoration: WidgetStateProperty.all(BoxDecoration(
-              color: AppColors.surfaceElevated,
+              color: c.surfaceElevated,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.white.withAlpha(25)),
+              border: Border.all(color: c.borderMedium),
             )),
           )
         else
@@ -98,20 +99,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
             controller: controller,
             placeholder: placeholder ?? '',
             keyboardType: keyboardType,
-            style: const TextStyle(color: AppColors.textStrong),
+            style: TextStyle(color: c.textStrong),
             decoration: WidgetStateProperty.all(BoxDecoration(
-              color: AppColors.surfaceElevated,
+              color: c.surfaceElevated,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.white.withAlpha(25)),
+              border: Border.all(color: c.borderMedium),
             )),
           ),
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
       ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return GradientBackground(
       child: SafeArea(
         child: Column(
@@ -121,7 +123,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(FluentIcons.back, color: AppColors.textStrong, size: 20),
+                    icon: Icon(FluentIcons.back, color: c.textStrong, size: 20),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -134,25 +136,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   children: [
                     Image.asset('assets/logo.png', width: 56, height: 56)
                         .animate().fadeIn(duration: 500.ms),
-                    const SizedBox(height: 8),
-                    const Text('AIRAT-NA', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textStrong, letterSpacing: 2))
+                    SizedBox(height: 8),
+                    Text('AIRAT-NA', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: c.textStrong, letterSpacing: 2))
                         .animate().fadeIn(delay: 100.ms, duration: 500.ms),
-                    const SizedBox(height: 28),
+                    SizedBox(height: 28),
                     GlassCard(
                       padding: const EdgeInsets.all(24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Create Account', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: AppColors.textStrong)),
-                          const SizedBox(height: 4),
-                          const Text('Join AIRAT-NA and explore!', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
-                          const SizedBox(height: 24),
+                          Text('Create Account', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: c.textStrong)),
+                          SizedBox(height: 4),
+                          Text('Join AIRAT-NA and explore!', style: TextStyle(fontSize: 13, color: c.textMuted)),
+                          SizedBox(height: 24),
                           _buildField('Full Name *', _nameController, placeholder: 'John Doe'),
                           _buildField('Email *', _emailController, placeholder: 'you@example.com', keyboardType: TextInputType.emailAddress),
                           _buildField('Phone Number', _phoneController, placeholder: '+63 XXX XXX XXXX', keyboardType: TextInputType.phone),
                           _buildField('Password *', _passwordController, placeholder: 'Min 6 characters', isPassword: true),
                           _buildField('Confirm Password *', _confirmController, placeholder: 'Re-enter password', isPassword: true),
-                          const SizedBox(height: 8),
+                          SizedBox(height: 8),
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton(
@@ -166,14 +168,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 14)),
                               ),
                               child: _loading
-                                  ? const SizedBox(width: 18, height: 18, child: ProgressRing(strokeWidth: 2))
-                                  : const Text('Create Account', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                                  ? SizedBox(width: 18, height: 18, child: ProgressRing(strokeWidth: 2))
+                                  : Text('Create Account', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                             ),
                           ),
                         ],
                       ),
                     ).animate().fadeIn(delay: 200.ms, duration: 600.ms).slideY(begin: 0.1, end: 0, duration: 600.ms),
-                    const SizedBox(height: 30),
+                    SizedBox(height: 30),
                   ],
                 ),
               ),

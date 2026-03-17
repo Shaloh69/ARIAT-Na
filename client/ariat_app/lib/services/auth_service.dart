@@ -1,18 +1,24 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:crypto/crypto.dart';
 import 'cache_service.dart';
 
 class AuthService extends ChangeNotifier {
+  // Sensitive keys — stored in encrypted secure storage
   static const _tokenKey = 'access_token';
   static const _refreshKey = 'refresh_token';
+  // Non-sensitive keys — stored in SharedPreferences
   static const _userKey = 'user_data';
   static const _baseUrlKey = 'api_base_url';
   static const String defaultBaseUrl = 'http://10.0.2.2:5000/api/v1';
 
   final CacheService _cache = CacheService();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
 
   String? _accessToken;
   String? _refreshToken;
@@ -33,9 +39,9 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> init() async {
+    _accessToken = await _secureStorage.read(key: _tokenKey);
+    _refreshToken = await _secureStorage.read(key: _refreshKey);
     final prefs = await SharedPreferences.getInstance();
-    _accessToken = prefs.getString(_tokenKey);
-    _refreshToken = prefs.getString(_refreshKey);
     _baseUrl = prefs.getString(_baseUrlKey) ?? defaultBaseUrl;
     final userData = prefs.getString(_userKey);
     if (userData != null) {
@@ -129,9 +135,9 @@ class AuthService extends ChangeNotifier {
     _refreshToken = cached['refresh_token'] as String;
     _isOfflineSession = true;
 
+    await _secureStorage.write(key: _tokenKey, value: _accessToken);
+    await _secureStorage.write(key: _refreshKey, value: _refreshToken);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, _accessToken!);
-    await prefs.setString(_refreshKey, _refreshToken!);
     await prefs.setString(_userKey, jsonEncode(_user));
     notifyListeners();
   }
@@ -208,9 +214,8 @@ class AuthService extends ChangeNotifier {
     if (response.statusCode == 200 && body['success'] == true) {
       _accessToken = body['data']['accessToken'];
       _refreshToken = body['data']['refreshToken'];
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_tokenKey, _accessToken!);
-      await prefs.setString(_refreshKey, _refreshToken!);
+      await _secureStorage.write(key: _tokenKey, value: _accessToken);
+      await _secureStorage.write(key: _refreshKey, value: _refreshToken);
     } else {
       throw Exception('Token refresh failed');
     }
@@ -232,9 +237,9 @@ class AuthService extends ChangeNotifier {
     _accessToken = data['accessToken'];
     _refreshToken = data['refreshToken'];
     _user = data['user'];
+    await _secureStorage.write(key: _tokenKey, value: _accessToken);
+    await _secureStorage.write(key: _refreshKey, value: _refreshToken);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, _accessToken!);
-    await prefs.setString(_refreshKey, _refreshToken!);
     await prefs.setString(_userKey, jsonEncode(_user));
     notifyListeners();
   }
@@ -243,9 +248,9 @@ class AuthService extends ChangeNotifier {
     _accessToken = null;
     _refreshToken = null;
     _user = null;
+    await _secureStorage.delete(key: _tokenKey);
+    await _secureStorage.delete(key: _refreshKey);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
-    await prefs.remove(_refreshKey);
     await prefs.remove(_userKey);
     notifyListeners();
   }

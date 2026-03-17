@@ -6,10 +6,10 @@ import '../theme/app_theme.dart';
 import '../widgets/connectivity_banner.dart';
 import '../widgets/toast_overlay.dart';
 import 'home/home_screen.dart';
-import 'destinations/destinations_screen.dart';
-import 'map/map_screen.dart';
+import 'explore/explore_screen.dart';
+import 'trips/trips_screen.dart';
+import 'saved/saved_screen.dart';
 import 'profile/profile_screen.dart';
-import 'settings/settings_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -21,12 +21,12 @@ class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
   bool? _wasOnline;
 
-  final _pages = const <Widget>[
+  final _pages = <Widget>[
     HomeScreen(),
-    DestinationsScreen(),
-    MapScreen(),
+    ExploreScreen(),
+    TripsScreen(),
+    SavedScreen(),
     ProfileScreen(),
-    SettingsScreen(),
   ];
 
   @override
@@ -34,7 +34,6 @@ class _AppShellState extends State<AppShell> {
     super.didChangeDependencies();
     final isOnline = context.watch<ConnectivityService>().isOnline;
 
-    // Show toast when connectivity changes
     if (_wasOnline != null && _wasOnline != isOnline) {
       if (isOnline) {
         AppToast.success(context, 'Back online — syncing data...');
@@ -49,24 +48,25 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final isOnline = context.watch<ConnectivityService>().isOnline;
+    final c = context.appColors;
 
     return Container(
-      color: AppColors.surface,
+      color: c.surface,
       child: Column(
         children: [
           ConnectivityBanner(isOnline: isOnline),
           Expanded(child: _pages[_selectedIndex]),
-          _buildBottomNav(),
+          _buildBottomNav(c),
         ],
       ),
     );
   }
 
-  Widget _buildBottomNav() {
+  Widget _buildBottomNav(AppColorScheme c) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceCard.withAlpha(240),
-        border: Border(top: BorderSide(color: Colors.white.withAlpha(20))),
+        color: c.surfaceCard.withAlpha(240),
+        border: Border(top: BorderSide(color: c.borderLight)),
       ),
       child: SafeArea(
         top: false,
@@ -75,11 +75,11 @@ class _AppShellState extends State<AppShell> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _navItem(FluentIcons.home, 'Home', 0),
-              _navItem(FluentIcons.poi, 'Explore', 1),
-              _navItem(FluentIcons.nav2_d_map_view, 'Map', 2),
-              _navItem(FluentIcons.contact, 'Profile', 3),
-              _navItem(FluentIcons.settings, 'Settings', 4),
+              _navItem(FluentIcons.home, 'Home', 0, c),
+              _navItem(FluentIcons.compass_n_w, 'Explore', 1, c),
+              _navItem(FluentIcons.lightbulb, 'Trips', 2, c),
+              _navItem(FluentIcons.save, 'Saved', 3, c),
+              _navItem(FluentIcons.contact, 'Profile', 4, c),
             ],
           ),
         ),
@@ -87,7 +87,7 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Widget _navItem(IconData icon, String label, int index) {
+  Widget _navItem(IconData icon, String label, int index, AppColorScheme c) {
     final isSelected = _selectedIndex == index;
     return GestureDetector(
       onTap: () => setState(() => _selectedIndex = index),
@@ -104,7 +104,7 @@ class _AppShellState extends State<AppShell> {
                 color: isSelected ? AppColors.red500.withAlpha(30) : Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(icon, size: 22, color: isSelected ? AppColors.red400 : AppColors.textFaint),
+              child: Icon(icon, size: 22, color: isSelected ? AppColors.red400 : c.textFaint),
             ),
             const SizedBox(height: 2),
             Text(
@@ -112,7 +112,7 @@ class _AppShellState extends State<AppShell> {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                color: isSelected ? AppColors.red400 : AppColors.textFaint,
+                color: isSelected ? AppColors.red400 : c.textFaint,
               ),
             ),
           ],

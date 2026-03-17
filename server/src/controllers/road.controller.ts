@@ -4,6 +4,7 @@ import * as turf from '@turf/turf';
 import { RowDataPacket } from 'mysql2';
 import { AuthRequest, AppError } from '../types';
 import { pool } from '../config/database';
+import { invalidateGraphCache } from '../services/pathfinding.service';
 
 /**
  * Safely parse a MySQL JSON column value.
@@ -40,7 +41,7 @@ function ensurePathArray(value: any): [number, number][] {
 async function resolveOrCreateIntersection(lat: number, lng: number, labelHint: string): Promise<string> {
   const SNAP_KM = 0.015; // 15 m
   const [rows] = await pool.execute<RowDataPacket[]>(
-    'SELECT id, latitude, longitude FROM intersections WHERE is_active = TRUE'
+    'SELECT id, latitude, longitude FROM intersections'
   );
   for (const row of rows as any[]) {
     const dlat = (row.latitude as number) - lat;
@@ -185,7 +186,7 @@ export const createRoad = async (
   }
 
   // Validate road_type
-  const validRoadTypes = ['highway', 'main_road', 'local_road'];
+  const validRoadTypes = ['highway', 'main_road', 'local_road', 'ferry'];
   if (!validRoadTypes.includes(road_type)) {
     throw new AppError(`Invalid road type. Must be one of: ${validRoadTypes.join(', ')}`, 400);
   }
@@ -208,6 +209,7 @@ export const createRoad = async (
     highway: 80, // km/h
     main_road: 50,
     local_road: 30,
+    ferry: 25,   // boat speed ~25 km/h
   };
   const speed = speedMap[road_type] || 30;
   const estimated_time = Math.round((distance / speed) * 60); // minutes
@@ -237,6 +239,7 @@ export const createRoad = async (
   ]);
 
   const [roads]: any = await pool.execute('SELECT * FROM roads WHERE id = ?', [roadId]);
+  invalidateGraphCache();
 
   res.status(201).json({
     success: true,
@@ -302,6 +305,7 @@ export const updateRoad = async (
         highway: 80,
         main_road: 50,
         local_road: 30,
+        ferry: 25,
       };
       const speed = speedMap[roadType] || 30;
       const estimatedTime = Math.round((distance / speed) * 60);
@@ -324,6 +328,7 @@ export const updateRoad = async (
   await pool.execute(sql, [...updateValues, id]);
 
   const [roads]: any = await pool.execute('SELECT * FROM roads WHERE id = ?', [id]);
+  invalidateGraphCache();
 
   res.json({
     success: true,
@@ -350,6 +355,7 @@ export const deleteRoad = async (
   if (result.affectedRows === 0) {
     throw new AppError('Road not found', 404);
   }
+  invalidateGraphCache();
 
   res.json({
     success: true,
