@@ -49,7 +49,33 @@
       "Bash(find C:/Projects/Thesis/2026/AIRAT-NA/client/ariat_web -name *.css -o -name tailwind.config* -o -name theme*)",
       "Bash(find C:/Projects/Thesis/2026/AIRAT-NA/client/ariat_web -name tailwind.config*)",
       "Read(//c/Projects/Thesis/2026/AIRAT-NA/client/ariat_app/lib/screens/map/**)",
-      "Read(//d/Projects-Shem/Thesis/2026/AIRAT-NA/client/ariat_app/lib/screens/map/**)"
+      "Read(//d/Projects-Shem/Thesis/2026/AIRAT-NA/client/ariat_app/lib/screens/map/**)",
+      "Bash(head -20 grep -rn \"limit.*100\\\\|limit.*20\\\\|maxLimit\\\\|Math.min\" \"C:/Projects/Thesis/2026/AIRAT-NA/server/src/controllers/destination.controller.ts\")",
+      "Read(//c/Projects/Thesis/2026/AIRAT-NA/server/src/utils/**)",
+      "Read(//d/Projects-Shem/Thesis/2026/AIRAT-NA/server/src/utils/**)",
+      "Read(//c/Projects/Thesis/2026/AIRAT-NA/server/src/controllers/**)",
+      "Read(//d/Projects-Shem/Thesis/2026/AIRAT-NA/server/src/controllers/**)",
+      "Bash(find C:/Projects/Thesis/2026/AIRAT-NA/client/ariat_web/lib -name *.ts)",
+      "Read(//c/Projects/Thesis/2026/AIRAT-NA/server/src/routes/**)",
+      "Read(//d/Projects-Shem/Thesis/2026/AIRAT-NA/server/src/routes/**)",
+      "Bash(head -10 grep -n \"handleValidationErrors\\\\|validationResult\" \"C:/Projects/Thesis/2026/AIRAT-NA/server/src/utils/validators.ts\")",
+      "Read(//c/Projects/Thesis/2026/AIRAT-NA/server/src/middleware/**)",
+      "Read(//d/Projects-Shem/Thesis/2026/AIRAT-NA/server/src/middleware/**)",
+      "Bash(head -15 grep -n \"limit\\\\|apiClient\\\\|fetch\\\\|axios\" \"C:/Projects/Thesis/2026/AIRAT-NA/client/ariat_web/pages/admin/roads.tsx\")",
+      "Bash(head -15 grep -n \"limit\\\\|apiClient\\\\|fetch\\\\|axios\" \"C:/Projects/Thesis/2026/AIRAT-NA/client/ariat_web/pages/admin/fare-configs.tsx\")",
+      "Bash(head -10 grep -n \"limit\\\\|LIMIT\\\\|paginationValidator\" C:/Projects/Thesis/2026/AIRAT-NA/server/src/routes/road.routes.ts)",
+      "Bash(head -10 grep -n \"limit\\\\|LIMIT\" C:/Projects/Thesis/2026/AIRAT-NA/server/src/controllers/category.controller.ts)",
+      "Bash(head -10 grep -rn \"limit\\\\|LIMIT\" C:/Projects/Thesis/2026/AIRAT-NA/server/src/controllers/road.controller.ts)",
+      "Bash(head -15 grep -n \"res.json\\\\|success.*true\\\\|data:\" \"C:/Projects/Thesis/2026/AIRAT-NA/server/src/controllers/road.controller.ts\")",
+      "Read(//c/Projects/Thesis/2026/AIRAT-NA/server/src/database/migrations/**)",
+      "Bash(head -10 grep -n \"is_active\\\\|CREATE TABLE destinations\" C:/Projects/Thesis/2026/AIRAT-NA/server/src/database/schema.sql)",
+      "Bash(head -5 grep -n \"export.*validate\\\\|validationResult\\\\|return.*400\\\\|return.*422\" \"C:/Projects/Thesis/2026/AIRAT-NA/server/src/middleware/validation.middleware.ts\")",
+      "Bash(head -20 grep -n \"limit\\\\|axios\\\\|apiClient\\\\|fetch\" \"C:/Projects/Thesis/2026/AIRAT-NA/client/ariat_web/pages/admin/roads.tsx\")",
+      "Bash(head -20 grep -n \"limit\\\\|axios\\\\|apiClient\\\\|fetch\" \"C:/Projects/Thesis/2026/AIRAT-NA/client/ariat_web/pages/admin/fare-configs.tsx\")",
+      "Bash(head -10 grep -n \"limit\\\\|axios\\\\|apiClient\\\\|fetch\" \"C:/Projects/Thesis/2026/AIRAT-NA/client/ariat_web/pages/admin/dashboard.tsx\")",
+      "Bash(head -10 grep -n \"limit\\\\|get\\(\" \"C:/Projects/Thesis/2026/AIRAT-NA/server/src/routes/road.routes.ts\")",
+      "Read(//c/Projects/Thesis/2026/AIRAT-NA/server/src/services/**)",
+      "Read(//d/Projects-Shem/Thesis/2026/AIRAT-NA/server/src/services/**)"
     ],
     "additionalDirectories": [
       "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\client\\ariat_web\\pages\\admin",
@@ -58,7 +84,11 @@
       "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\client\\ariat_web",
       "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\client\\ariat_web",
       "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\client\\ariat_app\\lib\\screens\\map",
-      "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\client\\ariat_app\\lib\\screens\\map"
+      "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\client\\ariat_app\\lib\\screens\\map",
+      "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\server\\src\\utils",
+      "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\server\\src\\utils",
+      "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\server\\src\\services",
+      "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\server\\src\\services"
     ]
   }
 }

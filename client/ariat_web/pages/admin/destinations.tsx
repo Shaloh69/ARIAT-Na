@@ -203,10 +203,11 @@ export default function DestinationsPage() {
     try {
       setLoading(true);
       const res = await apiClient.get<any>(
-        `${API_ENDPOINTS.DESTINATIONS}?limit=100&active=false`
+        `${API_ENDPOINTS.DESTINATIONS}?limit=500&active=false`
       );
-      if (res.success && res.data) {
-        const list = Array.isArray(res.data) ? res.data : (res.data as any).data ?? [];
+      if (res.success) {
+        // Server returns { success, data: [...], pagination: {...} }
+        const list = Array.isArray(res.data) ? res.data : [];
         setDestinations(list);
       }
     } catch {

@@ -149,7 +149,7 @@ export const getPublicUrl = (filePath: string): string => {
 /**
  * List files in a folder
  */
-export const listFiles = async (folderPath: string = '') => {
+export const listFiles = async (folderPath: string = ''): Promise<any[]> => {
   try {
     const { data, error } = await supabase.storage
       .from(STORAGE_BUCKET)
@@ -172,7 +172,7 @@ export const listFiles = async (folderPath: string = '') => {
 /**
  * Get file metadata
  */
-export const getFileMetadata = async (filePath: string) => {
+export const getFileMetadata = async (filePath: string): Promise<any> => {
   try {
     const { data, error } = await supabase.storage
       .from(STORAGE_BUCKET)

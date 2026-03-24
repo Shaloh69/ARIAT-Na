@@ -13,9 +13,12 @@ export default function DashboardPage() {
     queryKey: ["destinations"],
     queryFn: async () => {
       const response = await apiClient.get<Destination[]>(
-        API_ENDPOINTS.DESTINATIONS,
+        `${API_ENDPOINTS.DESTINATIONS}?limit=500&active=false`,
       );
-      return response.data || [];
+
+      return (
+        Array.isArray(response.data) ? response.data : []
+      ) as Destination[];
     },
   });
 
