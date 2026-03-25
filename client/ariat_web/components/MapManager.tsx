@@ -133,8 +133,8 @@ interface MapManagerProps {
   roadsGeojsonData?: RoadsGeoJSON;
   destinationsGeojsonData?: DestinationsGeoJSON;
   categories?: CategoryOption[];
-  onSavePoint: (point: NewPoint) => Promise<void>;
-  onSaveRoad: (road: NewRoad) => Promise<void>;
+  onSavePoint?: (point: NewPoint) => Promise<void>;
+  onSaveRoad?: (road: NewRoad) => Promise<void>;
   onSaveDestination?: (dest: NewDestination) => Promise<void>;
   onDeletePoint?: (id: string) => Promise<void>;
   onUpdatePoint?: (id: string, data: { name: string }) => Promise<void>;
@@ -146,6 +146,14 @@ interface MapManagerProps {
     endLon: number,
     optimizeFor: string,
   ) => Promise<RouteResult | null>;
+  // Transit route building
+  transitSelectedRoadIds?: string[];
+  transitSelectedStopIds?: string[];
+  transitRouteColor?: string;
+  transitPickupMode?: "anywhere" | "stops_only";
+  onTransitRoadsChange?: (ids: string[]) => void;
+  onTransitStopsChange?: (ids: string[]) => void;
+  initialMode?: MapMode;
 }
 
 interface NewPoint {
@@ -190,7 +198,8 @@ type MapMode =
   | "add_point"
   | "add_road"
   | "add_destination"
-  | "test_route";
+  | "test_route"
+  | "transit_route";
 
 // Map Click Handler Component
 function MapClickHandler({
@@ -519,8 +528,15 @@ export default function MapManager({
   onUpdatePoint,
   onDeleteRoad,
   onCalculateRoute,
+  transitSelectedRoadIds = [],
+  transitSelectedStopIds = [],
+  transitRouteColor = "#3b82f6",
+  transitPickupMode = "stops_only",
+  onTransitRoadsChange,
+  onTransitStopsChange,
+  initialMode = "view",
 }: MapManagerProps) {
-  const [mode, setMode] = useState<MapMode>("view");
+  const [mode, setMode] = useState<MapMode>(initialMode);
   const [pointType, setPointType] =
     useState<NewPoint["point_type"]>("intersection");
   const [roadType, setRoadType] = useState<NewRoad["road_type"]>("local_road");
@@ -814,6 +830,7 @@ export default function MapManager({
     }
 
     try {
+      if (!onSavePoint) return;
       await onSavePoint({
         name: newPointName,
         latitude: pendingPoint.lat,
@@ -853,6 +870,7 @@ export default function MapManager({
     }
 
     try {
+      if (!onSaveRoad) return;
       await onSaveRoad({
         name: roadName,
         road_type: roadType,
@@ -1112,6 +1130,14 @@ export default function MapManager({
                   onClick={() => switchMode("test_route")}
                 >
                   Route
+                </Button>
+                <Button
+                  size="sm"
+                  color={mode === "transit_route" ? "secondary" : "default"}
+                  variant={mode === "transit_route" ? "solid" : "flat"}
+                  onClick={() => switchMode("transit_route")}
+                >
+                  Transit
                 </Button>
               </div>
             </div>
@@ -1555,6 +1581,82 @@ export default function MapManager({
               </>
             )}
 
+            {/* Transit Route Mode Panel */}
+            {mode === "transit_route" && (
+              <div className="space-y-2">
+                <div
+                  className="p-2 rounded"
+                  style={{ background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.2)" }}
+                >
+                  <p style={{ fontSize: "0.75rem", fontWeight: 600, color: "#7c3aed" }}>
+                    Transit Route Builder
+                  </p>
+                  <p style={{ fontSize: "0.7rem", color: "#6b7280", marginTop: "2px" }}>
+                    Click roads to add/remove from route.
+                    {transitPickupMode === "stops_only" && " Click transit stops to toggle them."}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div
+                    className="p-2 rounded text-center"
+                    style={{ background: "rgba(0,0,0,0.04)" }}
+                  >
+                    <p style={{ fontSize: "0.65rem", color: "#6b7280" }}>Roads</p>
+                    <p style={{ fontWeight: 700, color: "#7c3aed" }}>
+                      {transitSelectedRoadIds.length}
+                    </p>
+                  </div>
+                  <div
+                    className="p-2 rounded text-center"
+                    style={{ background: "rgba(0,0,0,0.04)" }}
+                  >
+                    <p style={{ fontSize: "0.65rem", color: "#6b7280" }}>Stops</p>
+                    <p style={{ fontWeight: 700, color: "#7c3aed" }}>
+                      {transitSelectedStopIds.length}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-1 rounded" style={{ background: transitRouteColor }} />
+                  <span style={{ fontSize: "0.7rem", color: "#374151" }}>Selected road</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-1 rounded" style={{ background: "#94a3b8" }} />
+                  <span style={{ fontSize: "0.7rem", color: "#374151" }}>Unselected road</span>
+                </div>
+                {transitPickupMode === "stops_only" && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ background: "#3b82f6" }} />
+                      <span style={{ fontSize: "0.7rem", color: "#374151" }}>Bus Stop</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ background: "#8b5cf6" }} />
+                      <span style={{ fontSize: "0.7rem", color: "#374151" }}>Bus Terminal</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ background: "#0891b2" }} />
+                      <span style={{ fontSize: "0.7rem", color: "#374151" }}>Pier / Port</span>
+                    </div>
+                  </>
+                )}
+                {(transitSelectedRoadIds.length > 0 || transitSelectedStopIds.length > 0) && onTransitRoadsChange && (
+                  <Button
+                    size="sm"
+                    color="danger"
+                    variant="flat"
+                    onClick={() => {
+                      onTransitRoadsChange([]);
+                      onTransitStopsChange?.([]);
+                    }}
+                    className="w-full"
+                  >
+                    Clear Selection
+                  </Button>
+                )}
+              </div>
+            )}
+
             {/* Legend */}
             <div
               className="pt-3"
@@ -1763,20 +1865,37 @@ export default function MapManager({
         <CenterMapButton />
 
         {/* Existing markers — render as CircleMarker for all point types */}
-        {markers.map((marker, index) => (
+        {markers.map((marker, index) => {
+          const isTransitStop = ["bus_stop", "bus_terminal", "pier"].includes(marker.type);
+          const isTransitMode = mode === "transit_route";
+          const isTransitSelected = marker.id ? transitSelectedStopIds.includes(marker.id) : false;
+          // In transit mode: only show transit-type stops; dim non-selected ones
+          const transitRadius = isTransitSelected ? 11 : 7;
+          const transitFillOpacity = isTransitSelected ? 1.0 : 0.5;
+          const normalRadius = marker.type === "intersection" ? 6 : 8;
+
+          return (
           <CircleMarker
             key={marker.id || `marker-${index}`}
             center={marker.position}
-            radius={marker.type === "intersection" ? 6 : 8}
+            radius={isTransitMode ? transitRadius : normalRadius}
             pathOptions={{
-              color: "#fff",
-              weight: 2,
+              color: isTransitMode && isTransitSelected ? "#fff" : "#fff",
+              weight: isTransitMode ? (isTransitSelected ? 3 : 1.5) : 2,
               fillColor: getCircleMarkerColor(marker.type),
-              fillOpacity: 0.9,
-              interactive: mode === "view",
+              fillOpacity: isTransitMode ? transitFillOpacity : 0.9,
+              interactive: mode === "view" || (isTransitMode && isTransitStop && transitPickupMode === "stops_only"),
             }}
             eventHandlers={{
-              click: (e) => { if (mode !== "view") { L.DomEvent.stopPropagation(e); } },
+              click: (e) => {
+                if (isTransitMode && isTransitStop && transitPickupMode === "stops_only" && marker.id && onTransitStopsChange) {
+                  const cur = new Set(transitSelectedStopIds);
+                  if (cur.has(marker.id)) { cur.delete(marker.id); } else { cur.add(marker.id); }
+                  onTransitStopsChange(Array.from(cur));
+                } else if (mode !== "view") {
+                  L.DomEvent.stopPropagation(e);
+                }
+              },
             }}
           >
             {mode === "view" && <Popup>
@@ -1854,7 +1973,8 @@ export default function MapManager({
               </div>
             </Popup>}
           </CircleMarker>
-        ))}
+          );
+        })}
 
         {/* Destination markers — zoom-aware with image/name display */}
         {destinationMarkers.map((dest) => (
@@ -1873,67 +1993,78 @@ export default function MapManager({
 
         {/* Saved roads from server */}
         {savedRoads.map((road) => {
-          const roadColor = getRoadColor(road.roadType);
+          const isTransitMode = mode === "transit_route";
+          const isTransitSelected = transitSelectedRoadIds.includes(road.id);
+          const roadColor = isTransitMode
+            ? (isTransitSelected ? transitRouteColor : "#94a3b8")
+            : getRoadColor(road.roadType);
+          const roadWeight = isTransitMode
+            ? (isTransitSelected ? 5 : 2)
+            : (road.roadType === "ferry" ? 2 : 3);
+          const roadOpacity = isTransitMode
+            ? (isTransitSelected ? 0.95 : 0.35)
+            : 0.8;
+
           return (
             <React.Fragment key={`saved-road-${road.id}`}>
               <Polyline
                 positions={road.positions}
                 pathOptions={{
                   color: roadColor,
-                  weight: road.roadType === "ferry" ? 2 : 3,
-                  opacity: 0.8,
-                  dashArray: road.roadType === "ferry" ? "8 6" : undefined,
+                  weight: roadWeight,
+                  opacity: roadOpacity,
+                  dashArray: !isTransitMode && road.roadType === "ferry" ? "8 6" : undefined,
                 }}
+                eventHandlers={isTransitMode && onTransitRoadsChange ? {
+                  click: () => {
+                    const cur = new Set(transitSelectedRoadIds);
+                    if (cur.has(road.id)) { cur.delete(road.id); } else { cur.add(road.id); }
+                    onTransitRoadsChange(Array.from(cur));
+                  },
+                } : {}}
               >
-                <Popup>
-                  <div style={{ minWidth: "140px" }}>
-                    <p
-                      style={{
-                        fontWeight: 600,
-                        fontSize: "13px",
-                        margin: "0 0 4px",
-                      }}
-                    >
-                      {road.name}
-                    </p>
-                    <p
-                      style={{
-                        fontSize: "11px",
-                        color: "#6b7280",
-                        margin: "0 0 2px",
-                      }}
-                    >
-                      Type: {road.roadType.replace("_", " ")}
-                    </p>
-                    <p style={{ fontSize: "11px", color: "#6b7280", margin: "0 0 2px" }}>
-                      {road.distance} km &middot; ~{road.estimatedTime} min
-                    </p>
-                    <p style={{ fontSize: "11px", color: "#6b7280", margin: "0 0 8px" }}>
-                      Direction: {road.isBidirectional ? "↔ Two-way" : "→ One-way"}
-                    </p>
-                    {onDeleteRoad && (
-                      <Button
-                        size="sm"
-                        color="danger"
-                        variant="flat"
-                        style={{ fontSize: "11px", minHeight: "24px", height: "24px", padding: "0 8px" }}
-                        onClick={() => {
-                          if (confirm(`Delete road "${road.name}"? This cannot be undone.`)) {
-                            onDeleteRoad(road.id);
-                          }
-                        }}
-                      >
-                        Delete Road
-                      </Button>
-                    )}
-                  </div>
-                </Popup>
+                {!isTransitMode && (
+                  <Popup>
+                    <div style={{ minWidth: "140px" }}>
+                      <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 4px" }}>
+                        {road.name}
+                      </p>
+                      <p style={{ fontSize: "11px", color: "#6b7280", margin: "0 0 2px" }}>
+                        Type: {road.roadType.replace("_", " ")}
+                      </p>
+                      <p style={{ fontSize: "11px", color: "#6b7280", margin: "0 0 2px" }}>
+                        {road.distance} km &middot; ~{road.estimatedTime} min
+                      </p>
+                      <p style={{ fontSize: "11px", color: "#6b7280", margin: "0 0 8px" }}>
+                        Direction: {road.isBidirectional ? "↔ Two-way" : "→ One-way"}
+                      </p>
+                      {onDeleteRoad && (
+                        <Button
+                          size="sm"
+                          color="danger"
+                          variant="flat"
+                          style={{ fontSize: "11px", minHeight: "24px", height: "24px", padding: "0 8px" }}
+                          onClick={() => {
+                            if (confirm(`Delete road "${road.name}"? This cannot be undone.`)) {
+                              onDeleteRoad(road.id);
+                            }
+                          }}
+                        >
+                          Delete Road
+                        </Button>
+                      )}
+                    </div>
+                  </Popup>
+                )}
               </Polyline>
-              <RoadDecorator
-                positions={road.positions}
-                color={roadColor}
-                isBidirectional={road.isBidirectional}
-              />
+              {/* Show direction decorators: in transit mode only for selected roads */}
+              {(!isTransitMode || isTransitSelected) && (
+                <RoadDecorator
+                  positions={road.positions}
+                  color={roadColor}
+                  isBidirectional={road.isBidirectional}
+                />
+              )}
             </React.Fragment>
           );
         })}

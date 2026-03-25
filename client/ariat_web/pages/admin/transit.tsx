@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import AdminLayout from "@/layouts/admin";
 import { apiClient } from "@/lib/api";
@@ -59,9 +59,9 @@ interface Intersection {
   point_type: string;
 }
 
-// ─── Map picker (dynamic — no SSR) ───────────────────────────────────────────
+// ─── Map (dynamic — no SSR) ──────────────────────────────────────────────────
 
-const RouteMapPicker = dynamic(() => import("@/components/TransitRouteMapPicker"), {
+const MapManager = dynamic(() => import("@/components/MapManager"), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-full text-sm" style={{ color: "var(--text-muted)" }}>
@@ -128,7 +128,9 @@ export default function TransitPage() {
 
   // Road data for picker
   const [allRoads, setAllRoads] = useState<Road[]>([]);
-  const [allIntersections, setAllIntersections] = useState<Intersection[]>([]);
+  // Raw GeoJSON for MapManager
+  const [roadsGeojson, setRoadsGeojson] = useState<any>(null);
+  const [intersectionsGeojson, setIntersectionsGeojson] = useState<any>(null);
 
   // ── Fetchers ────────────────────────────────────────────────────────────────
 
@@ -164,24 +166,42 @@ export default function TransitPage() {
   }, []);
 
   const fetchMapData = useCallback(async () => {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
     try {
-      const [roadsRes, intRes] = await Promise.all([
-        apiClient.get<any>(`${API_ENDPOINTS.ROADS_GEOJSON}`),
+      // Roads GeoJSON returns raw FeatureCollection (no { success, data } wrapper)
+      // Use fetch() directly, same as the Map Manager page
+      const [geojson, intRes] = await Promise.all([
+        fetch(`${baseUrl}${API_ENDPOINTS.ROADS_GEOJSON}`).then(r => r.json()),
         apiClient.get<Intersection[]>(API_ENDPOINTS.INTERSECTIONS),
       ]);
-      // apiClient wraps responses in { success, data } — GeoJSON is in .data
-      const geojson = (roadsRes as any).data ?? (roadsRes as any);
+
       if (geojson?.features) {
+        setRoadsGeojson(geojson);
         setAllRoads(geojson.features.map((f: any) => ({
           id: f.properties.id,
           name: f.properties.name,
+          // GeoJSON stores [lng, lat]; Leaflet needs [lat, lng]
           positions: f.geometry.coordinates.map(([lng, lat]: [number, number]) => [lat, lng] as [number, number]),
           roadType: f.properties.road_type ?? "local_road",
           isBidirectional: f.properties.is_bidirectional !== false,
         })));
       }
-      if (intRes.success && intRes.data) setAllIntersections(intRes.data as Intersection[]);
-    } catch { /* non-fatal */ }
+
+      if (intRes.success && intRes.data) {
+        const ints = intRes.data as Intersection[];
+        // Build GeoJSON FeatureCollection for MapManager
+        setIntersectionsGeojson({
+          type: "FeatureCollection",
+          features: ints.map((i) => ({
+            type: "Feature",
+            properties: { id: i.id, name: i.name, point_type: i.point_type },
+            geometry: { type: "Point", coordinates: [i.longitude, i.latitude] },
+          })),
+        });
+      }
+    } catch (e) {
+      console.error("fetchMapData error:", e);
+    }
   }, []);
 
   useEffect(() => {
@@ -642,15 +662,16 @@ export default function TransitPage() {
             </div>
           </div>
           <div className="flex-1 overflow-hidden">
-            <RouteMapPicker
-              roads={allRoads}
-              intersections={allIntersections.filter(i => ["bus_stop", "bus_terminal", "pier"].includes(i.point_type))}
-              selectedRoadIds={routeForm.road_ids}
-              selectedStopIds={routeForm.stop_ids}
-              pickupMode={routeForm.pickup_mode}
-              routeColor={routeForm.color}
-              onRoadsChange={(ids) => setRouteForm(p => ({ ...p, road_ids: ids }))}
-              onStopsChange={(ids) => setRouteForm(p => ({ ...p, stop_ids: ids }))}
+            <MapManager
+              geojsonData={intersectionsGeojson}
+              roadsGeojsonData={roadsGeojson}
+              initialMode="transit_route"
+              transitSelectedRoadIds={routeForm.road_ids}
+              transitSelectedStopIds={routeForm.stop_ids}
+              transitPickupMode={routeForm.pickup_mode}
+              transitRouteColor={routeForm.color}
+              onTransitRoadsChange={(ids) => setRouteForm(p => ({ ...p, road_ids: ids }))}
+              onTransitStopsChange={(ids) => setRouteForm(p => ({ ...p, stop_ids: ids }))}
             />
           </div>
         </div>

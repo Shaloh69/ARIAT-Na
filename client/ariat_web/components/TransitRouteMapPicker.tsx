@@ -64,6 +64,8 @@ export default function TransitRouteMapPicker({
   const selectedRoadsRef = useRef<Set<string>>(new Set(selectedRoadIds));
   const selectedStopsRef = useRef<Set<string>>(new Set(selectedStopIds));
 
+  const [mapReady, setMapReady] = useState(false);
+
   // ── Init map ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
@@ -82,17 +84,19 @@ export default function TransitRouteMapPicker({
     }).addTo(map);
 
     mapRef.current = map;
+    setMapReady(true);
 
     return () => {
       map.remove();
       mapRef.current = null;
+      setMapReady(false);
     };
   }, []);
 
   // ── Draw / redraw roads whenever road list or selection changes ───────────
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !mapReady) return;
 
     selectedRoadsRef.current = new Set(selectedRoadIds);
 
@@ -158,12 +162,12 @@ export default function TransitRouteMapPicker({
         }
       }
     });
-  }, [roads, selectedRoadIds, routeColor, onRoadsChange]);
+  }, [roads, selectedRoadIds, routeColor, onRoadsChange, mapReady]);
 
   // ── Draw / redraw stops ───────────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !mapReady) return;
 
     selectedStopsRef.current = new Set(selectedStopIds);
 
@@ -207,7 +211,7 @@ export default function TransitRouteMapPicker({
         stopLayersRef.current.set(stop.id, marker);
       }
     });
-  }, [intersections, selectedStopIds, pickupMode, onStopsChange]);
+  }, [intersections, selectedStopIds, pickupMode, onStopsChange, mapReady]);
 
   // ── Legend ────────────────────────────────────────────────────────────────
   return (
