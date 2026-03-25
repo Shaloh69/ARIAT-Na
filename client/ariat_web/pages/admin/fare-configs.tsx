@@ -19,6 +19,17 @@ import { modalClassNames } from "@/lib/modal-styles";
 import { apiClient } from "@/lib/api";
 import { API_ENDPOINTS } from "@/lib/constants";
 
+type RoutingBehavior = "walk" | "private" | "direct_fare" | "corridor_stops" | "corridor_anywhere" | "ferry";
+
+const ROUTING_BEHAVIOR_OPTIONS: { value: RoutingBehavior; label: string; description: string }[] = [
+  { value: "walk",             label: "Walk",              description: "On foot — no fare" },
+  { value: "private",          label: "Private Vehicle",   description: "Own car / van / motorbike — no fare" },
+  { value: "direct_fare",      label: "Direct Fare",       description: "Door-to-door with fare (taxi, Grab)" },
+  { value: "corridor_stops",   label: "Corridor — Stops Only", description: "Fixed route; board at stops/terminals (bus, jeepney)" },
+  { value: "corridor_anywhere",label: "Corridor — Anywhere",   description: "Fixed route; flag from roadside (tricycle, habal-habal)" },
+  { value: "ferry",            label: "Ferry",             description: "Pier-to-pier via sea" },
+];
+
 interface FareConfig {
   id: string;
   transport_type: string;
@@ -28,6 +39,7 @@ interface FareConfig {
   per_km_rate: number;
   minimum_fare: number;
   peak_hour_multiplier: number;
+  routing_behavior: RoutingBehavior;
   is_active: boolean;
   display_order: number;
   created_at: string;
@@ -57,6 +69,7 @@ export default function FareConfigsPage() {
     per_km_rate: "0",
     minimum_fare: "0",
     peak_hour_multiplier: "1.0",
+    routing_behavior: "direct_fare" as RoutingBehavior,
     is_active: true,
     display_order: "0",
   });
@@ -90,6 +103,7 @@ export default function FareConfigsPage() {
         per_km_rate: config.per_km_rate.toString(),
         minimum_fare: config.minimum_fare.toString(),
         peak_hour_multiplier: config.peak_hour_multiplier.toString(),
+        routing_behavior: config.routing_behavior ?? "direct_fare",
         is_active: config.is_active,
         display_order: config.display_order.toString(),
       });
@@ -103,6 +117,7 @@ export default function FareConfigsPage() {
         per_km_rate: "0",
         minimum_fare: "0",
         peak_hour_multiplier: "1.0",
+        routing_behavior: "direct_fare",
         is_active: true,
         display_order: "0",
       });
@@ -129,6 +144,7 @@ export default function FareConfigsPage() {
       per_km_rate: parseFloat(formData.per_km_rate) || 0,
       minimum_fare: parseFloat(formData.minimum_fare) || 0,
       peak_hour_multiplier: parseFloat(formData.peak_hour_multiplier) || 1.0,
+      routing_behavior: formData.routing_behavior,
       is_active: formData.is_active,
       display_order: parseInt(formData.display_order) || 0,
     };
@@ -237,6 +253,7 @@ export default function FareConfigsPage() {
                 <tr className="border-b border-gray-200 dark:border-gray-700">
                   <th className="text-left py-3 px-4 font-semibold text-gray-600 dark:text-gray-400">Mode</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-600 dark:text-gray-400">Display Name</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-600 dark:text-gray-400">Routing</th>
                   <th className="text-right py-3 px-4 font-semibold text-gray-600 dark:text-gray-400">Base Fare</th>
                   <th className="text-right py-3 px-4 font-semibold text-gray-600 dark:text-gray-400">Per KM</th>
                   <th className="text-right py-3 px-4 font-semibold text-gray-600 dark:text-gray-400">Min Fare</th>
@@ -258,6 +275,11 @@ export default function FareConfigsPage() {
                       </code>
                     </td>
                     <td className="py-3 px-4 font-medium">{config.display_name}</td>
+                    <td className="py-3 px-4">
+                      <Chip size="sm" variant="flat" color="secondary">
+                        {ROUTING_BEHAVIOR_OPTIONS.find((o) => o.value === config.routing_behavior)?.label ?? config.routing_behavior ?? "—"}
+                      </Chip>
+                    </td>
                     <td className="py-3 px-4 text-right font-mono">₱{Number(config.base_fare).toFixed(2)}</td>
                     <td className="py-3 px-4 text-right font-mono">₱{Number(config.per_km_rate).toFixed(2)}</td>
                     <td className="py-3 px-4 text-right font-mono">₱{Number(config.minimum_fare).toFixed(2)}</td>
@@ -392,6 +414,29 @@ export default function FareConfigsPage() {
                 onChange={(e) => setFormData({ ...formData, display_order: e.target.value })}
                 description="Lower numbers appear first in lists"
               />
+              <div>
+                <p className="text-sm font-medium mb-2">Routing Behavior</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                  Controls how this transport type routes passengers — determines which routing engine function is used.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {ROUTING_BEHAVIOR_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, routing_behavior: opt.value })}
+                      className={`text-left px-3 py-2.5 rounded-lg border transition-colors ${
+                        formData.routing_behavior === opt.value
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500"
+                      }`}
+                    >
+                      <div className="text-sm font-medium">{opt.label}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{opt.description}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
               <Switch
                 isSelected={formData.is_active}
                 onValueChange={(value) => setFormData({ ...formData, is_active: value })}

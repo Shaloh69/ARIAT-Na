@@ -75,7 +75,10 @@
       "Bash(head -10 grep -n \"limit\\\\|axios\\\\|apiClient\\\\|fetch\" \"C:/Projects/Thesis/2026/AIRAT-NA/client/ariat_web/pages/admin/dashboard.tsx\")",
       "Bash(head -10 grep -n \"limit\\\\|get\\(\" \"C:/Projects/Thesis/2026/AIRAT-NA/server/src/routes/road.routes.ts\")",
       "Read(//c/Projects/Thesis/2026/AIRAT-NA/server/src/services/**)",
-      "Read(//d/Projects-Shem/Thesis/2026/AIRAT-NA/server/src/services/**)"
+      "Read(//d/Projects-Shem/Thesis/2026/AIRAT-NA/server/src/services/**)",
+      "Bash(ls C:/Projects/Thesis/2026/AIRAT-NA/server/src/database/migrations/ grep -n \"intersections\\\\|point_type\\\\|bus_stop\\\\|bus_terminal\\\\|pier\" C:/Projects/Thesis/2026/AIRAT-NA/server/src/database/migrations/001_cebu_navigation.sql)",
+      "Read(//c/Projects/Thesis/2026/AIRAT-NA/server/src/**)",
+      "Read(//d/Projects-Shem/Thesis/2026/AIRAT-NA/server/src/**)"
     ],
     "additionalDirectories": [
       "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\client\\ariat_web\\pages\\admin",
@@ -88,7 +91,15 @@
       "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\server\\src\\utils",
       "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\server\\src\\utils",
       "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\server\\src\\services",
-      "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\server\\src\\services"
+      "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\server\\src\\services",
+      "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\server\\src\\database\\migrations",
+      "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\server\\src\\database\\migrations",
+      "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\server\\src\\controllers",
+      "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\server\\src\\controllers",
+      "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\server\\src\\routes",
+      "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\server\\src\\routes",
+      "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\server\\src",
+      "D:\\Projects-Shem\\Thesis\\2026\\AIRAT-NA\\server\\src"
     ]
   }
 }

@@ -32,6 +32,10 @@ export const API_ENDPOINTS = {
   // Fare Configs
   FARE_CONFIGS: "/fare-configs",
 
+  // Transit (stops + routes)
+  TRANSIT_STOPS: "/transit/stops",
+  TRANSIT_ROUTES: "/transit/routes",
+
   // Admin Profile
   ADMIN_PROFILE: "/admin/profile",
   ADMIN_PROFILE_IMAGE: "/admin/profile/image",

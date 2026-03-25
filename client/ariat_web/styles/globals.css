@@ -65,12 +65,49 @@
 
 /* ===== Base Styles ===== */
 
+/* Dark base — animated gradient floats above root canvas (z-index: -2 fix) */
+html {
+  background: #080818;
+}
+
+/* Light mode — soft lavender-white base */
+html.light {
+  background: #eef0f9;
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: var(--text);
   background: transparent !important;
   min-height: 100vh;
+}
+
+/* ===== LIGHT MODE — CSS Variable Overrides ===== */
+
+html.light {
+  /* Surfaces */
+  --bg-0: rgba(255, 255, 255, 0.50);
+  --bg-1: rgba(255, 255, 255, 0.70);
+  --bg-2: rgba(255, 255, 255, 0.88);
+  --bg-3: rgba(245, 246, 252, 0.85);
+
+  /* Text — dark slate */
+  --text-strong: #0f172a;
+  --text: #1e293b;
+  --text-muted: #475569;
+  --text-faint: #64748b;
+
+  /* Borders — dark at low opacity */
+  --border: rgba(15, 23, 42, 0.10);
+  --border-strong: rgba(15, 23, 42, 0.20);
+
+  /* Shadows */
+  --shadow: 0 12px 30px rgba(15, 23, 42, 0.10);
+  --shadow-soft: 0 8px 18px rgba(15, 23, 42, 0.07);
+
+  /* Keep brand reds same */
+  --glass-blur: blur(20px);
 }
 
 /* ===== Animated Background ===== */
@@ -650,7 +687,7 @@ body {
   transform: scale(1.05);
 }
 
-/* ===== Custom Scrollbar ===== */
+/* ===== Custom Scrollbar (dark mode) ===== */
 
 ::-webkit-scrollbar {
   width: 10px;
@@ -672,4 +709,265 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
   background-clip: content-box;
+}
+
+/* =====================================================================
+   LIGHT MODE — html.light overrides
+   next-themes sets class="light" on <html> for light mode
+   ===================================================================== */
+
+/* ── Animated gradient: much softer on light background ── */
+html.light .bg-animated {
+  background:
+    radial-gradient(circle at 15% 25%, rgba(244, 63, 94, 0.18), transparent 35%),
+    radial-gradient(circle at 85% 20%, rgba(37, 99, 235, 0.14), transparent 40%),
+    radial-gradient(circle at 50% 75%, rgba(147, 51, 234, 0.16), transparent 45%),
+    radial-gradient(circle at 25% 80%, rgba(8, 145, 178, 0.12), transparent 40%),
+    radial-gradient(circle at 90% 65%, rgba(251, 113, 133, 0.14), transparent 45%),
+    radial-gradient(circle at 60% 40%, rgba(168, 85, 247, 0.10), transparent 40%);
+  filter: blur(80px);
+}
+
+html.light .bg-noise {
+  opacity: 0.04;
+}
+
+/* ── Glass layout panels ── */
+html.light .glass-sidebar {
+  background: rgba(255, 255, 255, 0.82) !important;
+  border-right: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+
+html.light .glass-topbar {
+  background: rgba(255, 255, 255, 0.82) !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+
+html.light .glass-card,
+html.light .glass-card--raised {
+  background: rgba(255, 255, 255, 0.75) !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+/* ── Nav items ── */
+html.light .glass-nav-item:hover {
+  background: rgba(244, 63, 94, 0.07) !important;
+}
+
+/* active stays red — already uses --red-600, looks correct on both themes */
+
+/* ── HeroUI Cards ── */
+html.light [data-slot="base"][class*="heroui-card"] {
+  background: rgba(255, 255, 255, 0.78) !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08) !important;
+}
+
+/* ── HeroUI Inputs ── */
+html.light [data-slot="input-wrapper"],
+html.light [data-slot="input"] {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border: 1px solid rgba(15, 23, 42, 0.14) !important;
+  color: #0f172a !important;
+}
+
+html.light [data-slot="input-wrapper"] input,
+html.light [data-slot="inner-wrapper"] input,
+html.light input[class*="heroui"],
+html.light [data-slot="input-wrapper"] textarea {
+  color: #0f172a !important;
+}
+
+html.light [data-slot="input-wrapper"] [data-slot="label"],
+html.light [data-slot="input-wrapper"] [data-slot="description"],
+html.light [data-slot="input-wrapper"] [data-slot="helper-wrapper"] {
+  color: #475569 !important;
+}
+
+/* ── HeroUI Select trigger ── */
+html.light [data-slot="trigger"] {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border: 1px solid rgba(15, 23, 42, 0.14) !important;
+}
+
+html.light [data-slot="trigger"] [data-slot="value"],
+html.light [data-slot="trigger"] [data-slot="label"],
+html.light [data-slot="trigger"] [data-slot="selectorIcon"],
+html.light [data-slot="trigger"] [data-slot="placeholder"] {
+  color: #0f172a !important;
+}
+
+/* ── HeroUI Select / Dropdown popover ── */
+html.light [data-slot="popover"] {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.14) !important;
+}
+
+html.light [data-slot="listbox-wrapper"],
+html.light [data-slot="listbox"] {
+  background: transparent !important;
+}
+
+html.light [data-slot="popover"] [role="option"],
+html.light [data-slot="popover"] [data-slot="title"],
+html.light [data-slot="popover"] li,
+html.light [data-slot="popover"] li span {
+  color: #1e293b !important;
+  background: transparent !important;
+}
+
+html.light [data-slot="popover"] [role="option"]:hover,
+html.light [data-slot="popover"] [role="option"][data-hover="true"],
+html.light [data-slot="popover"] [role="option"][data-focus="true"] {
+  background: rgba(15, 23, 42, 0.05) !important;
+}
+
+html.light [data-slot="popover"] [role="option"][data-selected="true"],
+html.light [data-slot="popover"] [role="option"][aria-selected="true"] {
+  background: rgba(244, 63, 94, 0.10) !important;
+  color: #be123c !important;
+}
+
+/* ── HeroUI Buttons ── */
+html.light [data-slot="base"][class*="heroui-button"][data-color="default"],
+html.light [data-slot="base"][class*="heroui-button"][data-variant="flat"][data-color="default"] {
+  background: rgba(248, 249, 252, 0.90) !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(15, 23, 42, 0.15) !important;
+  backdrop-filter: none !important;
+}
+
+html.light [data-slot="base"][class*="heroui-button"][data-color="danger"] {
+  background: rgba(220, 38, 38, 0.08) !important;
+  color: #dc2626 !important;
+}
+
+html.light [data-slot="base"][class*="heroui-button"][data-color="danger"]:hover {
+  background: rgba(220, 38, 38, 0.14) !important;
+}
+
+html.light [data-slot="base"][class*="heroui-button"][data-color="warning"][data-variant="flat"] {
+  background: rgba(245, 158, 11, 0.10) !important;
+  color: #b45309 !important;
+  border: 1px solid rgba(245, 158, 11, 0.25) !important;
+}
+
+/* ── HeroUI Switch ── */
+html.light [data-slot="wrapper"][class*="heroui-switch"] {
+  background: rgba(15, 23, 42, 0.18) !important;
+}
+
+/* ── Modals — override the hardcoded dark slate in modalClassNames ── */
+html.light [role="dialog"] > [data-slot="base"] {
+  background: rgba(250, 251, 255, 0.97) !important;
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18) !important;
+}
+
+html.light [role="dialog"] [data-slot="header"],
+html.light [role="dialog"] [data-slot="body"],
+html.light [role="dialog"] [data-slot="footer"] {
+  background: transparent !important;
+  border-color: rgba(15, 23, 42, 0.10) !important;
+}
+
+html.light [role="dialog"] [data-slot="header"] * {
+  color: #0f172a !important;
+}
+
+html.light [role="dialog"] [data-slot="input-wrapper"],
+html.light [role="dialog"] [data-slot="input"] {
+  background: rgba(248, 249, 252, 0.95) !important;
+  border: 1px solid rgba(15, 23, 42, 0.15) !important;
+}
+
+html.light [role="dialog"] [data-slot="inner-wrapper"] input,
+html.light [role="dialog"] input,
+html.light [role="dialog"] textarea {
+  color: #0f172a !important;
+}
+
+html.light [role="dialog"] input::placeholder,
+html.light [role="dialog"] textarea::placeholder {
+  color: rgba(71, 85, 105, 0.65) !important;
+}
+
+html.light [role="dialog"] [data-slot="body"] label,
+html.light [role="dialog"] [data-slot="body"] p,
+html.light [role="dialog"] [data-slot="body"] span,
+html.light [role="dialog"] [data-slot="body"] h4,
+html.light [role="dialog"] [data-slot="body"] div {
+  color: #1e293b !important;
+}
+
+html.light [role="dialog"] [data-slot="close-button"] {
+  color: rgba(15, 23, 42, 0.60) !important;
+}
+
+html.light [role="dialog"] [data-slot="close-button"]:hover {
+  color: #0f172a !important;
+  background: rgba(15, 23, 42, 0.07) !important;
+}
+
+/* ── Modal backdrop ── */
+html.light [data-slot="backdrop"] {
+  background: rgba(15, 23, 42, 0.40) !important;
+}
+
+/* ── Utility overrides ── */
+html.light .bg-white,
+html.light .dark\:bg-gray-950 {
+  background: rgba(255, 255, 255, 0.82) !important;
+}
+
+html.light .bg-gray-50,
+html.light .dark\:bg-gray-900 {
+  background: rgba(248, 249, 252, 0.70) !important;
+}
+
+html.light .border-gray-200,
+html.light .dark\:border-gray-800 {
+  border-color: rgba(15, 23, 42, 0.10) !important;
+}
+
+html.light .text-gray-600,
+html.light .dark\:text-gray-400 {
+  color: #475569 !important;
+}
+
+html.light .text-gray-500 {
+  color: #475569 !important;
+}
+
+html.light .text-gray-700,
+html.light .dark\:text-gray-300 {
+  color: #334155 !important;
+}
+
+/* Table hover rows */
+html.light tr.border-b:hover,
+html.light .hover\:bg-gray-50:hover {
+  background: rgba(248, 249, 252, 0.80) !important;
+}
+
+/* Chip adjustments */
+html.light [data-slot="base"][class*="heroui-chip"] {
+  color: #1e293b !important;
+}
+
+/* ── Scrollbar (light mode) ── */
+html.light ::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.15);
+  background-clip: content-box;
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.28);
+  background-clip: content-box;
+}
+
+/* ── Transit route picker modal backdrop ── */
+html.light .route-editor-overlay {
+  background: rgba(248, 249, 252, 0.97) !important;
 }

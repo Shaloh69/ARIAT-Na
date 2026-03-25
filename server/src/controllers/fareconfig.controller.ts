@@ -70,6 +70,7 @@ export const createFareConfig = async (
     per_km_rate = 0,
     minimum_fare = 0,
     peak_hour_multiplier = 1.0,
+    routing_behavior = 'direct_fare',
     is_active = true,
     display_order = 0,
   } = req.body;
@@ -78,12 +79,17 @@ export const createFareConfig = async (
     throw new AppError('transport_type and display_name are required', 400);
   }
 
+  const validBehaviors = ['walk', 'private', 'direct_fare', 'corridor_stops', 'corridor_anywhere', 'ferry'];
+  if (!validBehaviors.includes(routing_behavior)) {
+    throw new AppError(`routing_behavior must be one of: ${validBehaviors.join(', ')}`, 400);
+  }
+
   const id = uuidv4();
 
   await pool.execute(
     `INSERT INTO fare_configs
-      (id, transport_type, display_name, description, base_fare, per_km_rate, minimum_fare, peak_hour_multiplier, is_active, display_order)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, transport_type, display_name, description, base_fare, per_km_rate, minimum_fare, peak_hour_multiplier, routing_behavior, is_active, display_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       transport_type,
@@ -93,6 +99,7 @@ export const createFareConfig = async (
       per_km_rate,
       minimum_fare,
       peak_hour_multiplier,
+      routing_behavior,
       is_active,
       display_order,
     ]
@@ -129,6 +136,7 @@ export const updateFareConfig = async (
     'per_km_rate',
     'minimum_fare',
     'peak_hour_multiplier',
+    'routing_behavior',
     'is_active',
     'display_order',
   ];

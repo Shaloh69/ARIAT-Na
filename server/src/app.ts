@@ -25,6 +25,7 @@ import aiRoutes from './routes/ai.routes';
 import clusterRoutes from './routes/cluster.routes';
 import guideRoutes from './routes/guide.routes';
 import fareConfigRoutes from './routes/fareconfig.routes';
+import transitRoutes from './routes/transit.routes';
 
 // Create Express application
 const app: Application = express();
@@ -100,6 +101,7 @@ app.use(`${apiPrefix}/ai`, aiRoutes);
 app.use(`${apiPrefix}/clusters`, clusterRoutes);
 app.use(`${apiPrefix}/guides`, guideRoutes);
 app.use(`${apiPrefix}/fare-configs`, fareConfigRoutes);
+app.use(`${apiPrefix}/transit`, transitRoutes);
 
 // =====================================================
 // ERROR HANDLING

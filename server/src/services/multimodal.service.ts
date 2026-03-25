@@ -53,6 +53,7 @@ interface FareConfig {
   per_km_rate: number;
   minimum_fare: number;
   peak_hour_multiplier: number;
+  routing_behavior: 'walk' | 'private' | 'direct_fare' | 'corridor_stops' | 'corridor_anywhere' | 'ferry';
 }
 
 interface TransitStop {
@@ -70,7 +71,7 @@ interface TransitStop {
 /** Load all active fare configs into a lookup map. */
 async function loadFareConfigs(): Promise<Map<string, FareConfig>> {
   const [rows]: any = await pool.execute(
-    'SELECT transport_type, display_name, base_fare, per_km_rate, minimum_fare, peak_hour_multiplier FROM fare_configs WHERE is_active = TRUE'
+    'SELECT transport_type, display_name, base_fare, per_km_rate, minimum_fare, peak_hour_multiplier, routing_behavior FROM fare_configs WHERE is_active = TRUE'
   );
   const map = new Map<string, FareConfig>();
   for (const row of rows) {
@@ -232,135 +233,145 @@ async function routePrivateCar(
   };
 }
 
-async function routeTaxi(
+/**
+ * routeDirectFare — generic door-to-door with fare (taxi, Grab, any new type).
+ * Works for any transport_type that has a fare config with routing_behavior = 'direct_fare'.
+ */
+async function routeDirectFare(
   startLat: number, startLon: number, endLat: number, endLon: number,
+  transportType: string,
   fares: Map<string, FareConfig>
 ): Promise<MultiModalRoute> {
-  // Compute rough distance first for fare estimate
+  const fc = fares.get(transportType);
+  const displayName = fc?.display_name ?? transportType;
   const roughDist = haversine(startLat, startLon, endLat, endLon);
-  const fare = calculateFare(fares, 'taxi', roughDist);
+  const roughFare = calculateFare(fares, transportType, roughDist);
+
   const leg = await buildLeg(
     startLat, startLon, 'Starting Point', undefined,
     endLat, endLon, 'Destination', undefined,
-    'taxi', fare,
-    'Take a taxi / Grab to your destination',
+    transportType as TransportLeg['mode'],
+    roughFare,
+    `Take a ${displayName} to your destination`,
     'time'
   );
-  // Recalculate fare with actual road distance
-  const actualFare = calculateFare(fares, 'taxi', leg.distance);
-  leg.fare = actualFare;
+  leg.fare = calculateFare(fares, transportType, leg.distance);
+
   return {
     legs: [leg],
     totalDistance: leg.distance,
     totalDuration: leg.duration,
-    totalFare: actualFare,
-    summary: 'Taxi',
+    totalFare: leg.fare,
+    summary: displayName,
   };
 }
 
-async function routeHabalHabal(
+/**
+ * routeCorridor — generic fixed-route transit for any corridor-based transport type.
+ * Covers both 'corridor_stops' (board only at stops) and 'corridor_anywhere' (flag from road).
+ * Works for jeepney, bus, bus_ac, tricycle, habal_habal, and any new type added via fare config.
+ */
+async function routeCorridor(
   startLat: number, startLon: number, endLat: number, endLon: number,
-  fares: Map<string, FareConfig>
-): Promise<MultiModalRoute> {
-  const roughDist = haversine(startLat, startLon, endLat, endLon);
-  const fare = calculateFare(fares, 'habal_habal', roughDist);
-  const leg = await buildLeg(
-    startLat, startLon, 'Starting Point', undefined,
-    endLat, endLon, 'Destination', undefined,
-    'habal_habal', fare,
-    'Ride a Habal-Habal (motorcycle taxi) to your destination',
-    'distance'
-  );
-  const actualFare = calculateFare(fares, 'habal_habal', leg.distance);
-  leg.fare = actualFare;
-  return {
-    legs: [leg],
-    totalDistance: leg.distance,
-    totalDuration: leg.duration,
-    totalFare: actualFare,
-    summary: 'Habal-Habal',
-  };
-}
-
-async function routeBusCommute(
-  startLat: number, startLon: number, endLat: number, endLon: number,
+  transportType: string,
+  pickupMode: 'stops_only' | 'anywhere',
   fares: Map<string, FareConfig>
 ): Promise<MultiModalRoute> {
   const warnings: string[] = [];
   const legs: TransportLeg[] = [];
+  const fc = fares.get(transportType);
+  const displayName = fc?.display_name ?? transportType;
 
-  // 1. Find nearest bus stops to start and end
-  const startStop = await findNearestBusStop(startLat, startLon, 2.0);
-  const endStop   = await findNearestBusStop(endLat, endLon, 2.0);
+  // 1. Find matching transit route for this transport type
+  const transitRoutes = await loadTransitRoutes(transportType);
+  const matched = await findMatchingTransitRoute(transitRoutes, startLat, startLon, endLat, endLon);
 
-  if (!startStop) {
-    warnings.push('No bus stop found within 2 km of start — routing by taxi instead');
-    return { ...(await routeTaxi(startLat, startLon, endLat, endLon, fares)), warnings };
+  let boardStop: TransitStop | null = null;
+  let alightStop: TransitStop | null = null;
+
+  if (matched) {
+    // Use the matched route's stops or road intersections
+    const effectivePickup = matched.pickup_mode; // route-level setting overrides default
+    if (effectivePickup === 'anywhere') {
+      const ints = await loadRouteIntersections(matched.road_ids);
+      boardStop  = ints.reduce<TransitStop | null>((best, i) =>
+        !best || haversine(startLat, startLon, i.lat, i.lon) < haversine(startLat, startLon, best.lat, best.lon) ? i : best, null);
+      alightStop = ints.reduce<TransitStop | null>((best, i) =>
+        !best || haversine(endLat, endLon, i.lat, i.lon) < haversine(endLat, endLon, best.lat, best.lon) ? i : best, null);
+    } else {
+      boardStop  = await nearestStopOnRoute(startLat, startLon, matched);
+      alightStop = await nearestStopOnRoute(endLat,   endLon,   matched);
+    }
+    if (!boardStop)  boardStop  = await findNearestBusStop(startLat, startLon, 2.0);
+    if (!alightStop) alightStop = await findNearestBusStop(endLat,   endLon,   2.0);
+    if (matched) warnings.push(`Using route: ${matched.route_name}`);
+  } else if (pickupMode === 'stops_only') {
+    // No matched route — fall back to nearest bus stop globally
+    boardStop  = await findNearestBusStop(startLat, startLon, 2.0);
+    alightStop = await findNearestBusStop(endLat,   endLon,   2.0);
   }
-  if (!endStop) {
-    warnings.push('No bus stop found within 2 km of destination — routing by taxi instead');
-    return { ...(await routeTaxi(startLat, startLon, endLat, endLon, fares)), warnings };
+
+  // No stops found at all — fall back to direct fare
+  if (!boardStop || !alightStop) {
+    warnings.push(`No ${displayName} stop found near origin or destination — routing as direct fare`);
+    return { ...(await routeDirectFare(startLat, startLon, endLat, endLon, transportType, fares)), warnings };
   }
 
-  // Degenerate: same stop for start and end — use tricycle directly
-  if (startStop.id === endStop.id) {
-    const dist = haversine(startLat, startLon, endLat, endLon);
-    const fare = calculateFare(fares, 'tricycle', dist);
+  // Same stop — short trip, route directly
+  if (boardStop.id === alightStop.id) {
     const leg = await buildLeg(
       startLat, startLon, 'Starting Point', undefined,
       endLat, endLon, 'Destination', undefined,
-      'tricycle', fare, 'Ride a tricycle to your destination'
+      transportType as TransportLeg['mode'],
+      calculateFare(fares, transportType, haversine(startLat, startLon, endLat, endLon)),
+      `Ride a ${displayName} to your destination`
     );
-    leg.fare = calculateFare(fares, 'tricycle', leg.distance);
+    leg.fare = calculateFare(fares, transportType, leg.distance);
     return {
       legs: [leg],
       totalDistance: leg.distance, totalDuration: leg.duration, totalFare: leg.fare,
-      summary: 'Tricycle', warnings: ['Destination is close — no bus transfer needed'],
+      summary: displayName, warnings: ['Destination is nearby — direct ride'],
     };
   }
 
-  // 2. Leg A — start → nearest bus stop (walk or tricycle)
-  const distToStartStop = haversine(startLat, startLon, startStop.lat, startStop.lon);
-  if (distToStartStop > 5.0) {
-    warnings.push('Nearest bus stop is over 5 km from start — routing by taxi instead');
-    return { ...(await routeTaxi(startLat, startLon, endLat, endLon, fares)), warnings };
+  // Leg A — start → board stop
+  const distA = haversine(startLat, startLon, boardStop.lat, boardStop.lon);
+  if (distA > 5.0) {
+    warnings.push(`Board stop is ${distA.toFixed(1)} km away — routing as direct fare`);
+    return { ...(await routeDirectFare(startLat, startLon, endLat, endLon, transportType, fares)), warnings };
   }
-  const modeA = lastMileMode(distToStartStop);
-  const fareA = modeA === 'walk' ? 0 : calculateFare(fares, 'tricycle', distToStartStop);
+  const modeA = lastMileMode(distA);
   const legA = await buildLeg(
     startLat, startLon, 'Starting Point', undefined,
-    startStop.lat, startStop.lon, startStop.name, startStop.type,
-    modeA, fareA,
-    modeA === 'walk'
-      ? `Walk to ${startStop.name}`
-      : `Ride a tricycle to ${startStop.name}`
+    boardStop.lat, boardStop.lon, boardStop.name, boardStop.type,
+    modeA, modeA === 'walk' ? 0 : calculateFare(fares, 'tricycle', distA),
+    modeA === 'walk' ? `Walk to ${boardStop.name}` : `Ride a tricycle to ${boardStop.name}`
   );
   legA.fare = modeA === 'walk' ? 0 : calculateFare(fares, 'tricycle', legA.distance);
   legs.push(legA);
 
-  // 3. Leg B — bus stop to bus stop
-  const busLeg = await buildLeg(
-    startStop.lat, startStop.lon, startStop.name, startStop.type,
-    endStop.lat, endStop.lon, endStop.name, endStop.type,
-    'bus',
-    calculateFare(fares, 'bus', haversine(startStop.lat, startStop.lon, endStop.lat, endStop.lon)),
-    `Take a bus from ${startStop.name} to ${endStop.name}`,
+  // Leg B — transit leg (A* routes through road graph, respects one-way)
+  const transitLeg = await buildLeg(
+    boardStop.lat, boardStop.lon, boardStop.name, boardStop.type,
+    alightStop.lat, alightStop.lon, alightStop.name, alightStop.type,
+    transportType as TransportLeg['mode'],
+    calculateFare(fares, transportType, haversine(boardStop.lat, boardStop.lon, alightStop.lat, alightStop.lon)),
+    matched
+      ? `${displayName} (${matched.route_name}) from ${boardStop.name} to ${alightStop.name}`
+      : `${displayName} from ${boardStop.name} to ${alightStop.name}`,
     'time'
   );
-  busLeg.fare = calculateFare(fares, 'bus', busLeg.distance);
-  legs.push(busLeg);
+  transitLeg.fare = calculateFare(fares, transportType, transitLeg.distance);
+  legs.push(transitLeg);
 
-  // 4. Leg C — bus stop → destination (walk or tricycle)
-  const distToEnd = haversine(endStop.lat, endStop.lon, endLat, endLon);
-  if (distToEnd > 3.0) {
-    warnings.push(`Destination is ${distToEnd.toFixed(1)} km from nearest bus stop — tricycle required`);
-  }
-  const modeC = lastMileMode(distToEnd);
+  // Leg C — alight stop → destination
+  const distC = haversine(alightStop.lat, alightStop.lon, endLat, endLon);
+  if (distC > 3.0) warnings.push(`Destination is ${distC.toFixed(1)} km from alight stop — tricycle required`);
+  const modeC = lastMileMode(distC);
   const legC = await buildLeg(
-    endStop.lat, endStop.lon, endStop.name, endStop.type,
+    alightStop.lat, alightStop.lon, alightStop.name, alightStop.type,
     endLat, endLon, 'Destination', undefined,
-    modeC,
-    modeC === 'walk' ? 0 : calculateFare(fares, 'tricycle', distToEnd),
+    modeC, modeC === 'walk' ? 0 : calculateFare(fares, 'tricycle', distC),
     modeC === 'walk' ? 'Walk to your destination' : 'Ride a tricycle to your destination'
   );
   legC.fare = modeC === 'walk' ? 0 : calculateFare(fares, 'tricycle', legC.distance);
@@ -368,13 +379,13 @@ async function routeBusCommute(
 
   const totalDistance = legs.reduce((s, l) => s + l.distance, 0);
   const totalDuration = legs.reduce((s, l) => s + l.duration, 0);
-  const totalFare = legs.reduce((s, l) => s + l.fare, 0);
+  const totalFare     = legs.reduce((s, l) => s + l.fare, 0);
 
   return {
     legs,
     totalDistance: Math.round(totalDistance * 100) / 100,
     totalDuration: Math.round(totalDuration),
-    totalFare: Math.round(totalFare * 100) / 100,
+    totalFare:     Math.round(totalFare * 100) / 100,
     summary: buildSummary(legs),
     warnings,
   };
@@ -458,50 +469,190 @@ async function routeFerry(
 }
 
 // ---------------------------------------------------------------------------
-// Main entry point
+// Transit Route matching helpers
+// ---------------------------------------------------------------------------
+
+interface StoredTransitRoute {
+  id: string;
+  fare_config_id: string;
+  route_name: string;
+  transport_type: string;
+  road_ids: string[];   // parsed from JSON
+  stop_ids: string[];   // parsed from JSON — ordered stop intersection IDs
+  pickup_mode: 'anywhere' | 'stops_only';
+  color: string;
+  is_active: boolean;
+}
+
+/** Load active transit routes for a given transport type. */
+async function loadTransitRoutes(transportType: string): Promise<StoredTransitRoute[]> {
+  const [rows]: any = await pool.execute(
+    'SELECT * FROM transit_routes WHERE transport_type = ? AND is_active = TRUE ORDER BY route_name ASC',
+    [transportType]
+  );
+  return rows.map((r: any) => ({
+    ...r,
+    road_ids: typeof r.road_ids === 'string' ? JSON.parse(r.road_ids) : (r.road_ids ?? []),
+    stop_ids: typeof r.stop_ids === 'string' ? JSON.parse(r.stop_ids) : (r.stop_ids ?? []),
+  }));
+}
+
+/**
+ * Load the intersection endpoints for all roads in a transit route.
+ * Used to determine if origin/dest fall "on" the route.
+ */
+async function loadRouteIntersections(roadIds: string[]): Promise<TransitStop[]> {
+  if (roadIds.length === 0) return [];
+  const placeholders = roadIds.map(() => '?').join(', ');
+  // Each road has start_intersection_id / end_intersection_id
+  const [rows]: any = await pool.execute(
+    `SELECT DISTINCT i.id, i.name, i.latitude, i.longitude, i.point_type
+     FROM intersections i
+     JOIN roads r ON (r.start_intersection_id = i.id OR r.end_intersection_id = i.id)
+     WHERE r.id IN (${placeholders})`,
+    roadIds
+  );
+  return rows.map((r: any) => ({
+    id: r.id, name: r.name,
+    lat: r.latitude, lon: r.longitude,
+    type: r.point_type ?? 'intersection',
+  }));
+}
+
+/**
+ * Find the transit route (if any) whose road network covers both origin and dest.
+ * A route "covers" a point if any intersection on its roads is within maxKm of that point.
+ */
+async function findMatchingTransitRoute(
+  routes: StoredTransitRoute[],
+  startLat: number, startLon: number,
+  endLat: number, endLon: number,
+  maxKm = 2.0
+): Promise<StoredTransitRoute | null> {
+  for (const route of routes) {
+    const intersections = await loadRouteIntersections(route.road_ids);
+    if (intersections.length === 0) continue;
+
+    const coversStart = intersections.some(i => haversine(startLat, startLon, i.lat, i.lon) <= maxKm);
+    const coversEnd   = intersections.some(i => haversine(endLat,   endLon,   i.lat, i.lon) <= maxKm);
+
+    if (coversStart && coversEnd) return route;
+  }
+  return null;
+}
+
+/**
+ * From the stops on a transit route, find the nearest stop to a given point.
+ * For stops_only mode — only considers intersections whose IDs are in stop_ids.
+ * Falls back to any transit-type intersection on the route roads if stop_ids is empty.
+ */
+async function nearestStopOnRoute(
+  lat: number, lon: number,
+  route: StoredTransitRoute
+): Promise<TransitStop | null> {
+  const allIntersections = await loadRouteIntersections(route.road_ids);
+
+  // Filter to stops on this route
+  let candidates: TransitStop[];
+  if (route.stop_ids.length > 0) {
+    const stopSet = new Set(route.stop_ids);
+    candidates = allIntersections.filter(i => stopSet.has(i.id));
+  } else {
+    // Fallback: any bus_stop, bus_terminal, or pier on the route roads
+    candidates = allIntersections.filter(i =>
+      ['bus_stop', 'bus_terminal', 'pier'].includes(i.type)
+    );
+  }
+
+  if (candidates.length === 0) return null;
+
+  let nearest: TransitStop | null = null;
+  let minDist = Infinity;
+  for (const c of candidates) {
+    const d = haversine(lat, lon, c.lat, c.lon);
+    if (d < minDist) { minDist = d; nearest = c; }
+  }
+  return nearest;
+}
+
+// ---------------------------------------------------------------------------
+// Main entry point — fully data-driven via routing_behavior on fare_configs
 // ---------------------------------------------------------------------------
 
 /**
  * Calculate a multi-modal route between two GPS coordinates.
- * Each transport mode returns a MultiModalRoute with typed legs and fare estimates.
+ *
+ * Dispatches based on the fare config's routing_behavior field — NOT a hardcoded
+ * switch on transport type. Adding a new fare config with the correct routing_behavior
+ * automatically enables routing for it with zero code changes.
+ *
+ * routing_behavior values:
+ *   walk              — on foot, no fare
+ *   private           — own vehicle, no fare
+ *   direct_fare       — door-to-door with fare (taxi, Grab)
+ *   corridor_stops    — fixed route, board at stops/terminals only
+ *   corridor_anywhere — fixed route, flag from anywhere on the road
+ *   ferry             — pier-to-pier via sea
  */
 export async function calculateMultiModalRoute(
   startLat: number,
   startLon: number,
   endLat: number,
   endLon: number,
-  transportMode: TransportMode,
+  transportMode: string,   // accepts any string — new fare configs work automatically
   optimizeFor: 'distance' | 'time' = 'time'
 ): Promise<MultiModalRoute> {
   const fares = await loadFareConfigs();
+  const fc = fares.get(transportMode);
 
-  switch (transportMode) {
+  // Determine routing behavior: from fare config first, then legacy fallbacks
+  const behavior = fc?.routing_behavior ?? legacyBehavior(transportMode);
+
+  switch (behavior) {
     case 'walk':
       return routeWalk(startLat, startLon, endLat, endLon);
 
-    case 'private_car':
-      return routePrivateCar(startLat, startLon, endLat, endLon, 'private_car');
+    case 'private':
+      return routePrivateCar(startLat, startLon, endLat, endLon, transportMode as any);
 
-    case 'hired_van':
-      return routePrivateCar(startLat, startLon, endLat, endLon, 'hired_van');
+    case 'direct_fare':
+      return routeDirectFare(startLat, startLon, endLat, endLon, transportMode, fares);
 
-    case 'motorbike':
-    case 'habal_habal':
-      return routeHabalHabal(startLat, startLon, endLat, endLon, fares);
+    case 'corridor_stops':
+      return routeCorridor(startLat, startLon, endLat, endLon, transportMode, 'stops_only', fares);
 
-    case 'taxi':
-      return routeTaxi(startLat, startLon, endLat, endLon, fares);
-
-    case 'bus_commute':
-      return routeBusCommute(startLat, startLon, endLat, endLon, fares);
+    case 'corridor_anywhere':
+      return routeCorridor(startLat, startLon, endLat, endLon, transportMode, 'anywhere', fares);
 
     case 'ferry':
       return routeFerry(startLat, startLon, endLat, endLon, fares);
 
-    default:
-      // Unknown mode — fall back to private car with a warning
-      const result = await routePrivateCar(startLat, startLon, endLat, endLon, 'private_car');
-      result.warnings = [`Unknown transport mode '${transportMode}' — defaulted to private car`];
+    default: {
+      const result = await routeDirectFare(startLat, startLon, endLat, endLon, transportMode, fares);
+      result.warnings = [`Unknown routing behavior for '${transportMode}' — defaulted to direct fare`];
       return result;
+    }
   }
+}
+
+/**
+ * Fallback behavior for transport types that predate the routing_behavior column.
+ * Only needed until migration 008 has been applied to the database.
+ */
+function legacyBehavior(transportMode: string): FareConfig['routing_behavior'] {
+  const map: Record<string, FareConfig['routing_behavior']> = {
+    walk:         'walk',
+    private_car:  'private',
+    hired_van:    'private',
+    motorbike:    'private',
+    taxi:         'direct_fare',
+    habal_habal:  'corridor_anywhere',
+    tricycle:     'corridor_anywhere',
+    jeepney:      'corridor_stops',
+    bus:          'corridor_stops',
+    bus_commute:  'corridor_stops',
+    bus_ac:       'corridor_stops',
+    ferry:        'ferry',
+  };
+  return map[transportMode] ?? 'direct_fare';
 }
