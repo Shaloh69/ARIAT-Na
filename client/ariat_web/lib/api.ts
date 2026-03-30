@@ -1,11 +1,13 @@
+import type { ApiResponse } from "@/types/api";
+
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from "axios";
+
 import {
   API_BASE_URL,
   TOKEN_KEY,
   REFRESH_TOKEN_KEY,
   API_ENDPOINTS,
 } from "./constants";
-import type { ApiResponse } from "@/types/api";
 
 class ApiClient {
   private client: AxiosInstance;
@@ -65,6 +67,7 @@ class ApiClient {
 
           try {
             const refreshToken = this.getRefreshToken();
+
             if (!refreshToken) {
               throw new Error("No refresh token");
             }
@@ -120,11 +123,13 @@ class ApiClient {
   // Token management
   getAccessToken(): string | null {
     if (typeof window === "undefined") return null;
+
     return localStorage.getItem(TOKEN_KEY);
   }
 
   getRefreshToken(): string | null {
     if (typeof window === "undefined") return null;
+
     return localStorage.getItem(REFRESH_TOKEN_KEY);
   }
 
@@ -146,6 +151,7 @@ class ApiClient {
     config?: AxiosRequestConfig,
   ): Promise<ApiResponse<T>> {
     const response = await this.client.get(url, config);
+
     return response.data;
   }
 
@@ -155,6 +161,7 @@ class ApiClient {
     config?: AxiosRequestConfig,
   ): Promise<ApiResponse<T>> {
     const response = await this.client.post(url, data, config);
+
     return response.data;
   }
 
@@ -164,6 +171,7 @@ class ApiClient {
     config?: AxiosRequestConfig,
   ): Promise<ApiResponse<T>> {
     const response = await this.client.put(url, data, config);
+
     return response.data;
   }
 
@@ -172,6 +180,7 @@ class ApiClient {
     config?: AxiosRequestConfig,
   ): Promise<ApiResponse<T>> {
     const response = await this.client.delete(url, config);
+
     return response.data;
   }
 
@@ -181,6 +190,7 @@ class ApiClient {
     config?: AxiosRequestConfig,
   ): Promise<ApiResponse<T>> {
     const response = await this.client.patch(url, data, config);
+
     return response.data;
   }
 }

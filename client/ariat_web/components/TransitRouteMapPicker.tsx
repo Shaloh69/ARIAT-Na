@@ -8,7 +8,7 @@
  * - One-way roads show a directional indicator; bidirectional roads are blue when selected.
  */
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 

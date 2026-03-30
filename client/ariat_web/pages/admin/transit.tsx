@@ -645,6 +645,7 @@ export default function TransitPage() {
         <div
           className="fixed inset-0 z-[9999] flex flex-col"
           style={{ background: "rgba(2,6,23,0.97)" }}
+          onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between px-6 py-3 border-b" style={{ borderColor: "var(--border)" }}>
             <div>

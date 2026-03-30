@@ -41,6 +41,10 @@ export const API_ENDPOINTS = {
   ADMIN_PROFILE_IMAGE: "/admin/profile/image",
   ADMIN_CHANGE_PASSWORD: "/admin/profile/password",
 
+  // Clusters & Guides (public)
+  CLUSTERS: "/clusters",
+  GUIDES: "/guides",
+
   // Uploads
   UPLOAD_IMAGE: "/upload/image",
   UPLOAD_IMAGES: "/upload/images",

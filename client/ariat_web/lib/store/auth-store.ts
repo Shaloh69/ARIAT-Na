@@ -1,7 +1,9 @@
+import type { Admin, LoginCredentials } from "@/types/api";
+
 import { create } from "zustand";
+
 import { apiClient } from "../api";
 import { API_ENDPOINTS } from "../constants";
-import type { Admin, LoginCredentials } from "@/types/api";
 
 interface AuthState {
   admin: Admin | null;
@@ -33,6 +35,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       if (response.success && response.data) {
         const { admin, accessToken, refreshToken } = response.data;
+
         apiClient.setTokens(accessToken, refreshToken);
         set({
           admin,
@@ -75,11 +78,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     try {
       const refreshToken = apiClient.getRefreshToken();
+
       if (refreshToken) {
         await apiClient.post(API_ENDPOINTS.LOGOUT, { refreshToken });
       }
-    } catch (error) {
-      console.error("Logout error:", error);
+    } catch {
+      // ignore logout errors
     } finally {
       apiClient.clearTokens();
       set({
@@ -92,14 +96,17 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   fetchAdminProfile: async () => {
     const token = apiClient.getAccessToken();
+
     if (!token) {
       set({ isAuthenticated: false, admin: null });
+
       return;
     }
 
     set({ isLoading: true });
     try {
       const response = await apiClient.get<Admin>(API_ENDPOINTS.ADMIN_ME);
+
       if (response.success && response.data) {
         set({
           admin: response.data,
@@ -114,7 +121,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           isLoading: false,
         });
       }
-    } catch (error) {
+    } catch {
       apiClient.clearTokens();
       set({
         admin: null,

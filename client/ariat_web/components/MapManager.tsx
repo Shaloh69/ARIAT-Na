@@ -2209,10 +2209,10 @@ export default function MapManager({
 
       {/* Add Point Modal */}
       <Modal
-        isOpen={isModalOpen}
-        onClose={handleCancelPoint}
         classNames={modalClassNames}
         isDismissable={false}
+        isOpen={isModalOpen}
+        onClose={handleCancelPoint}
       >
         <ModalContent>
           <ModalHeader>
@@ -2221,11 +2221,11 @@ export default function MapManager({
           <ModalBody>
             <div className="space-y-4">
               <Input
+                isRequired
                 label="Name"
                 placeholder={`Enter ${pointType} name`}
                 value={newPointName}
                 onChange={(e) => setNewPointName(e.target.value)}
-                isRequired
               />
               <Input
                 label="Address"
@@ -2254,21 +2254,21 @@ export default function MapManager({
 
       {/* Add Road Modal */}
       <Modal
-        isOpen={isRoadModalOpen}
-        onClose={handleCancelRoad}
         classNames={modalClassNames}
         isDismissable={false}
+        isOpen={isRoadModalOpen}
+        onClose={handleCancelRoad}
       >
         <ModalContent>
           <ModalHeader>Save Road</ModalHeader>
           <ModalBody>
             <div className="space-y-4">
               <Input
+                isRequired
                 label="Road Name"
                 placeholder="Enter road name"
                 value={roadName}
                 onChange={(e) => setRoadName(e.target.value)}
-                isRequired
               />
               <div className="text-sm text-gray-600 dark:text-gray-400">
                 <p>
@@ -2306,28 +2306,29 @@ export default function MapManager({
 
       {/* Add Destination Modal */}
       <Modal
-        isOpen={isDestModalOpen}
-        onClose={handleCancelDest}
-        size="2xl"
         classNames={modalClassNames}
         isDismissable={false}
+        isOpen={isDestModalOpen}
+        size="2xl"
+        onClose={handleCancelDest}
       >
         <ModalContent>
           <ModalHeader>Create New Destination</ModalHeader>
           <ModalBody>
             <div className="space-y-4">
               <Input
+                isRequired
                 label="Destination Name"
                 placeholder="Enter destination name"
                 value={destForm.name}
                 onChange={(e) =>
                   setDestForm({ ...destForm, name: e.target.value })
                 }
-                isRequired
               />
 
               {categories && categories.length > 0 ? (
                 <Select
+                  isRequired
                   label="Category"
                   selectedKeys={
                     destForm.category_id ? [destForm.category_id] : []
@@ -2335,7 +2336,6 @@ export default function MapManager({
                   onChange={(e) =>
                     setDestForm({ ...destForm, category_id: e.target.value })
                   }
-                  isRequired
                 >
                   {categories.map((cat) => (
                     <SelectItem key={cat.id}>{cat.name}</SelectItem>
@@ -2349,13 +2349,13 @@ export default function MapManager({
 
               <Textarea
                 label="Description"
+                maxRows={8}
+                minRows={3}
                 placeholder="Describe this destination..."
                 value={destForm.description}
                 onChange={(e) =>
                   setDestForm({ ...destForm, description: e.target.value })
                 }
-                minRows={3}
-                maxRows={8}
               />
 
               <Input
