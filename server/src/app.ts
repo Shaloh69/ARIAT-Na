@@ -30,6 +30,10 @@ import transitRoutes from './routes/transit.routes';
 // Create Express application
 const app: Application = express();
 
+// Trust Render's reverse proxy so express-rate-limit reads the real client IP
+// from X-Forwarded-For instead of throwing ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+app.set('trust proxy', 1);
+
 // =====================================================
 // MIDDLEWARE
 // =====================================================
