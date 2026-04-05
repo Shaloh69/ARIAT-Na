@@ -1796,3 +1796,130 @@ html.light .kiosk-footer {
   transition: all 0.15s;
 }
 .picker-empty-reset:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+
+/* ── Map-based destination picker ─────────────────────────────────────── */
+.picker-map-wrap {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  /* fill the available space between header and nav */
+  min-height: 0;
+  height: calc(100vh - 260px);
+}
+
+/* Floating toolbar overlaid on map */
+.picker-map-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.picker-map-toolbar > * { pointer-events: auto; }
+
+.picker-map-toolbar .picker-search-wrap {
+  background: rgba(15, 12, 30, 0.88);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+}
+
+.picker-map-toolbar .picker-cat-scroll {
+  background: rgba(15, 12, 30, 0.82);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 6px 10px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.picker-map-toolbar .picker-cat-scroll::-webkit-scrollbar { display: none; }
+
+/* Loading state */
+.picker-map-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.03);
+  border-radius: 16px;
+}
+.picker-map-spinner {
+  width: 48px; height: 48px;
+  border: 3px solid rgba(244,63,94,0.2);
+  border-top-color: #f43f5e;
+  border-radius: 50%;
+  animation: planSpin 0.9s linear infinite;
+}
+
+/* Selected destinations strip at bottom of map */
+.picker-map-selected-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: rgba(15, 12, 30, 0.90);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(244,63,94,0.25);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.picker-sel-count {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #f43f5e;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.picker-sel-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.picker-sel-chips::-webkit-scrollbar { display: none; }
+.picker-sel-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 8px;
+  border-radius: 99px;
+  background: rgba(244,63,94,0.15);
+  border: 1px solid rgba(244,63,94,0.35);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.picker-sel-chip:hover { background: rgba(244,63,94,0.3); }
+.picker-sel-num {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #f43f5e;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.picker-sel-remove {
+  color: rgba(255,255,255,0.4);
+  font-size: 1rem;
+  line-height: 1;
+  margin-left: 2px;
+}
+.picker-sel-chip:hover .picker-sel-remove { color: rgba(255,255,255,0.8); }

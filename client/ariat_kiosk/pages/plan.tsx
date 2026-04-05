@@ -1,9 +1,8 @@
 import type { NextPage } from "next";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@heroui/button";
-import { Card, CardBody } from "@heroui/card";
 import { Chip } from "@heroui/chip";
 import { Skeleton } from "@heroui/skeleton";
 
@@ -15,9 +14,12 @@ import { toast } from "@/lib/toast";
 // Leaflet requires window — dynamic import with no SSR
 const ItineraryMap = dynamic(() => import("@/components/ItineraryMap"), {
   ssr: false,
-  loading: () => (
-    <div className="plan-map-skeleton" />
-  ),
+  loading: () => <div className="plan-map-skeleton" />,
+});
+
+const PickerMap = dynamic(() => import("@/components/PickerMap"), {
+  ssr: false,
+  loading: () => <div className="picker-map-loading"><div className="picker-map-spinner" /></div>,
 });
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -28,6 +30,8 @@ interface Destination {
   entrance_fee_local?: number;
   id: string;
   images?: string[];
+  latitude: number;
+  longitude: number;
   municipality?: string;
   name: string;
   rating?: number;
@@ -341,19 +345,86 @@ const KioskPlanPage: NextPage = () => {
             PICK MODE
         ══════════════════════════════════════════════════════════ */}
 
-        {/* Step: Destination Selection */}
+        {/* Step: Destination Selection — map */}
         {planMode === "pick" && pickStep === "select" && (
-          <DestinationPicker
-            allCategories={allCategories}
-            allDestinations={filtered}
-            filterCategory={filterCategory}
-            loading={loadingDests}
-            searchQuery={searchQuery}
-            selectedIds={selectedIds}
-            onFilterCategory={setFilterCategory}
-            onSearch={setSearchQuery}
-            onToggle={toggleSelect}
-          />
+          <div className="picker-map-wrap">
+            {/* Overlay toolbar */}
+            <div className="picker-map-toolbar">
+              <div className="picker-search-wrap">
+                <span className="picker-search-icon">🔍</span>
+                <input
+                  className="picker-search"
+                  placeholder="Search destinations…"
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    className="picker-search-clear"
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <div className="picker-cat-scroll">
+                <button
+                  className={`picker-cat-chip ${filterCategory === "all" ? "picker-cat-active" : ""}`}
+                  type="button"
+                  onClick={() => setFilterCategory("all")}
+                >
+                  All
+                </button>
+                {allCategories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    className={`picker-cat-chip ${filterCategory === cat.name ? "picker-cat-active" : ""}`}
+                    type="button"
+                    onClick={() => setFilterCategory(cat.name)}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Map */}
+            {loadingDests ? (
+              <div className="picker-map-loading"><div className="picker-map-spinner" /></div>
+            ) : (
+              <PickerMap
+                destinations={filtered}
+                selectedIds={selectedIds}
+                onToggle={toggleSelect}
+              />
+            )}
+
+            {/* Selected strip at bottom */}
+            {selectedIds.length > 0 && (
+              <div className="picker-map-selected-bar">
+                <span className="picker-sel-count">{selectedIds.length} selected</span>
+                <div className="picker-sel-chips">
+                  {selectedIds.map((id, idx) => {
+                    const dest = allDestinations.find((d) => d.id === id);
+                    return dest ? (
+                      <button
+                        key={id}
+                        className="picker-sel-chip"
+                        type="button"
+                        onClick={() => toggleSelect(id)}
+                      >
+                        <span className="picker-sel-num">{idx + 1}</span>
+                        {dest.name}
+                        <span className="picker-sel-remove">×</span>
+                      </button>
+                    ) : null;
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Step: Transport (shared) */}
@@ -695,156 +766,3 @@ const KioskPlanPage: NextPage = () => {
 
 export default KioskPlanPage;
 
-// ─── Destination Picker ───────────────────────────────────────────────────────
-
-interface PickerProps {
-  allCategories: Category[];
-  allDestinations: Destination[];
-  filterCategory: string;
-  loading: boolean;
-  searchQuery: string;
-  selectedIds: string[];
-  onFilterCategory: (c: string) => void;
-  onSearch: (q: string) => void;
-  onToggle: (id: string) => void;
-}
-
-function DestinationPicker({
-  allCategories,
-  allDestinations,
-  filterCategory,
-  loading,
-  searchQuery,
-  selectedIds,
-  onFilterCategory,
-  onSearch,
-  onToggle,
-}: PickerProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  return (
-    <div className="picker-wrap">
-      {/* Search + category filter bar */}
-      <div className="picker-toolbar">
-        <div className="picker-search-wrap">
-          <span className="picker-search-icon">🔍</span>
-          <input
-            ref={inputRef}
-            className="picker-search"
-            placeholder="Search destinations…"
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearch(e.target.value)}
-          />
-          {searchQuery && (
-            <button
-              className="picker-search-clear"
-              type="button"
-              onClick={() => { onSearch(""); inputRef.current?.focus(); }}
-            >
-              ×
-            </button>
-          )}
-        </div>
-
-        <div className="picker-cat-scroll">
-          <button
-            className={`picker-cat-chip ${filterCategory === "all" ? "picker-cat-active" : ""}`}
-            type="button"
-            onClick={() => onFilterCategory("all")}
-          >
-            All
-          </button>
-          {allCategories.map((cat) => (
-            <button
-              key={cat.id}
-              className={`picker-cat-chip ${filterCategory === cat.name ? "picker-cat-active" : ""}`}
-              type="button"
-              onClick={() => onFilterCategory(cat.name)}
-            >
-              {cat.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Selected strip */}
-      {selectedIds.length > 0 && (
-        <div className="picker-selected-bar">
-          <span className="picker-sel-count">
-            {selectedIds.length} selected
-          </span>
-          <span className="picker-sel-hint">Tap a destination to remove it</span>
-        </div>
-      )}
-
-      {/* Destination grid */}
-      {loading ? (
-        <div className="picker-grid">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <Skeleton key={i} className="rounded-2xl h-44" />
-          ))}
-        </div>
-      ) : allDestinations.length === 0 ? (
-        <div className="picker-empty">
-          <p>No destinations found</p>
-          <button
-            className="picker-empty-reset"
-            type="button"
-            onClick={() => { onSearch(""); onFilterCategory("all"); }}
-          >
-            Clear filters
-          </button>
-        </div>
-      ) : (
-        <div className="picker-grid">
-          {allDestinations.map((dest) => {
-            const isSelected = selectedIds.includes(dest.id);
-            const selIdx = selectedIds.indexOf(dest.id);
-            const img = dest.images?.[0];
-            return (
-              <button
-                key={dest.id}
-                className={`picker-card ${isSelected ? "picker-card-selected" : ""}`}
-                type="button"
-                onClick={() => onToggle(dest.id)}
-              >
-                {/* Image */}
-                <div className="picker-card-img-wrap">
-                  {img ? (
-                    <img
-                      alt={dest.name}
-                      className="picker-card-img"
-                      src={img}
-                    />
-                  ) : (
-                    <div className="picker-card-img-fallback">📍</div>
-                  )}
-                  {/* Selection badge */}
-                  {isSelected ? (
-                    <div className="picker-badge-selected">{selIdx + 1}</div>
-                  ) : (
-                    <div className="picker-badge-add">+</div>
-                  )}
-                </div>
-                {/* Info */}
-                <div className="picker-card-body">
-                  <p className="picker-card-name">{dest.name}</p>
-                  <p className="picker-card-meta">
-                    {dest.municipality ?? dest.category_name ?? ""}
-                  </p>
-                  {dest.entrance_fee_local != null &&
-                    dest.entrance_fee_local > 0 && (
-                      <p className="picker-card-fee">
-                        ₱{dest.entrance_fee_local}
-                      </p>
-                    )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
