@@ -1,5 +1,4 @@
 import { useState } from "react";
-import AdminLayout from "@/layouts/admin";
 import Head from "next/head";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
@@ -7,6 +6,8 @@ import { Input } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
 import { Chip } from "@heroui/chip";
 import { Tooltip } from "@heroui/tooltip";
+
+import AdminLayout from "@/layouts/admin";
 import { toast } from "@/lib/toast";
 import { apiClient } from "@/lib/api";
 import { API_ENDPOINTS } from "@/lib/constants";
@@ -46,7 +47,7 @@ interface RouteResult {
 
 export default function RouteTestPage() {
   const [loading, setLoading] = useState(false);
-  const [testType, setTestType] = useState<"gps" | "intersection">("gps");
+  const [testType] = useState<"gps" | "intersection">("gps");
   const [gpsForm, setGpsForm] = useState({
     start_lat: "10.3157",
     start_lon: "123.8854",
@@ -67,6 +68,7 @@ export default function RouteTestPage() {
         !gpsForm.end_lon
       ) {
         toast.error("Please fill in all GPS coordinates");
+
         return;
       }
 
@@ -89,7 +91,7 @@ export default function RouteTestPage() {
         } else {
           toast.error("No route found");
         }
-      } catch (error) {
+      } catch {
         toast.error("Failed to calculate route");
       } finally {
         setLoading(false);
@@ -148,9 +150,9 @@ export default function RouteTestPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <Input
                     label="Latitude"
-                    type="number"
-                    step="0.000001"
                     placeholder="10.3157"
+                    step="0.000001"
+                    type="number"
                     value={gpsForm.start_lat}
                     onChange={(e) =>
                       setGpsForm({ ...gpsForm, start_lat: e.target.value })
@@ -158,9 +160,9 @@ export default function RouteTestPage() {
                   />
                   <Input
                     label="Longitude"
-                    type="number"
-                    step="0.000001"
                     placeholder="123.8854"
+                    step="0.000001"
+                    type="number"
                     value={gpsForm.start_lon}
                     onChange={(e) =>
                       setGpsForm({ ...gpsForm, start_lon: e.target.value })
@@ -174,9 +176,9 @@ export default function RouteTestPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <Input
                     label="Latitude"
-                    type="number"
-                    step="0.000001"
                     placeholder="10.3200"
+                    step="0.000001"
+                    type="number"
                     value={gpsForm.end_lat}
                     onChange={(e) =>
                       setGpsForm({ ...gpsForm, end_lat: e.target.value })
@@ -184,9 +186,9 @@ export default function RouteTestPage() {
                   />
                   <Input
                     label="Longitude"
-                    type="number"
-                    step="0.000001"
                     placeholder="123.8900"
+                    step="0.000001"
+                    type="number"
                     value={gpsForm.end_lon}
                     onChange={(e) =>
                       setGpsForm({ ...gpsForm, end_lon: e.target.value })
@@ -196,25 +198,33 @@ export default function RouteTestPage() {
               </div>
 
               <div className="flex gap-2 pt-4">
-                <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                <Tooltip
+                  showArrow
+                  classNames={{
+                    content:
+                      "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+                  }}
                   content="Run A* pathfinding between the specified GPS coordinates"
                   delay={700}
-                  showArrow
                   placement="top"
                 >
                   <Button
-                    color="primary"
-                    onClick={handleCalculateRoute}
-                    isLoading={loading}
                     className="flex-1"
+                    color="primary"
+                    isLoading={loading}
+                    onClick={handleCalculateRoute}
                   >
                     Calculate Route
                   </Button>
                 </Tooltip>
-                <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                <Tooltip
+                  showArrow
+                  classNames={{
+                    content:
+                      "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+                  }}
                   content="Reset coordinates to defaults and clear results"
                   delay={700}
-                  showArrow
                   placement="top"
                 >
                   <Button color="default" variant="flat" onClick={handleClear}>
@@ -240,10 +250,10 @@ export default function RouteTestPage() {
                     viewBox="0 0 24 24"
                   >
                     <path
+                      d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
                     />
                   </svg>
                   <p className="text-gray-500">

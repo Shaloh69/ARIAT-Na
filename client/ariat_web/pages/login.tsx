@@ -3,9 +3,10 @@ import { useRouter } from "next/router";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Card, CardBody, CardHeader } from "@heroui/card";
+import Head from "next/head";
+
 import { useAuthStore } from "@/lib/store/auth-store";
 import { toast } from "@/lib/toast";
-import Head from "next/head";
 import AnimatedBackground from "@/components/animated-background";
 
 export default function LoginPage() {
@@ -34,6 +35,7 @@ export default function LoginPage() {
 
     if (!email || !password) {
       toast.error("Please enter email and password");
+
       return;
     }
 
@@ -41,7 +43,7 @@ export default function LoginPage() {
       await login({ email, password });
       toast.success("Login successful!");
       router.push("/admin/dashboard");
-    } catch (error: any) {
+    } catch {
       // Error is already handled by the store and toast
     }
   };
@@ -58,9 +60,9 @@ export default function LoginPage() {
           <CardHeader className="flex flex-col gap-3 px-6 pt-6">
             <div className="flex items-center justify-center">
               <img
-                src="/android-chrome-192x192.png"
                 alt="AIRAT-NA"
                 className="h-16 w-16 object-contain"
+                src="/android-chrome-192x192.png"
               />
             </div>
             <div className="text-center">
@@ -72,45 +74,45 @@ export default function LoginPage() {
           </CardHeader>
 
           <CardBody className="px-6 pb-6">
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
               <Input
-                type="email"
-                label="Email"
-                placeholder="admin@airat-na.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
                 isRequired
                 autoComplete="email"
+                label="Email"
+                placeholder="admin@airat-na.com"
+                type="email"
+                value={email}
                 variant="bordered"
+                onChange={(e) => setEmail(e.target.value)}
               />
 
               <Input
-                type="password"
-                label="Password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
                 isRequired
                 autoComplete="current-password"
+                label="Password"
+                placeholder="Enter your password"
+                type="password"
+                value={password}
                 variant="bordered"
+                onChange={(e) => setPassword(e.target.value)}
               />
 
               <div className="flex items-center justify-between text-sm">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="rounded" />
+                  <input className="rounded" type="checkbox" />
                   <span className="text-default-600">Remember me</span>
                 </label>
-                <button type="button" className="text-primary hover:underline">
+                <button className="text-primary hover:underline" type="button">
                   Forgot password?
                 </button>
               </div>
 
               <Button
-                type="submit"
-                color="primary"
-                size="lg"
-                isLoading={isLoading}
                 className="w-full"
+                color="primary"
+                isLoading={isLoading}
+                size="lg"
+                type="submit"
               >
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>

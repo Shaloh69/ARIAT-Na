@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import AdminLayout from "@/layouts/admin";
 import Head from "next/head";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
@@ -14,6 +13,8 @@ import {
 import { Chip } from "@heroui/chip";
 import { Switch } from "@heroui/switch";
 import { Tooltip } from "@heroui/tooltip";
+
+import AdminLayout from "@/layouts/admin";
 import { toast } from "@/lib/toast";
 import { modalClassNames } from "@/lib/modal-styles";
 import { apiClient } from "@/lib/api";
@@ -54,12 +55,13 @@ export default function CategoriesPage() {
       const response = await apiClient.get<Category[]>(
         API_ENDPOINTS.CATEGORIES,
       );
+
       if (response.success && response.data) {
         setCategories(
           response.data.sort((a, b) => a.display_order - b.display_order),
         );
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to fetch categories");
     } finally {
       setLoading(false);
@@ -114,6 +116,7 @@ export default function CategoriesPage() {
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
       toast.error("Category name is required");
+
       return;
     }
 
@@ -128,6 +131,7 @@ export default function CategoriesPage() {
           `${API_ENDPOINTS.CATEGORIES}/${editingCategory.id}`,
           payload,
         );
+
         if (response.success) {
           toast.success("Category updated successfully");
           fetchCategories();
@@ -138,13 +142,14 @@ export default function CategoriesPage() {
           API_ENDPOINTS.CATEGORIES,
           payload,
         );
+
         if (response.success) {
           toast.success("Category created successfully");
           fetchCategories();
           handleCloseModal();
         }
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to save category");
     }
   };
@@ -162,11 +167,12 @@ export default function CategoriesPage() {
       const response = await apiClient.delete(
         `${API_ENDPOINTS.CATEGORIES}/${id}`,
       );
+
       if (response.success) {
         toast.success("Category deleted successfully");
         fetchCategories();
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to delete category");
     }
   };
@@ -179,13 +185,14 @@ export default function CategoriesPage() {
           is_active: !category.is_active,
         },
       );
+
       if (response.success) {
         toast.success(
           `Category ${category.is_active ? "deactivated" : "activated"} successfully`,
         );
         fetchCategories();
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to update category");
     }
   };
@@ -204,10 +211,14 @@ export default function CategoriesPage() {
               Manage destination categories ({categories.length} total)
             </p>
           </div>
-          <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+          <Tooltip
+            showArrow
+            classNames={{
+              content:
+                "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+            }}
             content="Create a new destination category"
             delay={700}
-            showArrow
             placement="left"
           >
             <Button color="primary" onClick={() => handleOpenModal()}>
@@ -218,10 +229,10 @@ export default function CategoriesPage() {
                 viewBox="0 0 24 24"
               >
                 <path
+                  d="M12 4v16m8-8H4"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M12 4v16m8-8H4"
                 />
               </svg>
               Add Category
@@ -245,10 +256,10 @@ export default function CategoriesPage() {
                 viewBox="0 0 24 24"
               >
                 <path
+                  d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
                 />
               </svg>
               <p className="text-gray-600 dark:text-gray-400 mb-2">
@@ -271,9 +282,9 @@ export default function CategoriesPage() {
                     <div className="flex items-center gap-2">
                       {category.icon_url ? (
                         <img
-                          src={category.icon_url}
                           alt={category.name}
                           className="h-8 w-8 object-contain"
+                          src={category.icon_url}
                         />
                       ) : (
                         <div className="h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center">
@@ -284,10 +295,10 @@ export default function CategoriesPage() {
                             viewBox="0 0 24 24"
                           >
                             <path
+                              d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
                               strokeLinecap="round"
                               strokeLinejoin="round"
                               strokeWidth={2}
-                              d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
                             />
                           </svg>
                         </div>
@@ -295,8 +306,8 @@ export default function CategoriesPage() {
                       <h3 className="font-semibold text-lg">{category.name}</h3>
                     </div>
                     <Chip
-                      size="sm"
                       color={category.is_active ? "success" : "default"}
+                      size="sm"
                       variant="flat"
                     >
                       {category.is_active ? "Active" : "Inactive"}
@@ -322,50 +333,62 @@ export default function CategoriesPage() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                    <Tooltip
+                      showArrow
+                      classNames={{
+                        content:
+                          "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+                      }}
                       content="Edit category name, icon and details"
                       delay={700}
-                      showArrow
                       placement="top"
                     >
                       <Button
-                        size="sm"
                         color="primary"
+                        size="sm"
                         variant="flat"
                         onClick={() => handleOpenModal(category)}
                       >
                         Edit
                       </Button>
                     </Tooltip>
-                    <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                    <Tooltip
+                      showArrow
+                      classNames={{
+                        content:
+                          "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+                      }}
                       content={
                         category.is_active
                           ? "Hide this category from the app"
                           : "Make this category visible in the app"
                       }
                       delay={700}
-                      showArrow
                       placement="top"
                     >
                       <Button
-                        size="sm"
                         color={category.is_active ? "warning" : "success"}
+                        size="sm"
                         variant="flat"
                         onClick={() => handleToggleActive(category)}
                       >
                         {category.is_active ? "Deactivate" : "Activate"}
                       </Button>
                     </Tooltip>
-                    <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                    <Tooltip
+                      showArrow
+                      classNames={{
+                        content:
+                          "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+                      }}
+                      color="danger"
                       content="Permanently delete this category and all associations"
                       delay={700}
-                      showArrow
                       placement="top"
-                      color="danger"
                     >
                       <Button
-                        size="sm"
                         color="danger"
+                        size="sm"
                         variant="flat"
                         onClick={() => handleDelete(category.id)}
                       >
@@ -382,10 +405,10 @@ export default function CategoriesPage() {
 
       {/* Add/Edit Modal */}
       <Modal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        size="2xl"
         classNames={modalClassNames}
+        isOpen={isModalOpen}
+        size="2xl"
+        onClose={handleCloseModal}
       >
         <ModalContent>
           <ModalHeader>
@@ -394,49 +417,49 @@ export default function CategoriesPage() {
           <ModalBody>
             <div className="space-y-4">
               <Input
+                isRequired
                 label="Name"
                 placeholder="Enter category name"
                 value={formData.name}
                 onChange={(e) => handleNameChange(e.target.value)}
-                isRequired
               />
               <Input
+                isRequired
+                description="URL-friendly identifier (auto-generated from name)"
                 label="Slug"
                 placeholder="category-slug"
                 value={formData.slug}
                 onChange={(e) =>
                   setFormData({ ...formData, slug: e.target.value })
                 }
-                description="URL-friendly identifier (auto-generated from name)"
-                isRequired
               />
               <Textarea
                 label="Description"
+                minRows={3}
                 placeholder="Enter description"
                 value={formData.description}
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
-                minRows={3}
               />
               <Input
+                description="Optional icon image URL"
                 label="Icon URL"
                 placeholder="https://example.com/icon.png"
                 value={formData.icon_url}
                 onChange={(e) =>
                   setFormData({ ...formData, icon_url: e.target.value })
                 }
-                description="Optional icon image URL"
               />
               <Input
+                description="Lower numbers appear first"
                 label="Display Order"
-                type="number"
                 placeholder="0"
+                type="number"
                 value={formData.display_order}
                 onChange={(e) =>
                   setFormData({ ...formData, display_order: e.target.value })
                 }
-                description="Lower numbers appear first"
               />
               <Switch
                 isSelected={formData.is_active}
@@ -449,24 +472,32 @@ export default function CategoriesPage() {
             </div>
           </ModalBody>
           <ModalFooter>
-            <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+            <Tooltip
+              showArrow
+              classNames={{
+                content:
+                  "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+              }}
               content="Discard changes and close"
               delay={700}
-              showArrow
               placement="top"
             >
               <Button color="danger" variant="flat" onClick={handleCloseModal}>
                 Cancel
               </Button>
             </Tooltip>
-            <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+            <Tooltip
+              showArrow
+              classNames={{
+                content:
+                  "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+              }}
               content={
                 editingCategory
                   ? "Save changes to this category"
                   : "Create the new category"
               }
               delay={700}
-              showArrow
               placement="top"
             >
               <Button color="primary" onClick={handleSubmit}>

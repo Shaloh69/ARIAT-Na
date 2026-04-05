@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import AdminLayout from "@/layouts/admin";
 import Head from "next/head";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Tooltip } from "@heroui/tooltip";
+
+import AdminLayout from "@/layouts/admin";
 import { toast } from "@/lib/toast";
 import { apiClient } from "@/lib/api";
 import { API_ENDPOINTS } from "@/lib/constants";
@@ -21,7 +22,7 @@ interface AdminProfile {
 }
 
 export default function SettingsPage() {
-  const { admin, fetchAdminProfile } = useAuthStore();
+  const { fetchAdminProfile } = useAuthStore();
   const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -49,12 +50,13 @@ export default function SettingsPage() {
       const response = await apiClient.get<AdminProfile>(
         API_ENDPOINTS.ADMIN_PROFILE,
       );
+
       if (response.success && response.data) {
         setProfile(response.data);
         setFullName(response.data.full_name);
         setEmail(response.data.email);
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to load profile");
     } finally {
       setLoading(false);
@@ -64,10 +66,12 @@ export default function SettingsPage() {
   const handleUpdateProfile = async () => {
     if (!fullName.trim()) {
       toast.error("Full name is required");
+
       return;
     }
     if (!email.trim()) {
       toast.error("Email is required");
+
       return;
     }
 
@@ -93,6 +97,7 @@ export default function SettingsPage() {
         error.response?.data?.error ||
         error.message ||
         "Failed to update profile";
+
       toast.error(message);
     } finally {
       setProfileSaving(false);
@@ -102,18 +107,22 @@ export default function SettingsPage() {
   const handleChangePassword = async () => {
     if (!currentPassword) {
       toast.error("Current password is required");
+
       return;
     }
     if (!newPassword) {
       toast.error("New password is required");
+
       return;
     }
     if (newPassword.length < 8) {
       toast.error("New password must be at least 8 characters");
+
       return;
     }
     if (newPassword !== confirmPassword) {
       toast.error("Passwords do not match");
+
       return;
     }
 
@@ -141,6 +150,7 @@ export default function SettingsPage() {
         error.response?.data?.error ||
         error.message ||
         "Failed to change password";
+
       toast.error(message);
     } finally {
       setPasswordSaving(false);
@@ -149,21 +159,25 @@ export default function SettingsPage() {
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
       toast.error("Please select an image file");
+
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
       toast.error("Image must be less than 5MB");
+
       return;
     }
 
     try {
       setImageUploading(true);
       const formData = new FormData();
+
       formData.append("file", file);
 
       const response = await apiClient.post<{ profile_image_url: string }>(
@@ -183,6 +197,7 @@ export default function SettingsPage() {
       }
     } catch (error: any) {
       const message = error.response?.data?.error || "Failed to upload image";
+
       toast.error(message);
     } finally {
       setImageUploading(false);
@@ -195,6 +210,7 @@ export default function SettingsPage() {
       const response = await apiClient.delete(
         API_ENDPOINTS.ADMIN_PROFILE_IMAGE,
       );
+
       if (response.success) {
         setProfile((prev) =>
           prev ? { ...prev, profile_image_url: null } : prev,
@@ -204,6 +220,7 @@ export default function SettingsPage() {
       }
     } catch (error: any) {
       const message = error.response?.data?.error || "Failed to delete image";
+
       toast.error(message);
     } finally {
       setImageUploading(false);
@@ -218,7 +235,7 @@ export default function SettingsPage() {
         </Head>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
             <p>Loading settings...</p>
           </div>
         </div>
@@ -243,9 +260,9 @@ export default function SettingsPage() {
               <div className="flex-shrink-0">
                 {profile?.profile_image_url ? (
                   <img
-                    src={profile.profile_image_url}
                     alt={profile.full_name}
                     className="h-20 w-20 rounded-full object-cover ring-2 ring-primary/20"
+                    src={profile.profile_image_url}
                   />
                 ) : (
                   <div
@@ -261,44 +278,52 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <div className="flex gap-2">
-                  <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                  <Tooltip
+                    showArrow
+                    classNames={{
+                      content:
+                        "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+                    }}
                     content="Upload a new profile photo (JPG, PNG or GIF — max 5MB)"
                     delay={700}
-                    showArrow
                     placement="top"
                   >
                     <label>
                       <Button
                         as="span"
-                        size="sm"
+                        className="cursor-pointer"
                         color="primary"
                         isLoading={imageUploading}
-                        className="cursor-pointer"
+                        size="sm"
                       >
                         Upload Image
                       </Button>
                       <input
-                        type="file"
                         accept="image/*"
                         className="hidden"
-                        onChange={handleImageUpload}
                         disabled={imageUploading}
+                        type="file"
+                        onChange={handleImageUpload}
                       />
                     </label>
                   </Tooltip>
                   {profile?.profile_image_url && (
-                    <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                    <Tooltip
+                      showArrow
+                      classNames={{
+                        content:
+                          "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+                      }}
+                      color="danger"
                       content="Remove your current profile photo"
                       delay={700}
-                      showArrow
                       placement="top"
-                      color="danger"
                     >
                       <Button
-                        size="sm"
                         color="danger"
-                        variant="flat"
                         isLoading={imageUploading}
+                        size="sm"
+                        variant="flat"
                         onClick={handleDeleteImage}
                       >
                         Remove
@@ -322,16 +347,16 @@ export default function SettingsPage() {
           <CardBody className="space-y-4">
             <Input
               label="Full Name"
+              placeholder="Enter your full name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="Enter your full name"
             />
             <Input
               label="Email"
+              placeholder="Enter your email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
             />
             <div className="flex items-center gap-4">
               <div className="flex-1">
@@ -347,16 +372,20 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="flex justify-end pt-2">
-              <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+              <Tooltip
+                showArrow
+                classNames={{
+                  content:
+                    "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+                }}
                 content="Save your display name and email address"
                 delay={700}
-                showArrow
                 placement="left"
               >
                 <Button
                   color="primary"
-                  onClick={handleUpdateProfile}
                   isLoading={profileSaving}
+                  onClick={handleUpdateProfile}
                 >
                   Save Changes
                 </Button>
@@ -384,36 +413,40 @@ export default function SettingsPage() {
           <CardBody className="space-y-4">
             <Input
               label="Current Password"
+              placeholder="Enter current password"
               type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="Enter current password"
             />
             <Input
               label="New Password"
+              placeholder="Enter new password (min 8 characters)"
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Enter new password (min 8 characters)"
             />
             <Input
               label="Confirm New Password"
+              placeholder="Confirm new password"
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm new password"
             />
             <div className="flex justify-end pt-2">
-              <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+              <Tooltip
+                showArrow
+                classNames={{
+                  content:
+                    "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+                }}
                 content="Update your account password (min 8 characters)"
                 delay={700}
-                showArrow
                 placement="left"
               >
                 <Button
                   color="primary"
-                  onClick={handleChangePassword}
                   isLoading={passwordSaving}
+                  onClick={handleChangePassword}
                 >
                   Change Password
                 </Button>

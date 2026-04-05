@@ -1,3 +1,5 @@
+import type { GeoJSONFeatureCollection } from "@/types/api";
+
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import {
   MapContainer,
@@ -23,15 +25,14 @@ import {
   ModalBody,
   ModalFooter,
 } from "@heroui/modal";
-import { toast } from "@/lib/toast";
-import { modalClassNames } from "@/lib/modal-styles";
-import type { GeoJSONFeatureCollection } from "@/types/api";
-
 // Fix Leaflet default icon issue with Next.js webpack
 import "leaflet/dist/leaflet.css";
 import iconImg from "leaflet/dist/images/marker-icon.png";
 import iconRetina from "leaflet/dist/images/marker-icon-2x.png";
 import iconShadow from "leaflet/dist/images/marker-shadow.png";
+
+import { modalClassNames } from "@/lib/modal-styles";
+import { toast } from "@/lib/toast";
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -216,6 +217,7 @@ function MapClickHandler({
       }
     },
   });
+
   return null;
 }
 
@@ -229,10 +231,10 @@ function CenterMapButton() {
 
   return (
     <Button
-      size="sm"
-      color="primary"
-      variant="flat"
       className="absolute bottom-24 right-4 z-[1000]"
+      color="primary"
+      size="sm"
+      variant="flat"
       onClick={centerMap}
     >
       <svg
@@ -242,10 +244,10 @@ function CenterMapButton() {
         viewBox="0 0 24 24"
       >
         <path
+          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth={2}
-          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
         />
       </svg>
       Center on Cebu
@@ -288,16 +290,18 @@ function RoadPolyline({
 
     const forwardDecorator = (L as any)
       .polylineDecorator(positions, {
-        patterns: [{ offset: '40%', repeat: '60%', symbol: arrowSymbol(12) }],
+        patterns: [{ offset: "40%", repeat: "60%", symbol: arrowSymbol(12) }],
       })
       .addTo(map);
 
     let reverseDecorator: any = null;
+
     if (isBidirectional) {
       const reversed = [...positions].reverse();
+
       reverseDecorator = (L as any)
         .polylineDecorator(reversed, {
-          patterns: [{ offset: '40%', repeat: '60%', symbol: arrowSymbol(12) }],
+          patterns: [{ offset: "40%", repeat: "60%", symbol: arrowSymbol(12) }],
         })
         .addTo(map);
     }
@@ -307,7 +311,8 @@ function RoadPolyline({
     return () => {
       try {
         if (map.hasLayer(forwardDecorator)) map.removeLayer(forwardDecorator);
-        if (reverseDecorator && map.hasLayer(reverseDecorator)) map.removeLayer(reverseDecorator);
+        if (reverseDecorator && map.hasLayer(reverseDecorator))
+          map.removeLayer(reverseDecorator);
         if (map.hasLayer(polyline)) map.removeLayer(polyline);
       } catch {
         // Ignore cleanup errors during component unmount
@@ -344,24 +349,34 @@ function RoadDecorator({
     // Forward decorator: A→B (pass positions array directly — no invisible anchor needed)
     const forwardDecorator = (L as any)
       .polylineDecorator(positions, {
-        patterns: [{ offset: '30%', repeat: '40%', symbol: arrowSymbol(10) }],
+        patterns: [{ offset: "30%", repeat: "40%", symbol: arrowSymbol(10) }],
       })
       .addTo(map);
 
     // For two-way roads, add a second decorator on reversed positions (B→A)
     let reverseDecorator: any = null;
+
     if (isBidirectional) {
       const reversed = [...positions].reverse();
+
       reverseDecorator = (L as any)
         .polylineDecorator(reversed, {
-          patterns: [{ offset: '30%', repeat: '40%', symbol: arrowSymbol(10) }],
+          patterns: [{ offset: "30%", repeat: "40%", symbol: arrowSymbol(10) }],
         })
         .addTo(map);
     }
 
     return () => {
-      try { map.removeLayer(forwardDecorator); } catch { /* ignore */ }
-      try { if (reverseDecorator) map.removeLayer(reverseDecorator); } catch { /* ignore */ }
+      try {
+        map.removeLayer(forwardDecorator);
+      } catch {
+        /* ignore */
+      }
+      try {
+        if (reverseDecorator) map.removeLayer(reverseDecorator);
+      } catch {
+        /* ignore */
+      }
     };
   }, [map, positions, color, isBidirectional]);
 
@@ -395,7 +410,9 @@ function ZoomAwareDestinationMarker({
 
   useEffect(() => {
     const onZoom = () => setZoom(map.getZoom());
+
     map.on("zoomend", onZoom);
+
     return () => {
       map.off("zoomend", onZoom);
     };
@@ -447,68 +464,82 @@ function ZoomAwareDestinationMarker({
 
   return (
     <Marker
-      position={position}
+      eventHandlers={{
+        click: (e) => {
+          if (!interactive) {
+            L.DomEvent.stopPropagation(e);
+          }
+        },
+      }}
       icon={isZoomedIn ? zoomedInIcon : pinIcon}
       interactive={interactive}
-      eventHandlers={{
-        click: (e) => { if (!interactive) { L.DomEvent.stopPropagation(e); } },
-      }}
+      position={position}
     >
-      {showPopup && <Popup>
-        <div style={{ minWidth: "180px" }}>
-          {image && (
-            <img
-              src={image}
-              alt={name}
-              style={{
-                width: "100%",
-                height: "100px",
-                objectFit: "cover",
-                borderRadius: "6px",
-                marginBottom: "8px",
-              }}
-            />
-          )}
-          <p
-            style={{
-              fontWeight: 600,
-              fontSize: "13px",
-              margin: "0 0 4px",
-              color: "#111",
-            }}
-          >
-            {name}
-          </p>
-          {categoryName && (
+      {showPopup && (
+        <Popup>
+          <div style={{ minWidth: "180px" }}>
+            {image && (
+              <img
+                alt={name}
+                src={image}
+                style={{
+                  width: "100%",
+                  height: "100px",
+                  objectFit: "cover",
+                  borderRadius: "6px",
+                  marginBottom: "8px",
+                }}
+              />
+            )}
             <p
-              style={{ fontSize: "11px", color: "#6b7280", margin: "0 0 2px" }}
-            >
-              {categoryName}
-            </p>
-          )}
-          {address && (
-            <p
-              style={{ fontSize: "11px", color: "#6b7280", margin: "0 0 2px" }}
-            >
-              {address}
-            </p>
-          )}
-          {isFeatured && (
-            <span
               style={{
-                fontSize: "10px",
-                background: "#fef3c7",
-                color: "#92400e",
-                padding: "1px 6px",
-                borderRadius: "4px",
-                fontWeight: 500,
+                fontWeight: 600,
+                fontSize: "13px",
+                margin: "0 0 4px",
+                color: "#111",
               }}
             >
-              Featured
-            </span>
-          )}
-        </div>
-      </Popup>}
+              {name}
+            </p>
+            {categoryName && (
+              <p
+                style={{
+                  fontSize: "11px",
+                  color: "#6b7280",
+                  margin: "0 0 2px",
+                }}
+              >
+                {categoryName}
+              </p>
+            )}
+            {address && (
+              <p
+                style={{
+                  fontSize: "11px",
+                  color: "#6b7280",
+                  margin: "0 0 2px",
+                }}
+              >
+                {address}
+              </p>
+            )}
+            {isFeatured && (
+              <span
+                style={{
+                  fontSize: "10px",
+                  background: "#fef3c7",
+                  color: "#92400e",
+                  padding: "1px 6px",
+                  borderRadius: "4px",
+                  fontWeight: 500,
+                }}
+              >
+                Featured
+              </span>
+            )}
+          </div>
+        </Popup>
+      )}
     </Marker>
   );
 }
@@ -606,6 +637,7 @@ export default function MapManager({
         name: feature.properties.name,
         type: feature.properties.point_type || "intersection",
       }));
+
       setMarkers(existingMarkers);
     }
   }, [geojsonData]);
@@ -613,6 +645,7 @@ export default function MapManager({
   // Parse destination features
   const destinationMarkers = useMemo(() => {
     if (!destinationsGeojsonData?.features) return [];
+
     return destinationsGeojsonData.features.map((feature) => ({
       id: feature.properties.id,
       position: [
@@ -640,6 +673,7 @@ export default function MapManager({
       const dlat = marker.position[0] - lat;
       const dlng = marker.position[1] - lng;
       const dist = Math.sqrt(dlat * dlat + dlng * dlng);
+
       if (dist < minDist) {
         minDist = dist;
         nearest = marker;
@@ -649,6 +683,7 @@ export default function MapManager({
     if (nearest && minDist <= SNAP_THRESHOLD) {
       return nearest;
     }
+
     return null;
   };
 
@@ -662,6 +697,7 @@ export default function MapManager({
     };
     const label = typeLabels[pointType] || "Point";
     const count = markers.filter((m) => m.type === pointType).length;
+
     return `${label} ${count + 1}`;
   };
 
@@ -674,6 +710,7 @@ export default function MapManager({
       ferry: "Ferry Route",
     };
     const label = typeLabels[roadType] || "Road";
+
     return `${label} ${count + 1}`;
   };
 
@@ -684,6 +721,7 @@ export default function MapManager({
       setIsModalOpen(true);
     } else if (mode === "add_road") {
       const snapped = findNearestMarker(latlng.lat, latlng.lng);
+
       if (snapped) {
         setRoadPoints([...roadPoints, snapped.position]);
         setSnappedIndices((prev) => new Set(prev).add(roadPoints.length));
@@ -738,6 +776,7 @@ export default function MapManager({
     destId?: string;
   }) => {
     const newStops = [...routeStops, stop];
+
     setRouteStops(newStops);
     calculateMultiStopRoute(newStops);
   };
@@ -745,9 +784,11 @@ export default function MapManager({
   // Add a destination as a stop
   const addDestinationStop = (destId: string) => {
     const dest = destinationMarkers.find((d) => d.id === destId);
+
     if (!dest) return;
     if (routeStops.some((s) => s.destId === destId)) {
       toast.warning(`${dest.name} is already in the itinerary`);
+
       return;
     }
     addStop({ position: dest.position, name: dest.name, destId: dest.id });
@@ -756,6 +797,7 @@ export default function MapManager({
   // Remove a stop from the itinerary
   const removeStop = (idx: number) => {
     const newStops = routeStops.filter((_, i) => i !== idx);
+
     setRouteStops(newStops);
     if (newStops.length > 0) {
       calculateMultiStopRoute(newStops);
@@ -793,10 +835,12 @@ export default function MapManager({
         if (!result || !result.totalDistance) {
           const fromName = i === 0 ? "Start" : stops[i - 1].name;
           const toName = stops[i].name;
+
           setRouteError(
             `No route found for leg ${i + 1}: ${fromName} \u2192 ${toName}. Make sure roads connect these areas.`,
           );
           setRouteLegs(legs);
+
           return;
         }
         legs.push(result);
@@ -808,6 +852,7 @@ export default function MapManager({
         0,
       );
       const totalTime = legs.reduce((sum, l) => sum + l.estimatedTime, 0);
+
       toast.success(
         `Route: ${totalDist.toFixed(2)} km, ~${totalTime} min (${legs.length} leg${legs.length > 1 ? "s" : ""})`,
       );
@@ -816,6 +861,7 @@ export default function MapManager({
         err?.response?.data?.message ||
         err?.message ||
         "Route calculation failed";
+
       setRouteError(msg);
       toast.error(msg);
     } finally {
@@ -826,6 +872,7 @@ export default function MapManager({
   const handleSavePoint = async () => {
     if (!pendingPoint || !newPointName) {
       toast.error("Please enter a name for the point");
+
       return;
     }
 
@@ -853,7 +900,7 @@ export default function MapManager({
       setNewPointAddress("");
       setPendingPoint(null);
       // stay on current mode
-    } catch (error) {
+    } catch {
       toast.error("Failed to save point");
     }
   };
@@ -861,11 +908,13 @@ export default function MapManager({
   const handleSaveRoad = async () => {
     if (roadPoints.length < 2) {
       toast.error("A road needs at least 2 points");
+
       return;
     }
 
     if (!roadName) {
       toast.error("Please enter a name for the road");
+
       return;
     }
 
@@ -884,7 +933,7 @@ export default function MapManager({
       setSnappedIndices(new Set());
       setIsBidirectional(true);
       // stay on current mode
-    } catch (error) {
+    } catch {
       toast.error("Failed to save road");
     }
   };
@@ -893,14 +942,17 @@ export default function MapManager({
     if (!pendingPoint) return;
     if (!destForm.name.trim()) {
       toast.error("Destination name is required");
+
       return;
     }
     if (!destForm.category_id) {
       toast.error("Please select a category");
+
       return;
     }
     if (!onSaveDestination) {
       toast.error("Destination saving not available");
+
       return;
     }
 
@@ -927,7 +979,7 @@ export default function MapManager({
       setPendingPoint(null);
       // stay on current mode
       toast.success("Destination created successfully!");
-    } catch (error) {
+    } catch {
       toast.error("Failed to create destination");
     }
   };
@@ -945,6 +997,7 @@ export default function MapManager({
   const finishRoad = () => {
     if (roadPoints.length < 2) {
       toast.error("A road needs at least 2 points");
+
       return;
     }
     setRoadName(getDefaultRoadName());
@@ -978,6 +1031,7 @@ export default function MapManager({
       destForm.name.trim() ||
       destForm.description.trim() ||
       destForm.address.trim();
+
     if (hasData) {
       if (!confirm("Discard this destination? All entered data will be lost."))
         return;
@@ -1014,27 +1068,18 @@ export default function MapManager({
       pier: "#a855f7",
       intersection: "#6b7280",
     };
-    return colors[type] || "#6b7280";
-  };
 
-  const getMarkerColor = (type: string) => {
-    const colors: Record<string, string> = {
-      tourist_spot: "bg-red-500",
-      bus_terminal: "bg-blue-500",
-      bus_stop: "bg-green-500",
-      pier: "bg-purple-500",
-      intersection: "bg-gray-500",
-    };
-    return colors[type] || "bg-gray-500";
+    return colors[type] || "#6b7280";
   };
 
   const getRoadColor = (roadType: string) => {
     const colors: Record<string, string> = {
-      highway: "#dc2626",   // red
+      highway: "#dc2626", // red
       main_road: "#2563eb", // blue
       local_road: "#16a34a", // green
-      ferry: "#7c3aed",     // purple
+      ferry: "#7c3aed", // purple
     };
+
     return colors[roadType] || "#6b7280";
   };
 
@@ -1092,48 +1137,48 @@ export default function MapManager({
               </span>
               <div className="grid grid-cols-3 gap-2">
                 <Button
-                  size="sm"
                   color={mode === "view" ? "primary" : "default"}
+                  size="sm"
                   variant={mode === "view" ? "solid" : "flat"}
                   onClick={() => switchMode("view")}
                 >
                   View
                 </Button>
                 <Button
-                  size="sm"
                   color={mode === "add_point" ? "primary" : "default"}
+                  size="sm"
                   variant={mode === "add_point" ? "solid" : "flat"}
                   onClick={() => switchMode("add_point")}
                 >
                   Point
                 </Button>
                 <Button
-                  size="sm"
                   color={mode === "add_road" ? "primary" : "default"}
+                  size="sm"
                   variant={mode === "add_road" ? "solid" : "flat"}
                   onClick={() => switchMode("add_road")}
                 >
                   Road
                 </Button>
                 <Button
-                  size="sm"
                   color={mode === "add_destination" ? "primary" : "default"}
+                  size="sm"
                   variant={mode === "add_destination" ? "solid" : "flat"}
                   onClick={() => switchMode("add_destination")}
                 >
                   Dest.
                 </Button>
                 <Button
-                  size="sm"
                   color={mode === "test_route" ? "primary" : "default"}
+                  size="sm"
                   variant={mode === "test_route" ? "solid" : "flat"}
                   onClick={() => switchMode("test_route")}
                 >
                   Route
                 </Button>
                 <Button
-                  size="sm"
                   color={mode === "transit_route" ? "secondary" : "default"}
+                  size="sm"
                   variant={mode === "transit_route" ? "solid" : "flat"}
                   onClick={() => switchMode("transit_route")}
                 >
@@ -1147,12 +1192,12 @@ export default function MapManager({
               <>
                 <Select
                   label="Point Type"
+                  popoverProps={{ className: "map-select-popover" }}
                   selectedKeys={[pointType]}
+                  size="sm"
                   onChange={(e) =>
                     setPointType(e.target.value as NewPoint["point_type"])
                   }
-                  size="sm"
-                  popoverProps={{ className: "map-select-popover" }}
                 >
                   <SelectItem key="tourist_spot">Tourist Spot</SelectItem>
                   <SelectItem key="bus_terminal">Bus Terminal</SelectItem>
@@ -1177,12 +1222,12 @@ export default function MapManager({
               <>
                 <Select
                   label="Road Type"
+                  popoverProps={{ className: "map-select-popover" }}
                   selectedKeys={[roadType]}
+                  size="sm"
                   onChange={(e) =>
                     setRoadType(e.target.value as NewRoad["road_type"])
                   }
-                  size="sm"
-                  popoverProps={{ className: "map-select-popover" }}
                 >
                   <SelectItem key="highway">Highway</SelectItem>
                   <SelectItem key="main_road">Main Road</SelectItem>
@@ -1192,8 +1237,8 @@ export default function MapManager({
 
                 <Checkbox
                   isSelected={isBidirectional}
-                  onValueChange={setIsBidirectional}
                   size="sm"
+                  onValueChange={setIsBidirectional}
                 >
                   <span style={{ color: "#374151" }}>
                     Two-way road (bidirectional)
@@ -1201,8 +1246,8 @@ export default function MapManager({
                 </Checkbox>
 
                 <div
-                  style={{ fontSize: "0.875rem", color: "#374151" }}
                   className="space-y-1"
+                  style={{ fontSize: "0.875rem", color: "#374151" }}
                 >
                   <p>Points added: {roadPoints.length}</p>
                   <p>
@@ -1227,16 +1272,16 @@ export default function MapManager({
 
                 <div className="flex gap-2">
                   <Button
-                    size="sm"
-                    color="success"
-                    onClick={finishRoad}
                     className="flex-1"
+                    color="success"
+                    size="sm"
+                    onClick={finishRoad}
                   >
                     Finish Road
                   </Button>
                   <Button
-                    size="sm"
                     color="danger"
+                    size="sm"
                     variant="flat"
                     onClick={cancelRoad}
                   >
@@ -1249,8 +1294,8 @@ export default function MapManager({
             {/* Add Destination Controls */}
             {mode === "add_destination" && (
               <div
-                style={{ fontSize: "0.875rem", color: "#374151" }}
                 className="space-y-1"
+                style={{ fontSize: "0.875rem", color: "#374151" }}
               >
                 <p>Click on the map to place a new destination.</p>
                 <p>A form will appear for you to enter details.</p>
@@ -1271,12 +1316,12 @@ export default function MapManager({
               <>
                 <Select
                   label="Optimize For"
+                  popoverProps={{ className: "map-select-popover" }}
                   selectedKeys={[routeOptimizeFor]}
+                  size="sm"
                   onChange={(e) =>
                     setRouteOptimizeFor(e.target.value as "distance" | "time")
                   }
-                  size="sm"
-                  popoverProps={{ className: "map-select-popover" }}
                 >
                   <SelectItem key="distance">Shortest Distance</SelectItem>
                   <SelectItem key="time">Fastest Time</SelectItem>
@@ -1287,12 +1332,12 @@ export default function MapManager({
                   <Select
                     label="Add Destination Stop"
                     placeholder="Choose a destination..."
+                    popoverProps={{ className: "map-select-popover" }}
                     selectedKeys={[]}
+                    size="sm"
                     onChange={(e) => {
                       if (e.target.value) addDestinationStop(e.target.value);
                     }}
-                    size="sm"
-                    popoverProps={{ className: "map-select-popover" }}
                   >
                     {destinationMarkers.map((dest) => (
                       <SelectItem key={dest.id}>
@@ -1326,7 +1371,6 @@ export default function MapManager({
                           {idx + 1}. {stop.name}
                         </span>
                         <button
-                          onClick={() => removeStop(idx)}
                           style={{
                             fontSize: "0.7rem",
                             color: "#dc2626",
@@ -1335,6 +1379,7 @@ export default function MapManager({
                             border: "none",
                             padding: "2px 6px",
                           }}
+                          onClick={() => removeStop(idx)}
                         >
                           Remove
                         </button>
@@ -1344,8 +1389,8 @@ export default function MapManager({
                 )}
 
                 <div
-                  style={{ fontSize: "0.875rem", color: "#374151" }}
                   className="space-y-1"
+                  style={{ fontSize: "0.875rem", color: "#374151" }}
                 >
                   {!routeStart ? (
                     <div
@@ -1387,7 +1432,7 @@ export default function MapManager({
                       <div
                         className="animate-spin rounded-full h-4 w-4 border-b-2"
                         style={{ borderColor: "#2563eb" }}
-                      ></div>
+                      />
                       <p style={{ color: "#2563eb", fontWeight: 500 }}>
                         Calculating route...
                       </p>
@@ -1569,11 +1614,11 @@ export default function MapManager({
 
                 {(routeStart || routeLegs.length > 0) && (
                   <Button
-                    size="sm"
+                    className="w-full"
                     color="danger"
+                    size="sm"
                     variant="flat"
                     onClick={clearRoute}
-                    className="w-full"
                   >
                     Clear Route
                   </Button>
@@ -1586,14 +1631,30 @@ export default function MapManager({
               <div className="space-y-2">
                 <div
                   className="p-2 rounded"
-                  style={{ background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.2)" }}
+                  style={{
+                    background: "rgba(139,92,246,0.08)",
+                    border: "1px solid rgba(139,92,246,0.2)",
+                  }}
                 >
-                  <p style={{ fontSize: "0.75rem", fontWeight: 600, color: "#7c3aed" }}>
+                  <p
+                    style={{
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                      color: "#7c3aed",
+                    }}
+                  >
                     Transit Route Builder
                   </p>
-                  <p style={{ fontSize: "0.7rem", color: "#6b7280", marginTop: "2px" }}>
+                  <p
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#6b7280",
+                      marginTop: "2px",
+                    }}
+                  >
                     Click roads to add/remove from route.
-                    {transitPickupMode === "stops_only" && " Click transit stops to toggle them."}
+                    {transitPickupMode === "stops_only" &&
+                      " Click transit stops to toggle them."}
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -1601,7 +1662,9 @@ export default function MapManager({
                     className="p-2 rounded text-center"
                     style={{ background: "rgba(0,0,0,0.04)" }}
                   >
-                    <p style={{ fontSize: "0.65rem", color: "#6b7280" }}>Roads</p>
+                    <p style={{ fontSize: "0.65rem", color: "#6b7280" }}>
+                      Roads
+                    </p>
                     <p style={{ fontWeight: 700, color: "#7c3aed" }}>
                       {transitSelectedRoadIds.length}
                     </p>
@@ -1610,50 +1673,79 @@ export default function MapManager({
                     className="p-2 rounded text-center"
                     style={{ background: "rgba(0,0,0,0.04)" }}
                   >
-                    <p style={{ fontSize: "0.65rem", color: "#6b7280" }}>Stops</p>
+                    <p style={{ fontSize: "0.65rem", color: "#6b7280" }}>
+                      Stops
+                    </p>
                     <p style={{ fontWeight: 700, color: "#7c3aed" }}>
                       {transitSelectedStopIds.length}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-1 rounded" style={{ background: transitRouteColor }} />
-                  <span style={{ fontSize: "0.7rem", color: "#374151" }}>Selected road</span>
+                  <div
+                    className="w-6 h-1 rounded"
+                    style={{ background: transitRouteColor }}
+                  />
+                  <span style={{ fontSize: "0.7rem", color: "#374151" }}>
+                    Selected road
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-1 rounded" style={{ background: "#94a3b8" }} />
-                  <span style={{ fontSize: "0.7rem", color: "#374151" }}>Unselected road</span>
+                  <div
+                    className="w-6 h-1 rounded"
+                    style={{ background: "#94a3b8" }}
+                  />
+                  <span style={{ fontSize: "0.7rem", color: "#374151" }}>
+                    Unselected road
+                  </span>
                 </div>
                 {transitPickupMode === "stops_only" && (
                   <>
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ background: "#3b82f6" }} />
-                      <span style={{ fontSize: "0.7rem", color: "#374151" }}>Bus Stop</span>
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ background: "#3b82f6" }}
+                      />
+                      <span style={{ fontSize: "0.7rem", color: "#374151" }}>
+                        Bus Stop
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ background: "#8b5cf6" }} />
-                      <span style={{ fontSize: "0.7rem", color: "#374151" }}>Bus Terminal</span>
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ background: "#8b5cf6" }}
+                      />
+                      <span style={{ fontSize: "0.7rem", color: "#374151" }}>
+                        Bus Terminal
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ background: "#0891b2" }} />
-                      <span style={{ fontSize: "0.7rem", color: "#374151" }}>Pier / Port</span>
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ background: "#0891b2" }}
+                      />
+                      <span style={{ fontSize: "0.7rem", color: "#374151" }}>
+                        Pier / Port
+                      </span>
                     </div>
                   </>
                 )}
-                {(transitSelectedRoadIds.length > 0 || transitSelectedStopIds.length > 0) && onTransitRoadsChange && (
-                  <Button
-                    size="sm"
-                    color="danger"
-                    variant="flat"
-                    onClick={() => {
-                      onTransitRoadsChange([]);
-                      onTransitStopsChange?.([]);
-                    }}
-                    className="w-full"
-                  >
-                    Clear Selection
-                  </Button>
-                )}
+                {(transitSelectedRoadIds.length > 0 ||
+                  transitSelectedStopIds.length > 0) &&
+                  onTransitRoadsChange && (
+                    <Button
+                      className="w-full"
+                      color="danger"
+                      size="sm"
+                      variant="flat"
+                      onClick={() => {
+                        onTransitRoadsChange([]);
+                        onTransitStopsChange?.([]);
+                      }}
+                    >
+                      Clear Selection
+                    </Button>
+                  )}
               </div>
             )}
 
@@ -1728,11 +1820,11 @@ export default function MapManager({
                 </p>
                 <div className="flex items-center gap-2">
                   <svg
-                    width="14"
+                    className="flex-shrink-0"
+                    fill="none"
                     height="18"
                     viewBox="0 0 28 36"
-                    fill="none"
-                    className="flex-shrink-0"
+                    width="14"
                   >
                     <path
                       d="M14 0C6.268 0 0 6.268 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.268 21.732 0 14 0z"
@@ -1741,21 +1833,21 @@ export default function MapManager({
                     <circle
                       cx="14"
                       cy="14"
-                      r="7"
                       fill="white"
                       fillOpacity="0.9"
+                      r="7"
                     />
-                    <circle cx="14" cy="14" r="4" fill="#e11d48" />
+                    <circle cx="14" cy="14" fill="#e11d48" r="4" />
                   </svg>
                   <span>Destination</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <svg
-                    width="14"
+                    className="flex-shrink-0"
+                    fill="none"
                     height="18"
                     viewBox="0 0 28 36"
-                    fill="none"
-                    className="flex-shrink-0"
+                    width="14"
                   >
                     <path
                       d="M14 0C6.268 0 0 6.268 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.268 21.732 0 14 0z"
@@ -1764,11 +1856,11 @@ export default function MapManager({
                     <circle
                       cx="14"
                       cy="14"
-                      r="7"
                       fill="white"
                       fillOpacity="0.9"
+                      r="7"
                     />
-                    <circle cx="14" cy="14" r="4" fill="#f59e0b" />
+                    <circle cx="14" cy="14" fill="#f59e0b" r="4" />
                   </svg>
                   <span>Featured Destination</span>
                 </div>
@@ -1843,136 +1935,162 @@ export default function MapManager({
       {/* Map */}
       <MapContainer
         center={[10.3157, 123.8854]}
-        zoom={11}
-        minZoom={9}
-        maxZoom={19}
+        className="z-0"
         maxBounds={[
           [9.35, 123.15],
           [11.35, 124.65],
         ]}
         maxBoundsViscosity={1.0}
+        maxZoom={19}
+        minZoom={9}
         style={{ height: "100%", width: "100%" }}
-        className="z-0"
+        zoom={11}
       >
         <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           maxNativeZoom={19}
           maxZoom={19}
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <MapClickHandler onMapClick={handleMapClick} mode={mode} />
+        <MapClickHandler mode={mode} onMapClick={handleMapClick} />
         <CenterMapButton />
 
         {/* Existing markers — render as CircleMarker for all point types */}
         {markers.map((marker, index) => {
-          const isTransitStop = ["bus_stop", "bus_terminal", "pier"].includes(marker.type);
+          const isTransitStop = ["bus_stop", "bus_terminal", "pier"].includes(
+            marker.type,
+          );
           const isTransitMode = mode === "transit_route";
-          const isTransitSelected = marker.id ? transitSelectedStopIds.includes(marker.id) : false;
+          const isTransitSelected = marker.id
+            ? transitSelectedStopIds.includes(marker.id)
+            : false;
           // In transit mode: only show transit-type stops; dim non-selected ones
           const transitRadius = isTransitSelected ? 11 : 7;
           const transitFillOpacity = isTransitSelected ? 1.0 : 0.5;
           const normalRadius = marker.type === "intersection" ? 6 : 8;
 
           return (
-          <CircleMarker
-            key={marker.id || `marker-${index}`}
-            center={marker.position}
-            radius={isTransitMode ? transitRadius : normalRadius}
-            pathOptions={{
-              color: isTransitMode && isTransitSelected ? "#fff" : "#fff",
-              weight: isTransitMode ? (isTransitSelected ? 3 : 1.5) : 2,
-              fillColor: getCircleMarkerColor(marker.type),
-              fillOpacity: isTransitMode ? transitFillOpacity : 0.9,
-              interactive: mode === "view" || (isTransitMode && isTransitStop && transitPickupMode === "stops_only"),
-            }}
-            eventHandlers={{
-              click: (e) => {
-                if (isTransitMode && isTransitStop && transitPickupMode === "stops_only" && marker.id && onTransitStopsChange) {
-                  const cur = new Set(transitSelectedStopIds);
-                  if (cur.has(marker.id)) { cur.delete(marker.id); } else { cur.add(marker.id); }
-                  onTransitStopsChange(Array.from(cur));
-                } else if (mode !== "view") {
-                  L.DomEvent.stopPropagation(e);
-                }
-              },
-            }}
-          >
-            {mode === "view" && <Popup>
-              <div style={{ minWidth: "160px" }}>
-                <p className="font-semibold text-sm">{marker.name}</p>
-                <p className="text-xs text-gray-500 mb-2">
-                  {marker.type.replace("_", " ")}
-                </p>
-                <p className="text-xs text-gray-400 mb-2">
-                  {Number(marker.position[0]).toFixed(6)},{" "}
-                  {Number(marker.position[1]).toFixed(6)}
-                </p>
-                {marker.id && mode === "view" && (
-                  <div style={{ display: "flex", gap: "4px" }}>
-                    {onUpdatePoint && (
-                      <button
-                        onClick={() => {
-                          const newName = prompt("Edit name:", marker.name);
-                          if (newName && newName !== marker.name && marker.id) {
-                            onUpdatePoint(marker.id, { name: newName }).then(
-                              () => {
-                                setMarkers((prev) =>
-                                  prev.map((m) =>
-                                    m.id === marker.id
-                                      ? { ...m, name: newName }
-                                      : m,
-                                  ),
-                                );
-                              },
-                            );
-                          }
-                        }}
-                        style={{
-                          padding: "2px 8px",
-                          fontSize: "11px",
-                          background: "#2563eb",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Edit
-                      </button>
-                    )}
-                    {onDeletePoint && (
-                      <button
-                        onClick={() => {
-                          if (
-                            confirm(`Delete "${marker.name}"?`) &&
-                            marker.id
-                          ) {
-                            onDeletePoint(marker.id).then(() => {
-                              setMarkers((prev) =>
-                                prev.filter((m) => m.id !== marker.id),
-                              );
-                            });
-                          }
-                        }}
-                        style={{
-                          padding: "2px 8px",
-                          fontSize: "11px",
-                          background: "#dc2626",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Delete
-                      </button>
+            <CircleMarker
+              key={marker.id || `marker-${index}`}
+              center={marker.position}
+              eventHandlers={{
+                click: (e) => {
+                  if (
+                    isTransitMode &&
+                    isTransitStop &&
+                    transitPickupMode === "stops_only" &&
+                    marker.id &&
+                    onTransitStopsChange
+                  ) {
+                    const cur = new Set(transitSelectedStopIds);
+
+                    if (cur.has(marker.id)) {
+                      cur.delete(marker.id);
+                    } else {
+                      cur.add(marker.id);
+                    }
+                    onTransitStopsChange(Array.from(cur));
+                  } else if (mode !== "view") {
+                    L.DomEvent.stopPropagation(e);
+                  }
+                },
+              }}
+              pathOptions={{
+                color: isTransitMode && isTransitSelected ? "#fff" : "#fff",
+                weight: isTransitMode ? (isTransitSelected ? 3 : 1.5) : 2,
+                fillColor: getCircleMarkerColor(marker.type),
+                fillOpacity: isTransitMode ? transitFillOpacity : 0.9,
+                interactive:
+                  mode === "view" ||
+                  (isTransitMode &&
+                    isTransitStop &&
+                    transitPickupMode === "stops_only"),
+              }}
+              radius={isTransitMode ? transitRadius : normalRadius}
+            >
+              {mode === "view" && (
+                <Popup>
+                  <div style={{ minWidth: "160px" }}>
+                    <p className="font-semibold text-sm">{marker.name}</p>
+                    <p className="text-xs text-gray-500 mb-2">
+                      {marker.type.replace("_", " ")}
+                    </p>
+                    <p className="text-xs text-gray-400 mb-2">
+                      {Number(marker.position[0]).toFixed(6)},{" "}
+                      {Number(marker.position[1]).toFixed(6)}
+                    </p>
+                    {marker.id && mode === "view" && (
+                      <div style={{ display: "flex", gap: "4px" }}>
+                        {onUpdatePoint && (
+                          <button
+                            style={{
+                              padding: "2px 8px",
+                              fontSize: "11px",
+                              background: "#2563eb",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                            }}
+                            onClick={() => {
+                              const newName = prompt("Edit name:", marker.name);
+
+                              if (
+                                newName &&
+                                newName !== marker.name &&
+                                marker.id
+                              ) {
+                                onUpdatePoint(marker.id, {
+                                  name: newName,
+                                }).then(() => {
+                                  setMarkers((prev) =>
+                                    prev.map((m) =>
+                                      m.id === marker.id
+                                        ? { ...m, name: newName }
+                                        : m,
+                                    ),
+                                  );
+                                });
+                              }
+                            }}
+                          >
+                            Edit
+                          </button>
+                        )}
+                        {onDeletePoint && (
+                          <button
+                            style={{
+                              padding: "2px 8px",
+                              fontSize: "11px",
+                              background: "#dc2626",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                            }}
+                            onClick={() => {
+                              if (
+                                confirm(`Delete "${marker.name}"?`) &&
+                                marker.id
+                              ) {
+                                onDeletePoint(marker.id).then(() => {
+                                  setMarkers((prev) =>
+                                    prev.filter((m) => m.id !== marker.id),
+                                  );
+                                });
+                              }
+                            }}
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
-            </Popup>}
-          </CircleMarker>
+                </Popup>
+              )}
+            </CircleMarker>
           );
         })}
 
@@ -1980,13 +2098,13 @@ export default function MapManager({
         {destinationMarkers.map((dest) => (
           <ZoomAwareDestinationMarker
             key={`dest-${dest.id}`}
-            position={dest.position}
-            name={dest.name}
-            image={dest.image}
-            categoryName={dest.categoryName}
             address={dest.address}
-            isFeatured={dest.isFeatured}
+            categoryName={dest.categoryName}
+            image={dest.image}
             interactive={mode === "view"}
+            isFeatured={dest.isFeatured}
+            name={dest.name}
+            position={dest.position}
             showPopup={mode === "view"}
           />
         ))}
@@ -1996,56 +2114,110 @@ export default function MapManager({
           const isTransitMode = mode === "transit_route";
           const isTransitSelected = transitSelectedRoadIds.includes(road.id);
           const roadColor = isTransitMode
-            ? (isTransitSelected ? transitRouteColor : "#94a3b8")
+            ? isTransitSelected
+              ? transitRouteColor
+              : "#94a3b8"
             : getRoadColor(road.roadType);
           const roadWeight = isTransitMode
-            ? (isTransitSelected ? 5 : 2)
-            : (road.roadType === "ferry" ? 2 : 3);
+            ? isTransitSelected
+              ? 5
+              : 2
+            : road.roadType === "ferry"
+              ? 2
+              : 3;
           const roadOpacity = isTransitMode
-            ? (isTransitSelected ? 0.95 : 0.35)
+            ? isTransitSelected
+              ? 0.95
+              : 0.35
             : 0.8;
 
           return (
             <React.Fragment key={`saved-road-${road.id}`}>
               <Polyline
-                positions={road.positions}
+                eventHandlers={
+                  isTransitMode && onTransitRoadsChange
+                    ? {
+                        click: () => {
+                          const cur = new Set(transitSelectedRoadIds);
+
+                          if (cur.has(road.id)) {
+                            cur.delete(road.id);
+                          } else {
+                            cur.add(road.id);
+                          }
+                          onTransitRoadsChange(Array.from(cur));
+                        },
+                      }
+                    : {}
+                }
                 pathOptions={{
                   color: roadColor,
                   weight: roadWeight,
                   opacity: roadOpacity,
-                  dashArray: !isTransitMode && road.roadType === "ferry" ? "8 6" : undefined,
+                  dashArray:
+                    !isTransitMode && road.roadType === "ferry"
+                      ? "8 6"
+                      : undefined,
                 }}
-                eventHandlers={isTransitMode && onTransitRoadsChange ? {
-                  click: () => {
-                    const cur = new Set(transitSelectedRoadIds);
-                    if (cur.has(road.id)) { cur.delete(road.id); } else { cur.add(road.id); }
-                    onTransitRoadsChange(Array.from(cur));
-                  },
-                } : {}}
+                positions={road.positions}
               >
                 {!isTransitMode && (
                   <Popup>
                     <div style={{ minWidth: "140px" }}>
-                      <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 4px" }}>
+                      <p
+                        style={{
+                          fontWeight: 600,
+                          fontSize: "13px",
+                          margin: "0 0 4px",
+                        }}
+                      >
                         {road.name}
                       </p>
-                      <p style={{ fontSize: "11px", color: "#6b7280", margin: "0 0 2px" }}>
+                      <p
+                        style={{
+                          fontSize: "11px",
+                          color: "#6b7280",
+                          margin: "0 0 2px",
+                        }}
+                      >
                         Type: {road.roadType.replace("_", " ")}
                       </p>
-                      <p style={{ fontSize: "11px", color: "#6b7280", margin: "0 0 2px" }}>
+                      <p
+                        style={{
+                          fontSize: "11px",
+                          color: "#6b7280",
+                          margin: "0 0 2px",
+                        }}
+                      >
                         {road.distance} km &middot; ~{road.estimatedTime} min
                       </p>
-                      <p style={{ fontSize: "11px", color: "#6b7280", margin: "0 0 8px" }}>
-                        Direction: {road.isBidirectional ? "↔ Two-way" : "→ One-way"}
+                      <p
+                        style={{
+                          fontSize: "11px",
+                          color: "#6b7280",
+                          margin: "0 0 8px",
+                        }}
+                      >
+                        Direction:{" "}
+                        {road.isBidirectional ? "↔ Two-way" : "→ One-way"}
                       </p>
                       {onDeleteRoad && (
                         <Button
-                          size="sm"
                           color="danger"
+                          size="sm"
+                          style={{
+                            fontSize: "11px",
+                            minHeight: "24px",
+                            height: "24px",
+                            padding: "0 8px",
+                          }}
                           variant="flat"
-                          style={{ fontSize: "11px", minHeight: "24px", height: "24px", padding: "0 8px" }}
                           onClick={() => {
-                            if (confirm(`Delete road "${road.name}"? This cannot be undone.`)) {
+                            if (
+                              confirm(
+                                `Delete road "${road.name}"? This cannot be undone.`,
+                              )
+                            ) {
                               onDeleteRoad(road.id);
                             }
                           }}
@@ -2060,9 +2232,9 @@ export default function MapManager({
               {/* Show direction decorators: in transit mode only for selected roads */}
               {(!isTransitMode || isTransitSelected) && (
                 <RoadDecorator
-                  positions={road.positions}
                   color={roadColor}
                   isBidirectional={road.isBidirectional}
+                  positions={road.positions}
                 />
               )}
             </React.Fragment>
@@ -2072,11 +2244,11 @@ export default function MapManager({
         {/* Road in progress */}
         {roadPoints.length > 0 && (
           <RoadPolyline
-            positions={roadPoints}
             color="blue"
-            weight={4}
-            opacity={0.7}
             isBidirectional={isBidirectional}
+            opacity={0.7}
+            positions={roadPoints}
+            weight={4}
           />
         )}
 
@@ -2086,13 +2258,13 @@ export default function MapManager({
             <CircleMarker
               key={`road-pt-${idx}`}
               center={pt}
-              radius={snappedIndices.has(idx) ? 7 : 5}
               pathOptions={{
                 color: snappedIndices.has(idx) ? "#16a34a" : "#f59e0b",
                 fillColor: snappedIndices.has(idx) ? "#16a34a" : "#f59e0b",
                 fillOpacity: 0.8,
                 weight: 2,
               }}
+              radius={snappedIndices.has(idx) ? 7 : 5}
             >
               <Popup>
                 <span className="text-xs">
@@ -2110,13 +2282,13 @@ export default function MapManager({
         {mode === "test_route" && routeStart && (
           <CircleMarker
             center={routeStart}
-            radius={10}
             pathOptions={{
               color: "#16a34a",
               fillColor: "#22c55e",
               fillOpacity: 0.9,
               weight: 3,
             }}
+            radius={10}
           >
             <Popup>
               <span style={{ color: "#111", fontWeight: 600 }}>
@@ -2132,7 +2304,6 @@ export default function MapManager({
             <CircleMarker
               key={`route-stop-${idx}`}
               center={stop.position}
-              radius={idx === routeStops.length - 1 ? 10 : 8}
               pathOptions={{
                 color: idx === routeStops.length - 1 ? "#dc2626" : "#7c3aed",
                 fillColor:
@@ -2140,6 +2311,7 @@ export default function MapManager({
                 fillOpacity: 0.9,
                 weight: 3,
               }}
+              radius={idx === routeStops.length - 1 ? 10 : 8}
             >
               <Popup>
                 <span style={{ color: "#111", fontWeight: 600 }}>
@@ -2155,13 +2327,13 @@ export default function MapManager({
             positions.length >= 2 ? (
               <Polyline
                 key={`route-leg-${idx}`}
-                positions={positions}
                 pathOptions={{
                   color: "#7c3aed",
                   weight: 5,
                   opacity: 0.8,
                   dashArray: "10, 6",
                 }}
+                positions={positions}
               />
             ) : null,
           )}
@@ -2172,16 +2344,16 @@ export default function MapManager({
             (leg.virtualConnections || []).map((vc, idx) => (
               <Polyline
                 key={`vc-${legIdx}-${idx}`}
-                positions={[
-                  [vc.from.lat, vc.from.lon],
-                  [vc.to.lat, vc.to.lon],
-                ]}
                 pathOptions={{
                   color: "#f59e0b",
                   weight: 3,
                   opacity: 0.7,
                   dashArray: "5, 8",
                 }}
+                positions={[
+                  [vc.from.lat, vc.from.lon],
+                  [vc.to.lat, vc.to.lon],
+                ]}
               />
             )),
           )}
@@ -2190,13 +2362,13 @@ export default function MapManager({
         {mode === "add_destination" && pendingPoint && (
           <CircleMarker
             center={[pendingPoint.lat, pendingPoint.lng]}
-            radius={12}
             pathOptions={{
               color: "#e11d48",
               fillColor: "#f43f5e",
               fillOpacity: 0.9,
               weight: 3,
             }}
+            radius={12}
           >
             <Popup>
               <span style={{ color: "#111", fontWeight: 600 }}>
