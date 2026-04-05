@@ -7,26 +7,26 @@ export default function Document() {
   return (
     <Html lang="en">
       <Head>
-        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link href="/favicon.ico" rel="icon" sizes="any" />
         <link
-          rel="icon"
-          type="image/png"
-          sizes="32x32"
           href="/favicon-32x32.png"
-        />
-        <link
           rel="icon"
+          sizes="32x32"
           type="image/png"
-          sizes="16x16"
-          href="/favicon-16x16.png"
         />
         <link
+          href="/favicon-16x16.png"
+          rel="icon"
+          sizes="16x16"
+          type="image/png"
+        />
+        <link
+          href="/apple-touch-icon.png"
           rel="apple-touch-icon"
           sizes="180x180"
-          href="/apple-touch-icon.png"
         />
-        <link rel="manifest" href="/site.webmanifest" />
-        <meta name="theme-color" content="#e11d48" />
+        <link href="/site.webmanifest" rel="manifest" />
+        <meta content="#e11d48" name="theme-color" />
       </Head>
       <body
         className={clsx(

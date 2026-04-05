@@ -29,7 +29,7 @@ export default function App({ Component, pageProps }: AppProps) {
     <QueryClientProvider client={queryClient}>
       <HeroUIProvider navigate={router.push}>
         <NextThemesProvider attribute="class" defaultTheme="dark">
-          <ToastProvider placement="top-right" maxVisibleToasts={5} />
+          <ToastProvider maxVisibleToasts={5} placement="top-right" />
           <Component {...pageProps} />
         </NextThemesProvider>
       </HeroUIProvider>

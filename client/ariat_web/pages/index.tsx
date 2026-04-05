@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
+
 import AnimatedBackground from "@/components/animated-background";
 
 export default function IndexPage() {
@@ -20,9 +21,9 @@ export default function IndexPage() {
         <div className="flex flex-col items-center gap-4">
           <div className="relative">
             <img
-              src="/android-chrome-192x192.png"
               alt="AIRAT-NA"
               className="h-20 w-20 object-contain animate-pulse"
+              src="/android-chrome-192x192.png"
             />
             <div
               className="absolute inset-[-8px] rounded-full border-3 border-transparent animate-spin"

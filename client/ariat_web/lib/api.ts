@@ -33,9 +33,11 @@ class ApiClient {
     this.client.interceptors.request.use(
       (config) => {
         const token = this.getAccessToken();
+
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+
         return config;
       },
       (error) => Promise.reject(error),
@@ -98,6 +100,7 @@ class ApiClient {
             ) {
               window.location.href = "/login";
             }
+
             return Promise.reject(refreshError);
           } finally {
             this.isRefreshing = false;
