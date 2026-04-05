@@ -53,6 +53,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       AppToast.warning(context, 'Password must be at least 8 characters');
       return;
     }
+    final passwordRegex = RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)');
+    if (!passwordRegex.hasMatch(password)) {
+      AppToast.warning(context, 'Password must contain uppercase, lowercase, and a number');
+      return;
+    }
     if (password != confirm) {
       AppToast.error(context, 'Passwords do not match');
       return;
@@ -152,7 +157,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           _buildField('Full Name *', _nameController, placeholder: 'John Doe'),
                           _buildField('Email *', _emailController, placeholder: 'you@example.com', keyboardType: TextInputType.emailAddress),
                           _buildField('Phone Number', _phoneController, placeholder: '+63 XXX XXX XXXX', keyboardType: TextInputType.phone),
-                          _buildField('Password *', _passwordController, placeholder: 'Min 6 characters', isPassword: true),
+                          _buildField('Password *', _passwordController, placeholder: 'Min 8 chars: A-Z, a-z, 0-9', isPassword: true),
                           _buildField('Confirm Password *', _confirmController, placeholder: 'Re-enter password', isPassword: true),
                           SizedBox(height: 8),
                           SizedBox(

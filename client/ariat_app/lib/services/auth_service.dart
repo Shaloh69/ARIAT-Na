@@ -13,7 +13,7 @@ class AuthService extends ChangeNotifier {
   // Non-sensitive keys — stored in SharedPreferences
   static const _userKey = 'user_data';
   static const _baseUrlKey = 'api_base_url';
-  static const String defaultBaseUrl = 'http://10.0.2.2:5000/api/v1';
+  static const String defaultBaseUrl = 'https://ariat-na-server.onrender.com/api/v1';
 
   final CacheService _cache = CacheService();
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
@@ -101,10 +101,10 @@ class AuthService extends ChangeNotifier {
       Uri.parse('$_baseUrl/auth/user/login'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'email': email, 'password': password}),
-    );
+    ).timeout(const Duration(seconds: 30));
     final body = jsonDecode(response.body);
     if (response.statusCode != 200 || body['success'] != true) {
-      throw Exception(body['message'] ?? 'Login failed');
+      throw Exception(body['message'] ?? body['error'] ?? 'Login failed');
     }
     _isOfflineSession = false;
     await _saveAuthData(body['data']);
@@ -154,10 +154,10 @@ class AuthService extends ChangeNotifier {
         'password': password,
         if (phone != null && phone.isNotEmpty) 'phone_number': phone,
       }),
-    );
+    ).timeout(const Duration(seconds: 30));
     final body = jsonDecode(response.body);
     if (response.statusCode != 201 || body['success'] != true) {
-      throw Exception(body['message'] ?? 'Registration failed');
+      throw Exception(body['message'] ?? body['error'] ?? 'Registration failed');
     }
     await _saveAuthData(body['data']);
 
@@ -175,7 +175,7 @@ class AuthService extends ChangeNotifier {
     final response = await http.get(
       Uri.parse('$_baseUrl/auth/user/me'),
       headers: _authHeaders(),
-    );
+    ).timeout(const Duration(seconds: 30));
     final body = jsonDecode(response.body);
     if (response.statusCode == 200 && body['success'] == true) {
       _user = body['data'];
@@ -195,7 +195,7 @@ class AuthService extends ChangeNotifier {
         if (fullName != null) 'full_name': fullName,
         if (phone != null) 'phone_number': phone,
       }),
-    );
+    ).timeout(const Duration(seconds: 30));
     final body = jsonDecode(response.body);
     if (response.statusCode == 200 && body['success'] == true) {
       await fetchProfile();
@@ -209,7 +209,7 @@ class AuthService extends ChangeNotifier {
       Uri.parse('$_baseUrl/auth/refresh'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'refreshToken': _refreshToken}),
-    );
+    ).timeout(const Duration(seconds: 30));
     final body = jsonDecode(response.body);
     if (response.statusCode == 200 && body['success'] == true) {
       _accessToken = body['data']['accessToken'];
