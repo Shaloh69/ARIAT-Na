@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+
+export const FOOTER_H = 44; // px — collapsed footer height (exported for hero sizing)
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { Chip } from "@heroui/chip";
@@ -23,6 +25,7 @@ export default function KioskLayout({
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showAttract, setShowAttract] = useState(false);
   const [clock, setClock] = useState("");
+  const [footerOpen, setFooterOpen] = useState(false);
 
   const resetIdle = useCallback(() => {
     if (idleTimer.current) clearTimeout(idleTimer.current);
@@ -137,7 +140,46 @@ export default function KioskLayout({
         </header>
 
         {/* ── Page content ────────────────────────────────────────────── */}
-        <main className="relative z-10">{children}</main>
+        <main className="relative z-10" style={{ paddingBottom: FOOTER_H }}>
+          {children}
+        </main>
+
+        {/* ── Footer ──────────────────────────────────────────────────── */}
+        <footer
+          className="kiosk-footer"
+          style={{ height: footerOpen ? 110 : FOOTER_H }}
+        >
+          {/* Collapsed bar (always visible) */}
+          <div className="kiosk-footer-bar">
+            <span className="kiosk-footer-brand">
+              <span style={{ color: "var(--red-500)", fontWeight: 800 }}>AIRAT-NA</span>
+              <span style={{ opacity: 0.45, margin: "0 8px" }}>·</span>
+              <span style={{ opacity: 0.5, fontSize: "0.78rem" }}>AI-Assisted Tourism</span>
+            </span>
+            <span className="kiosk-footer-loc">📍 Cebu, Philippines</span>
+            <button
+              aria-label={footerOpen ? "Collapse footer" : "Expand footer"}
+              className="kiosk-footer-toggle"
+              type="button"
+              onClick={() => setFooterOpen((v) => !v)}
+            >
+              {footerOpen ? "▼" : "▲"}
+            </button>
+          </div>
+
+          {/* Expanded content */}
+          {footerOpen && (
+            <div className="kiosk-footer-expanded">
+              <p style={{ opacity: 0.55, fontSize: "0.78rem" }}>
+                Scan any destination card to continue exploring on the AIRAT-NA mobile app.
+                Available on iOS &amp; Android.
+              </p>
+              <p style={{ opacity: 0.35, fontSize: "0.72rem" }}>
+                © 2026 AIRAT-NA · Thesis Project · Cebu Technological University
+              </p>
+            </div>
+          )}
+        </footer>
 
         {/* ── Attract / idle screen ───────────────────────────────────── */}
         {showAttract && (

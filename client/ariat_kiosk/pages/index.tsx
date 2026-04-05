@@ -7,7 +7,7 @@ import { Card, CardBody } from "@heroui/card";
 import { Chip } from "@heroui/chip";
 import { Skeleton } from "@heroui/skeleton";
 
-import KioskLayout from "@/components/KioskLayout";
+import KioskLayout, { FOOTER_H } from "@/components/KioskLayout";
 import QRHandoffModal from "@/components/QRHandoffModal";
 import { API_BASE_URL, API_ENDPOINTS } from "@/lib/constants";
 import { toast } from "@/lib/toast";
@@ -181,7 +181,7 @@ const KioskHome: NextPage = () => {
       {/* ═══════════════════════════════════════════════════════════════
           HERO SECTION
       ═══════════════════════════════════════════════════════════════ */}
-      <section className="home-hero">
+      <section className="home-hero" style={{ height: `calc(100vh - 68px - ${FOOTER_H}px)` }}>
         {/* Background image */}
         {heroImages[heroImageIdx] && (
           <img
@@ -228,16 +228,9 @@ const KioskHome: NextPage = () => {
             </div>
           </div>
 
-          {/* Right — stat chips */}
+          {/* Right — 3D stat cube rotator */}
           <div className="home-hero-right">
-            <div className="home-stat-grid">
-              <StatCard icon="🏖️" label="Beaches" value="30+" />
-              <StatCard icon="⛰️" label="Mountains" value="12+" />
-              <StatCard icon="🏛️" label="Heritage" value="20+" />
-              <StatCard icon="🏝️" label="Islands" value="167" />
-              <StatCard icon="🗺️" label="Regions" value="5" />
-              <StatCard icon="⭐" label="Featured" value="50+" />
-            </div>
+            <StatRotator />
           </div>
         </div>
       </section>
@@ -502,20 +495,47 @@ function SectionHeader({
   );
 }
 
-function StatCard({
-  icon,
-  label,
-  value,
-}: {
-  icon: string;
-  label: string;
-  value: string;
-}) {
+const STAT_ITEMS = [
+  { icon: "🏖️", label: "Beaches", value: "30+" },
+  { icon: "⛰️", label: "Mountains", value: "12+" },
+  { icon: "🏛️", label: "Heritage", value: "20+" },
+  { icon: "🏝️", label: "Islands", value: "167" },
+  { icon: "🗺️", label: "Regions", value: "5" },
+  { icon: "⭐", label: "Featured", value: "50+" },
+];
+
+function StatRotator() {
+  const [idx, setIdx] = useState(0);
+  const [animKey, setAnimKey] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setIdx((i) => (i + 1) % STAT_ITEMS.length);
+      setAnimKey((k) => k + 1);
+    }, 2400);
+
+    return () => clearInterval(t);
+  }, []);
+
+  const stat = STAT_ITEMS[idx];
+
   return (
-    <div className="stat-card">
-      <span className="stat-icon">{icon}</span>
-      <span className="stat-value">{value}</span>
-      <span className="stat-label">{label}</span>
+    <div className="stat-rotator-wrap">
+      <div key={animKey} className="stat-rotator-face">
+        <span className="stat-r-icon">{stat.icon}</span>
+        <span className="stat-r-value">{stat.value}</span>
+        <span className="stat-r-label">{stat.label}</span>
+      </div>
+      {/* Dot indicators */}
+      <div className="stat-rotator-dots">
+        {STAT_ITEMS.map((_, i) => (
+          <span
+            key={i}
+            className="stat-rotator-dot"
+            style={{ opacity: i === idx ? 1 : 0.25 }}
+          />
+        ))}
+      </div>
     </div>
   );
 }
