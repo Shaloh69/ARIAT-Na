@@ -40,7 +40,7 @@ class ApiService {
         final uri =
             Uri.parse('$baseUrl$path').replace(queryParameters: query);
         final response = await http.get(uri, headers: _headers(auth: auth))
-            .timeout(const Duration(seconds: 30));
+            .timeout(const Duration(seconds: 60));
         final body = _handleResponse(response);
 
         // Cache certain endpoints
@@ -64,7 +64,7 @@ class ApiService {
     final response = await http.post(uri,
         headers: _headers(auth: auth),
         body: body != null ? jsonEncode(body) : null)
-        .timeout(const Duration(seconds: 30));
+        .timeout(const Duration(seconds: 60));
     return _handleResponse(response);
   }
 
@@ -77,7 +77,7 @@ class ApiService {
     final response = await http.put(uri,
         headers: _headers(auth: auth),
         body: body != null ? jsonEncode(body) : null)
-        .timeout(const Duration(seconds: 30));
+        .timeout(const Duration(seconds: 60));
     return _handleResponse(response);
   }
 
@@ -88,7 +88,7 @@ class ApiService {
     }
     final uri = Uri.parse('$baseUrl$path');
     final response = await http.delete(uri, headers: _headers(auth: auth))
-        .timeout(const Duration(seconds: 30));
+        .timeout(const Duration(seconds: 60));
     return _handleResponse(response);
   }
 

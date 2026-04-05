@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart' show RefreshIndicator;
 import 'package:provider/provider.dart';
@@ -27,6 +28,9 @@ class _HomeScreenState extends State<HomeScreen> {
   List<CuratedGuide> _guides = [];
   bool _loading = true;
   bool _fromCache = false;
+  String _loadingMessage = 'Loading...';
+  Timer? _warmupTimer1;
+  Timer? _warmupTimer2;
 
   @override
   void initState() {
@@ -34,8 +38,42 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadData();
   }
 
+  @override
+  void dispose() {
+    _warmupTimer1?.cancel();
+    _warmupTimer2?.cancel();
+    super.dispose();
+  }
+
+  void _startWarmupTimers() {
+    _warmupTimer1?.cancel();
+    _warmupTimer2?.cancel();
+    // After 4s: hint the server might be waking up
+    _warmupTimer1 = Timer(const Duration(seconds: 4), () {
+      if (mounted && _loading) {
+        setState(() => _loadingMessage = 'Connecting to server...');
+      }
+    });
+    // After 10s: tell the user clearly it's a cold start
+    _warmupTimer2 = Timer(const Duration(seconds: 10), () {
+      if (mounted && _loading) {
+        setState(() => _loadingMessage = 'Server waking up —\nfirst load takes ~30s on free tier');
+      }
+    });
+  }
+
+  void _cancelWarmupTimers() {
+    _warmupTimer1?.cancel();
+    _warmupTimer2?.cancel();
+    _loadingMessage = 'Loading...';
+  }
+
   Future<void> _loadData() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _loadingMessage = 'Loading...';
+    });
+    _startWarmupTimers();
     final api = context.read<ApiService>();
 
     // Fetch independently — a missing/broken endpoint (e.g. guides table not yet seeded)
@@ -58,6 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
       AppToast.error(context, 'Could not load data. Check connection.');
     }
 
+    _cancelWarmupTimers();
     setState(() {
       _featured = featuredData.map((d) => Destination.fromJson(d as Map<String, dynamic>)).toList();
       _clusters = clusterData.map((c) => Cluster.fromJson(c as Map<String, dynamic>)).toList();
@@ -79,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return GradientBackground(
       child: SafeArea(
         child: _loading
-            ? const Center(child: ProgressRing())
+            ? _LoadingState(message: _loadingMessage)
             : RefreshIndicator(
                 onRefresh: _loadData,
                 color: AppColors.red500,
@@ -271,6 +310,37 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
+      ),
+    );
+  }
+}
+
+// ─── Quick action chip ────────────────────────────────────────────────────────
+
+// ─── Loading state with warm-up message ──────────────────────────────────────
+
+class _LoadingState extends StatelessWidget {
+  final String message;
+  const _LoadingState({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ProgressRing(strokeWidth: 3),
+            const SizedBox(height: 20),
+            Text(
+              message,
+              style: TextStyle(fontSize: 13, color: c.textMuted, height: 1.5),
+              textAlign: TextAlign.center,
+            ).animate().fadeIn(duration: 400.ms),
+          ],
+        ),
       ),
     );
   }

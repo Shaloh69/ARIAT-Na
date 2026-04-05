@@ -503,11 +503,24 @@ export const getFeaturedDestinations = async (
     LIMIT 10
   `;
 
-  const [destinations]: any = await pool.execute(sql, [true, true]);
+  let [destinations]: any = await pool.execute(sql, [true, true]);
+
+  // Fallback: if no destinations are marked featured, return the top-rated active ones
+  if ((destinations as any[]).length === 0) {
+    const fallbackSql = `
+      SELECT d.*, c.name as category_name, c.slug as category_slug
+      FROM destinations d
+      LEFT JOIN categories c ON d.category_id = c.id
+      WHERE d.is_active = TRUE
+      ORDER BY d.rating DESC, d.popularity_score DESC
+      LIMIT 10
+    `;
+    [destinations] = await pool.execute(fallbackSql);
+  }
 
   res.json({
     success: true,
-    data: destinations.map(formatDestination),
+    data: (destinations as any[]).map(formatDestination),
   });
 };
 
