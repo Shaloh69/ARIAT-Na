@@ -295,6 +295,129 @@ const KioskPlanPage: NextPage = () => {
     return (steps.indexOf(aiStep) / (steps.length - 1)) * 100;
   };
 
+  // ── Shared back handler ───────────────────────────────────────────
+  const handleBack = () => {
+    if (planMode === "pick") {
+      if (pickStep === "select") { setPlanMode(null); return; }
+      if (pickStep === "transport") { setPickStep("select"); return; }
+      if (pickStep === "result") { setPickStep("transport"); setResult(null); return; }
+    } else {
+      const steps: AiStep[] = ["interests", "group", "transport", "regions", "duration", "result"];
+      const idx = steps.indexOf(aiStep);
+      if (idx === 0) { setPlanMode(null); return; }
+      setAiStep(steps[idx - 1]);
+      if (aiStep === "result") setResult(null);
+    }
+  };
+
+  // ── Full-screen picker ────────────────────────────────────────────
+  if (planMode === "pick" && pickStep === "select") {
+    return (
+      <KioskLayout title="Plan My Trip — AIRAT-NA">
+        <div className="picker-fullscreen">
+          {/* Map fills everything */}
+          {loadingDests ? (
+            <div className="picker-fs-loading">
+              <div className="picker-fs-spinner" />
+              <p>Loading destinations…</p>
+            </div>
+          ) : (
+            <PickerMap
+              destinations={filtered}
+              selectedIds={selectedIds}
+              onToggle={toggleSelect}
+            />
+          )}
+
+          {/* ── Top-left title pill ── */}
+          <div className="picker-fs-title-pill">
+            <span className="picker-fs-title-icon">🗺️</span>
+            <div>
+              <p className="picker-fs-title-text">Pick Destinations</p>
+              <p className="picker-fs-title-sub">Tap pins on the map to select</p>
+            </div>
+          </div>
+
+          {/* ── Top-right search + filter ── */}
+          <div className="picker-fs-search-panel">
+            <div className="picker-search-wrap">
+              <span className="picker-search-icon">🔍</span>
+              <input
+                className="picker-search"
+                placeholder="Search destinations…"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button className="picker-search-clear" type="button" onClick={() => setSearchQuery("")}>×</button>
+              )}
+            </div>
+            <div className="picker-cat-scroll">
+              <button
+                className={`picker-cat-chip ${filterCategory === "all" ? "picker-cat-active" : ""}`}
+                type="button"
+                onClick={() => setFilterCategory("all")}
+              >All</button>
+              {allCategories.map((cat) => (
+                <button
+                  key={cat.id}
+                  className={`picker-cat-chip ${filterCategory === cat.name ? "picker-cat-active" : ""}`}
+                  type="button"
+                  onClick={() => setFilterCategory(cat.name)}
+                >{cat.name}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Destination count badge ── */}
+          <div className="picker-fs-count">
+            <span>{filtered.length} destinations</span>
+          </div>
+
+          {/* ── Bottom bar: selected chips + nav buttons ── */}
+          <div className="picker-fs-bottom">
+            <button className="picker-fs-back" type="button" onClick={handleBack}>
+              ← Back
+            </button>
+
+            <div className="picker-fs-chips-area">
+              {selectedIds.length === 0 ? (
+                <p className="picker-fs-hint">Tap pins to add destinations to your trip</p>
+              ) : (
+                <>
+                  <span className="picker-fs-sel-count">{selectedIds.length} selected</span>
+                  <div className="picker-fs-sel-chips">
+                    {selectedIds.map((id, idx) => {
+                      const dest = allDestinations.find((d) => d.id === id);
+                      return dest ? (
+                        <button key={id} className="picker-sel-chip" type="button" onClick={() => toggleSelect(id)}>
+                          <span className="picker-sel-num">{idx + 1}</span>
+                          {dest.name}
+                          <span className="picker-sel-remove">×</span>
+                        </button>
+                      ) : null;
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <button
+              className={`picker-fs-next ${selectedIds.length === 0 ? "picker-fs-next-disabled" : ""}`}
+              disabled={selectedIds.length === 0}
+              type="button"
+              onClick={() => setPickStep("transport")}
+            >
+              Next → <span className="picker-fs-next-count">({selectedIds.length})</span>
+            </button>
+          </div>
+        </div>
+      </KioskLayout>
+    );
+  }
+
+  // ── Normal wizard layout ──────────────────────────────────────────
   return (
     <KioskLayout title="Plan My Trip — AIRAT-NA">
       <div className="plan-page">
@@ -304,10 +427,7 @@ const KioskPlanPage: NextPage = () => {
           <p className="plan-sub">{subtitle()}</p>
           {showProgress && (
             <div className="plan-progress-wrap">
-              <div
-                className="plan-progress-bar"
-                style={{ width: `${progressPct()}%` }}
-              />
+              <div className="plan-progress-bar" style={{ width: `${progressPct()}%` }} />
             </div>
           )}
         </div>
@@ -315,119 +435,21 @@ const KioskPlanPage: NextPage = () => {
         {/* ─── Mode selector ───────────────────────────────────────── */}
         {planMode === null && (
           <div className="plan-mode-selector">
-            <button
-              className="plan-mode-card plan-mode-pick"
-              type="button"
-              onClick={() => setPlanMode("pick")}
-            >
+            <button className="plan-mode-card plan-mode-pick" type="button" onClick={() => setPlanMode("pick")}>
               <span className="plan-mode-emoji">🗺️</span>
               <p className="plan-mode-title">Pick Destinations</p>
-              <p className="plan-mode-desc">
-                Browse and choose the exact places you want to visit
-              </p>
+              <p className="plan-mode-desc">Browse and choose the exact places you want to visit</p>
               <span className="plan-mode-badge">Recommended</span>
             </button>
-            <button
-              className="plan-mode-card plan-mode-ai"
-              type="button"
-              onClick={() => setPlanMode("ai")}
-            >
+            <button className="plan-mode-card plan-mode-ai" type="button" onClick={() => setPlanMode("ai")}>
               <span className="plan-mode-emoji">✨</span>
               <p className="plan-mode-title">AI Suggest</p>
-              <p className="plan-mode-desc">
-                Tell us your interests and let AI build the perfect itinerary
-              </p>
+              <p className="plan-mode-desc">Tell us your interests and let AI build the perfect itinerary</p>
             </button>
           </div>
         )}
 
-        {/* ══════════════════════════════════════════════════════════
-            PICK MODE
-        ══════════════════════════════════════════════════════════ */}
-
-        {/* Step: Destination Selection — map */}
-        {planMode === "pick" && pickStep === "select" && (
-          <div className="picker-map-wrap">
-            {/* Overlay toolbar */}
-            <div className="picker-map-toolbar">
-              <div className="picker-search-wrap">
-                <span className="picker-search-icon">🔍</span>
-                <input
-                  className="picker-search"
-                  placeholder="Search destinations…"
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                {searchQuery && (
-                  <button
-                    className="picker-search-clear"
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-              <div className="picker-cat-scroll">
-                <button
-                  className={`picker-cat-chip ${filterCategory === "all" ? "picker-cat-active" : ""}`}
-                  type="button"
-                  onClick={() => setFilterCategory("all")}
-                >
-                  All
-                </button>
-                {allCategories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    className={`picker-cat-chip ${filterCategory === cat.name ? "picker-cat-active" : ""}`}
-                    type="button"
-                    onClick={() => setFilterCategory(cat.name)}
-                  >
-                    {cat.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Map */}
-            {loadingDests ? (
-              <div className="picker-map-loading"><div className="picker-map-spinner" /></div>
-            ) : (
-              <PickerMap
-                destinations={filtered}
-                selectedIds={selectedIds}
-                onToggle={toggleSelect}
-              />
-            )}
-
-            {/* Selected strip at bottom */}
-            {selectedIds.length > 0 && (
-              <div className="picker-map-selected-bar">
-                <span className="picker-sel-count">{selectedIds.length} selected</span>
-                <div className="picker-sel-chips">
-                  {selectedIds.map((id, idx) => {
-                    const dest = allDestinations.find((d) => d.id === id);
-                    return dest ? (
-                      <button
-                        key={id}
-                        className="picker-sel-chip"
-                        type="button"
-                        onClick={() => toggleSelect(id)}
-                      >
-                        <span className="picker-sel-num">{idx + 1}</span>
-                        {dest.name}
-                        <span className="picker-sel-remove">×</span>
-                      </button>
-                    ) : null;
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Step: Transport (shared) */}
+        {/* ── Transport step (shared) ── */}
         {((planMode === "pick" && pickStep === "transport") ||
           (planMode === "ai" && aiStep === "transport")) && (
           <div className="plan-step">
@@ -448,10 +470,7 @@ const KioskPlanPage: NextPage = () => {
           </div>
         )}
 
-        {/* ══════════════════════════════════════════════════════════
-            AI MODE STEPS
-        ══════════════════════════════════════════════════════════ */}
-
+        {/* ── AI: Interests ── */}
         {planMode === "ai" && aiStep === "interests" && (
           <div className="plan-step">
             <div className="plan-chip-grid">
@@ -460,30 +479,21 @@ const KioskPlanPage: NextPage = () => {
                   key={item.value}
                   className={`plan-interest-chip ${interests.includes(item.value) ? "plan-chip-active" : ""}`}
                   type="button"
-                  onClick={() =>
-                    setInterests((prev) =>
-                      prev.includes(item.value)
-                        ? prev.filter((i) => i !== item.value)
-                        : [...prev, item.value],
-                    )
-                  }
+                  onClick={() => setInterests((prev) =>
+                    prev.includes(item.value) ? prev.filter((i) => i !== item.value) : [...prev, item.value]
+                  )}
                 >
                   <span className="plan-chip-emoji">{item.emoji}</span>
                   <span className="plan-chip-label">{item.label}</span>
-                  {interests.includes(item.value) && (
-                    <span className="plan-chip-check">✓</span>
-                  )}
+                  {interests.includes(item.value) && <span className="plan-chip-check">✓</span>}
                 </button>
               ))}
             </div>
-            <p className="plan-hint">
-              {interests.length === 0
-                ? "Tap any interest to select (or skip for a mix of everything)"
-                : `${interests.length} selected`}
-            </p>
+            <p className="plan-hint">{interests.length === 0 ? "Tap any interest to select (or skip for a mix of everything)" : `${interests.length} selected`}</p>
           </div>
         )}
 
+        {/* ── AI: Group ── */}
         {planMode === "ai" && aiStep === "group" && (
           <div className="plan-step">
             <div className="plan-group-grid">
@@ -502,6 +512,7 @@ const KioskPlanPage: NextPage = () => {
           </div>
         )}
 
+        {/* ── AI: Regions ── */}
         {planMode === "ai" && aiStep === "regions" && (
           <div className="plan-step">
             {loadingClusters ? (
@@ -519,80 +530,44 @@ const KioskPlanPage: NextPage = () => {
                     <button
                       key={cluster.id}
                       className={`plan-cluster-card ${active ? "plan-cluster-active" : ""}`}
-                      style={{
-                        background: active ? color + "30" : color + "10",
-                        borderColor: active ? color : color + "40",
-                        boxShadow: active ? `0 0 0 2px ${color}` : "none",
-                      }}
+                      style={{ background: active ? color + "30" : color + "10", borderColor: active ? color : color + "40", boxShadow: active ? `0 0 0 2px ${color}` : "none" }}
                       type="button"
-                      onClick={() =>
-                        setSelectedClusters((prev) =>
-                          prev.includes(cluster.id)
-                            ? prev.filter((c) => c !== cluster.id)
-                            : [...prev, cluster.id],
-                        )
-                      }
+                      onClick={() => setSelectedClusters((prev) =>
+                        prev.includes(cluster.id) ? prev.filter((c) => c !== cluster.id) : [...prev, cluster.id]
+                      )}
                     >
                       <span className="text-3xl">{icon}</span>
-                      <p className="plan-cluster-name" style={{ color }}>
-                        {cluster.name}
-                      </p>
+                      <p className="plan-cluster-name" style={{ color }}>{cluster.name}</p>
                       {active && <span className="plan-cluster-check">✓</span>}
                     </button>
                   );
                 })}
               </div>
             )}
-            <p className="plan-hint">
-              {selectedClusters.length === 0
-                ? "Skip to include all regions"
-                : `${selectedClusters.length} region${selectedClusters.length > 1 ? "s" : ""} selected`}
-            </p>
+            <p className="plan-hint">{selectedClusters.length === 0 ? "Skip to include all regions" : `${selectedClusters.length} region${selectedClusters.length > 1 ? "s" : ""} selected`}</p>
           </div>
         )}
 
+        {/* ── AI: Duration ── */}
         {planMode === "ai" && aiStep === "duration" && (
           <div className="plan-step plan-duration-step">
             <div className="plan-duration-row">
               <p className="plan-duration-label">Number of days</p>
               <div className="plan-day-picker">
                 {[1, 2, 3, 4, 5].map((d) => (
-                  <button
-                    key={d}
-                    className={`plan-day-btn ${days === d ? "plan-day-active" : ""}`}
-                    type="button"
-                    onClick={() => setDays(d)}
-                  >
-                    {d}
-                  </button>
+                  <button key={d} className={`plan-day-btn ${days === d ? "plan-day-active" : ""}`} type="button" onClick={() => setDays(d)}>{d}</button>
                 ))}
               </div>
             </div>
             <div className="plan-duration-row">
-              <p className="plan-duration-label">
-                Hours per day — <strong>{hoursPerDay}h</strong>
-              </p>
-              <input
-                className="plan-slider"
-                max={14}
-                min={3}
-                step={1}
-                type="range"
-                value={hoursPerDay}
-                onChange={(e) => setHoursPerDay(Number(e.target.value))}
-              />
-              <div className="plan-slider-labels">
-                <span>3h</span>
-                <span>14h</span>
-              </div>
+              <p className="plan-duration-label">Hours per day — <strong>{hoursPerDay}h</strong></p>
+              <input className="plan-slider" max={14} min={3} step={1} type="range" value={hoursPerDay} onChange={(e) => setHoursPerDay(Number(e.target.value))} />
+              <div className="plan-slider-labels"><span>3h</span><span>14h</span></div>
             </div>
           </div>
         )}
 
-        {/* ══════════════════════════════════════════════════════════
-            RESULT STEP (shared)
-        ══════════════════════════════════════════════════════════ */}
-
+        {/* ── Result step ── */}
         {((planMode === "pick" && pickStep === "result") ||
           (planMode === "ai" && aiStep === "result")) && (
           <div className="plan-step plan-result-step">
@@ -600,20 +575,11 @@ const KioskPlanPage: NextPage = () => {
               <div className="plan-generating">
                 <div className="plan-gen-spinner" />
                 <p className="plan-gen-title">Building your itinerary…</p>
-                <p className="plan-gen-sub">
-                  Finding the best route between your stops
-                </p>
+                <p className="plan-gen-sub">Finding the best route between your stops</p>
                 <div className="plan-gen-dots">
-                  {[
-                    "Fetching destinations",
-                    "Planning your route",
-                    "Calculating travel times",
-                  ].map((label, i) => (
+                  {["Fetching destinations", "Planning your route", "Calculating travel times"].map((label, i) => (
                     <div key={i} className="plan-gen-dot-row">
-                      <div
-                        className="plan-gen-dot"
-                        style={{ animationDelay: `${i * 0.4}s` }}
-                      />
+                      <div className="plan-gen-dot" style={{ animationDelay: `${i * 0.4}s` }} />
                       <span>{label}</span>
                     </div>
                   ))}
@@ -621,16 +587,9 @@ const KioskPlanPage: NextPage = () => {
               </div>
             ) : result ? (
               <div className="plan-result-content">
-                {/* Map — full width, shows stops + routes */}
                 <div className="plan-result-map-wrap">
-                  <ItineraryMap
-                    days={result.days}
-                    height={380}
-                    itinerary={result.itinerary}
-                  />
+                  <ItineraryMap days={result.days} height={380} itinerary={result.itinerary} />
                 </div>
-
-                {/* Title + chips */}
                 <div className="plan-result-header">
                   <h2 className="plan-result-title">{result.title}</h2>
                   <div className="plan-result-stats">
@@ -638,88 +597,29 @@ const KioskPlanPage: NextPage = () => {
                       {TRANSPORT_MODES.find((t) => t.value === result.transport_mode)?.emoji}{" "}
                       {TRANSPORT_MODES.find((t) => t.value === result.transport_mode)?.label ?? result.transport_mode}
                     </Chip>
-                    <Chip color="success" size="md" variant="flat">
-                      📅 {result.days} Day{result.days > 1 ? "s" : ""}
-                    </Chip>
-                    <Chip color="warning" size="md" variant="flat">
-                      📍 {result.total_stops} Stop{result.total_stops !== 1 ? "s" : ""}
-                    </Chip>
+                    <Chip color="success" size="md" variant="flat">📅 {result.days} Day{result.days > 1 ? "s" : ""}</Chip>
+                    <Chip color="warning" size="md" variant="flat">📍 {result.total_stops} Stop{result.total_stops !== 1 ? "s" : ""}</Chip>
                   </div>
                 </div>
-
-                {/* CTA */}
                 <div className="plan-result-cta">
-                  <Button
-                    className="plan-start-btn"
-                    color="primary"
-                    size="lg"
-                    onPress={() => setQrOpen(true)}
-                  >
+                  <Button className="plan-start-btn" color="primary" size="lg" onPress={() => setQrOpen(true)}>
                     🚀 Start Journey — Scan QR
                   </Button>
-                  <Button
-                    className="mt-3"
-                    size="md"
-                    variant="flat"
-                    onPress={resetAll}
-                  >
-                    Plan Another Trip
-                  </Button>
+                  <Button className="mt-3" size="md" variant="flat" onPress={resetAll}>Plan Another Trip</Button>
                 </div>
-
-                <p className="plan-result-note">
-                  Scan the QR code with your phone to open this itinerary — no account needed.
-                </p>
+                <p className="plan-result-note">Scan the QR code with your phone to open this itinerary — no account needed.</p>
               </div>
             ) : null}
           </div>
         )}
 
-        {/* ─── Navigation ───────────────────────────────────────────── */}
+        {/* ─── Navigation ── */}
         {planMode !== null && !generating && (
           <div className="plan-nav">
-            {/* Back */}
-            <Button
-              className="plan-nav-back"
-              size="lg"
-              variant="flat"
-              onPress={() => {
-                if (planMode === "pick") {
-                  if (pickStep === "select") { setPlanMode(null); return; }
-                  if (pickStep === "transport") { setPickStep("select"); return; }
-                  if (pickStep === "result") { setPickStep("transport"); setResult(null); return; }
-                } else {
-                  const steps: AiStep[] = ["interests", "group", "transport", "regions", "duration", "result"];
-                  const idx = steps.indexOf(aiStep);
-                  if (idx === 0) { setPlanMode(null); return; }
-                  setAiStep(steps[idx - 1]);
-                  if (aiStep === "result") setResult(null);
-                }
-              }}
-            >
-              ← Back
-            </Button>
-
-            {/* Forward / Generate */}
-            {planMode === "pick" && pickStep === "select" && (
-              <Button
-                className="plan-nav-generate"
-                color="primary"
-                isDisabled={selectedIds.length === 0}
-                size="lg"
-                onPress={() => setPickStep("transport")}
-              >
-                Next → ({selectedIds.length} selected)
-              </Button>
-            )}
+            <Button className="plan-nav-back" size="lg" variant="flat" onPress={handleBack}>← Back</Button>
 
             {planMode === "pick" && pickStep === "transport" && (
-              <Button
-                className="plan-nav-generate"
-                color="primary"
-                size="lg"
-                onPress={() => void generate()}
-              >
+              <Button className="plan-nav-generate" color="primary" size="lg" onPress={() => void generate()}>
                 ✨ Generate Itinerary
               </Button>
             )}
@@ -733,16 +633,9 @@ const KioskPlanPage: NextPage = () => {
                   className={isLast ? "plan-nav-generate" : "plan-nav-next"}
                   color="primary"
                   size="lg"
-                  onPress={() => {
-                    if (isLast) { void generate(); return; }
-                    setAiStep(steps[idx + 1]);
-                  }}
+                  onPress={() => { if (isLast) { void generate(); return; } setAiStep(steps[idx + 1]); }}
                 >
-                  {isLast
-                    ? "✨ Generate Itinerary"
-                    : aiStep === "interests" && interests.length === 0
-                    ? "Skip →"
-                    : "Next →"}
+                  {isLast ? "✨ Generate Itinerary" : aiStep === "interests" && interests.length === 0 ? "Skip →" : "Next →"}
                 </Button>
               );
             })()}
@@ -750,7 +643,6 @@ const KioskPlanPage: NextPage = () => {
         )}
       </div>
 
-      {/* QR Modal */}
       {result && (
         <QRHandoffModal
           deepLink={result.deep_link}

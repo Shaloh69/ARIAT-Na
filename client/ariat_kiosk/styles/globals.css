@@ -1797,129 +1797,194 @@ html.light .kiosk-footer {
 }
 .picker-empty-reset:hover { background: rgba(255,255,255,0.08); color: var(--text); }
 
-/* ── Map-based destination picker ─────────────────────────────────────── */
-.picker-map-wrap {
+/* ── Full-screen destination picker ───────────────────────────────────── */
+.picker-fullscreen {
   position: relative;
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
+  width: 100%;
+  height: calc(100vh - 112px); /* viewport minus topbar (68px) + footer (44px) */
   overflow: hidden;
-  border-radius: 16px;
-  /* fill the available space between header and nav */
-  min-height: 0;
-  height: calc(100vh - 260px);
 }
-
-/* Floating toolbar overlaid on map */
-.picker-map-toolbar {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  right: 12px;
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  pointer-events: none;
-}
-.picker-map-toolbar > * { pointer-events: auto; }
-
-.picker-map-toolbar .picker-search-wrap {
-  background: rgba(15, 12, 30, 0.88);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 12px;
-}
-
-.picker-map-toolbar .picker-cat-scroll {
-  background: rgba(15, 12, 30, 0.82);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px;
-  padding: 6px 10px;
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.picker-map-toolbar .picker-cat-scroll::-webkit-scrollbar { display: none; }
 
 /* Loading state */
-.picker-map-loading {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255,255,255,0.03);
-  border-radius: 16px;
+.picker-fs-loading {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 1rem;
+  background: #020617;
+  color: var(--text-muted);
+  font-size: 0.95rem;
 }
-.picker-map-spinner {
-  width: 48px; height: 48px;
+.picker-fs-spinner {
+  width: 52px; height: 52px;
   border: 3px solid rgba(244,63,94,0.2);
   border-top-color: #f43f5e;
   border-radius: 50%;
   animation: planSpin 0.9s linear infinite;
 }
 
-/* Selected destinations strip at bottom of map */
-.picker-map-selected-bar {
+/* ── Top-left: title pill ── */
+.picker-fs-title-pill {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 1000;
-  background: rgba(15, 12, 30, 0.90);
-  backdrop-filter: blur(12px);
-  border-top: 1px solid rgba(244,63,94,0.25);
-  padding: 10px 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  top: 16px; left: 16px;
+  z-index: 800;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 18px 10px 14px;
+  background: rgba(2, 6, 23, 0.88);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  animation: pillSlideIn .35s cubic-bezier(.22,1,.36,1);
 }
-.picker-sel-count {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #f43f5e;
-  white-space: nowrap;
-  flex-shrink: 0;
+@keyframes pillSlideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-.picker-sel-chips {
-  display: flex;
-  gap: 8px;
+.picker-fs-title-icon { font-size: 1.6rem; }
+.picker-fs-title-text { font-size: 1rem; font-weight: 800; color: #fff; line-height: 1.2; }
+.picker-fs-title-sub { font-size: 0.72rem; color: var(--text-faint); margin-top: 1px; }
+
+/* ── Top-right: search + category filter ── */
+.picker-fs-search-panel {
+  position: absolute;
+  top: 16px; right: 16px;
+  z-index: 800;
+  width: 420px;
+  display: flex; flex-direction: column; gap: 8px;
+  animation: pillSlideIn .35s cubic-bezier(.22,1,.36,1);
+}
+
+.picker-fs-search-panel .picker-search-wrap {
+  background: rgba(2, 6, 23, 0.90);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+
+.picker-fs-search-panel .picker-cat-scroll {
+  background: rgba(2, 6, 23, 0.88);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 6px 10px;
+  display: flex; gap: 6px;
   overflow-x: auto;
   scrollbar-width: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
 }
-.picker-sel-chips::-webkit-scrollbar { display: none; }
+.picker-fs-search-panel .picker-cat-scroll::-webkit-scrollbar { display: none; }
+
+/* ── Destination count badge ── */
+.picker-fs-count {
+  position: absolute;
+  top: 16px; left: 50%; transform: translateX(-50%);
+  z-index: 800;
+  background: rgba(2,6,23,0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 100px;
+  padding: 6px 18px;
+  font-size: 0.8rem; font-weight: 600; color: var(--text-muted);
+  white-space: nowrap;
+  animation: pillSlideIn .35s cubic-bezier(.22,1,.36,1);
+}
+
+/* ── Bottom action bar ── */
+.picker-fs-bottom {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  z-index: 800;
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 20px;
+  background: rgba(2, 6, 23, 0.92);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 -8px 32px rgba(0,0,0,0.4);
+  animation: bottomSlideIn .4s cubic-bezier(.22,1,.36,1);
+}
+@keyframes bottomSlideIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.picker-fs-back {
+  flex-shrink: 0;
+  padding: 12px 22px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--text-muted);
+  font-size: 0.95rem; font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.picker-fs-back:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+.picker-fs-chips-area {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 12px;
+}
+.picker-fs-hint {
+  color: var(--text-faint);
+  font-size: 0.88rem;
+}
+.picker-fs-sel-count {
+  font-size: 0.88rem; font-weight: 700; color: #f43f5e;
+  flex-shrink: 0; white-space: nowrap;
+}
+.picker-fs-sel-chips {
+  display: flex; gap: 8px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.picker-fs-sel-chips::-webkit-scrollbar { display: none; }
+
+/* shared chip style (used in both layouts) */
 .picker-sel-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px 4px 8px;
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px 6px 8px;
   border-radius: 99px;
-  background: rgba(244,63,94,0.15);
+  background: rgba(244,63,94,0.14);
   border: 1px solid rgba(244,63,94,0.35);
   color: #fff;
-  font-size: 0.8rem;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background 0.15s;
+  font-size: 0.82rem; font-weight: 600;
+  white-space: nowrap; cursor: pointer;
+  transition: background .15s;
 }
-.picker-sel-chip:hover { background: rgba(244,63,94,0.3); }
+.picker-sel-chip:hover { background: rgba(244,63,94,0.28); }
 .picker-sel-num {
-  width: 18px; height: 18px;
-  border-radius: 50%;
-  background: #f43f5e;
-  color: #fff;
-  font-size: 0.7rem;
-  font-weight: 800;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #f43f5e; color: #fff;
+  font-size: 0.72rem; font-weight: 800;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
-.picker-sel-remove {
-  color: rgba(255,255,255,0.4);
-  font-size: 1rem;
-  line-height: 1;
-  margin-left: 2px;
+.picker-sel-remove { color: rgba(255,255,255,0.35); font-size: 1rem; margin-left: 2px; }
+.picker-sel-chip:hover .picker-sel-remove { color: rgba(255,255,255,0.75); }
+
+.picker-fs-next {
+  flex-shrink: 0;
+  padding: 13px 28px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f43f5e, #e11d48);
+  border: none;
+  color: #fff;
+  font-size: 1rem; font-weight: 700;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+  box-shadow: 0 4px 20px rgba(244,63,94,0.45);
 }
-.picker-sel-chip:hover .picker-sel-remove { color: rgba(255,255,255,0.8); }
+.picker-fs-next:hover:not(.picker-fs-next-disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 26px rgba(244,63,94,0.6);
+}
+.picker-fs-next-disabled {
+  opacity: 0.35; cursor: not-allowed;
+  box-shadow: none;
+}
+.picker-fs-next-count {
+  font-size: 0.85rem; opacity: 0.85; margin-left: 2px;
+}
