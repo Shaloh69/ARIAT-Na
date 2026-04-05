@@ -43,6 +43,11 @@ class AuthService extends ChangeNotifier {
     _refreshToken = await _secureStorage.read(key: _refreshKey);
     final prefs = await SharedPreferences.getInstance();
     _baseUrl = prefs.getString(_baseUrlKey) ?? defaultBaseUrl;
+    // Auto-reset stale emulator URLs left over from older builds
+    if (_baseUrl.contains('10.0.2.2') || _baseUrl.contains('localhost:') || _baseUrl.contains('127.0.0.1')) {
+      _baseUrl = defaultBaseUrl;
+      await prefs.setString(_baseUrlKey, defaultBaseUrl);
+    }
     final userData = prefs.getString(_userKey);
     if (userData != null) {
       _user = jsonDecode(userData);

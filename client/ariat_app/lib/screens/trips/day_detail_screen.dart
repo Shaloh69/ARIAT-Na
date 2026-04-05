@@ -124,6 +124,13 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
     }
   }
 
+  /// Manually advance — same effect as GPS arrival but triggered by the user
+  void _manuallyAdvance(int idx) {
+    final stops = _currentDayStops;
+    if (idx < 0 || idx >= stops.length) return;
+    _onArrived(stops[idx].destination.id);
+  }
+
   /// Insert a pinned/recommended destination right after the current active stop
   void _insertDestination(Destination dest) {
     final dayNum = _day.dayNumber;
@@ -323,11 +330,22 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                           itemCount: day.stops.length,
                           itemBuilder: (context, i) {
+                            final isActive = i == _activeStopIdx && _day.dayNumber == day.dayNumber;
+                            final isNext = _activeStopIdx >= 0
+                                ? i == _activeStopIdx + 1
+                                : i == 0;
                             return _StopTimelineItem(
                               stop: day.stops[i],
                               index: i,
                               isLast: i == day.stops.length - 1,
-                              isActive: i == _activeStopIdx && _day.dayNumber == day.dayNumber,
+                              isActive: isActive,
+                              isNext: isNext,
+                              onMarkDone: isActive && i < day.stops.length - 1
+                                  ? () => _manuallyAdvance(i + 1)
+                                  : null,
+                              onStartHere: !isActive && isNext
+                                  ? () => _manuallyAdvance(i)
+                                  : null,
                             ).animate().fadeIn(delay: (100 + i * 80).ms, duration: 400.ms);
                           },
                         ),
@@ -447,12 +465,18 @@ class _StopTimelineItem extends StatelessWidget {
   final int index;
   final bool isLast;
   final bool isActive;
+  final bool isNext;
+  final VoidCallback? onMarkDone;
+  final VoidCallback? onStartHere;
 
   const _StopTimelineItem({
     required this.stop,
     required this.index,
     required this.isLast,
     this.isActive = false,
+    this.isNext = false,
+    this.onMarkDone,
+    this.onStartHere,
   });
 
   String _arrivalWindow() {
@@ -625,6 +649,64 @@ class _StopTimelineItem extends StatelessWidget {
                         Text(stop.reason,
                             style: TextStyle(fontSize: 11, color: c.textFaint, fontStyle: FontStyle.italic),
                             maxLines: 2, overflow: TextOverflow.ellipsis),
+                      ],
+
+                      // Action buttons
+                      if (onMarkDone != null || onStartHere != null) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            if (onMarkDone != null)
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: onMarkDone,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [AppColors.green, AppColors.green.withAlpha(180)],
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(FluentIcons.accept, size: 12, color: Colors.white),
+                                        SizedBox(width: 6),
+                                        Text('Done here — next stop',
+                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            if (onStartHere != null)
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: onStartHere,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.red500.withAlpha(15),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: AppColors.red500.withAlpha(80)),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(FluentIcons.location_fill, size: 12, color: AppColors.red500),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          index == 0 ? 'Start trip here' : "I'm here now",
+                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.red500),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ],
                     ],
                   ),

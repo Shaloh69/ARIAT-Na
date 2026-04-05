@@ -46,29 +46,30 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    try {
-      final api = context.read<ApiService>();
-      final results = await Future.wait([
-        api.get('/clusters'),
-        api.get('/destinations?limit=40'),
-        api.get('/guides'),
-      ]);
-      setState(() {
-        _clusters = (results[0]['data'] as List? ?? [])
-            .map((e) => Cluster.fromJson(e as Map<String, dynamic>))
-            .toList();
-        _spots = (results[1]['data'] as List? ?? [])
-            .map((e) => Destination.fromJson(e as Map<String, dynamic>))
-            .toList();
-        _guides = (results[2]['data'] as List? ?? [])
-            .map((e) => CuratedGuide.fromJson(e as Map<String, dynamic>))
-            .toList();
-        _loading = false;
-      });
-    } catch (e) {
-      setState(() => _loading = false);
-      if (mounted) AppToast.error(context, 'Failed to load explore data');
+    final api = context.read<ApiService>();
+
+    // Fetch independently so one broken endpoint doesn't block the rest
+    const Map<String, dynamic> emptyResult = {'data': [], 'success': true};
+    final results = await Future.wait([
+      api.get('/clusters').catchError((_) => emptyResult),
+      api.get('/destinations?limit=40').catchError((_) => emptyResult),
+      api.get('/guides').catchError((_) => emptyResult),
+    ]);
+
+    final clusters   = (results[0]['data'] as List? ?? []).map((e) => Cluster.fromJson(e as Map<String, dynamic>)).toList();
+    final spots      = (results[1]['data'] as List? ?? []).map((e) => Destination.fromJson(e as Map<String, dynamic>)).toList();
+    final guides     = (results[2]['data'] as List? ?? []).map((e) => CuratedGuide.fromJson(e as Map<String, dynamic>)).toList();
+
+    if (mounted && spots.isEmpty && clusters.isEmpty) {
+      AppToast.error(context, 'Failed to load explore data');
     }
+
+    setState(() {
+      _clusters = clusters;
+      _spots = spots;
+      _guides = guides;
+      _loading = false;
+    });
   }
 
   List<Destination> get _filteredSpots {

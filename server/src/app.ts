@@ -200,10 +200,131 @@ const ensureAdminExists = async (): Promise<void> => {
   }
 };
 
+/**
+ * Auto-apply migration 002 if clusters / curated_guides tables are missing.
+ * Uses information_schema to check column/table existence — safe to run every startup.
+ */
+const ensureMigration002 = async (): Promise<void> => {
+  try {
+    // --- clusters table ---
+    const [clusterTables]: any = await pool.execute(
+      "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clusters'"
+    );
+    if (clusterTables.length === 0) {
+      logger.info('[STARTUP] Creating clusters table (migration 002)...');
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS clusters (
+          id VARCHAR(36) PRIMARY KEY,
+          name VARCHAR(100) NOT NULL,
+          slug VARCHAR(100) UNIQUE NOT NULL,
+          region_type ENUM('metro','south','north','islands','west') NOT NULL,
+          description TEXT,
+          center_lat DECIMAL(10, 8),
+          center_lng DECIMAL(11, 8),
+          recommended_trip_length VARCHAR(50),
+          is_active BOOLEAN DEFAULT TRUE,
+          display_order INT DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_region_type (region_type)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      logger.info('[STARTUP] clusters table created.');
+    }
+
+    // --- curated_guides table ---
+    const [guideTables]: any = await pool.execute(
+      "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'curated_guides'"
+    );
+    if (guideTables.length === 0) {
+      logger.info('[STARTUP] Creating curated_guides table (migration 002)...');
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS curated_guides (
+          id VARCHAR(36) PRIMARY KEY,
+          title VARCHAR(255) NOT NULL,
+          slug VARCHAR(255) UNIQUE NOT NULL,
+          description TEXT,
+          cover_image TEXT,
+          tags JSON,
+          clusters JSON,
+          interests JSON,
+          duration_label VARCHAR(50),
+          days INT DEFAULT 1,
+          difficulty ENUM('easy','moderate','challenging') DEFAULT 'easy',
+          is_featured BOOLEAN DEFAULT FALSE,
+          is_active BOOLEAN DEFAULT TRUE,
+          display_order INT DEFAULT 0,
+          destination_ids JSON,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_featured (is_featured),
+          INDEX idx_active (is_active)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      logger.info('[STARTUP] curated_guides table created.');
+    }
+
+    // --- destinations columns from migration 002 ---
+    const colChecks: [string, string][] = [
+      ['cluster_id', "ALTER TABLE destinations ADD COLUMN cluster_id VARCHAR(36) NULL AFTER category_id"],
+      ['municipality', "ALTER TABLE destinations ADD COLUMN municipality VARCHAR(100) NULL AFTER address"],
+      ['budget_level', "ALTER TABLE destinations ADD COLUMN budget_level ENUM('budget','mid','premium') DEFAULT 'mid' AFTER average_visit_duration"],
+      ['tags', "ALTER TABLE destinations ADD COLUMN tags JSON NULL AFTER amenities"],
+      ['family_friendly', "ALTER TABLE destinations ADD COLUMN family_friendly BOOLEAN DEFAULT FALSE AFTER tags"],
+    ];
+    for (const [colName, alterSql] of colChecks) {
+      const [cols]: any = await pool.execute(
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'destinations' AND COLUMN_NAME = ?",
+        [colName]
+      );
+      if (cols.length === 0) {
+        logger.info(`[STARTUP] Adding destinations.${colName} column...`);
+        await pool.execute(alterSql);
+      }
+    }
+
+    // --- itineraries columns from migration 002 ---
+    const itinCols: [string, string][] = [
+      ['days', "ALTER TABLE itineraries ADD COLUMN days INT DEFAULT 1 AFTER description"],
+      ['cluster_ids', "ALTER TABLE itineraries ADD COLUMN cluster_ids JSON NULL AFTER days"],
+      ['trip_type', "ALTER TABLE itineraries ADD COLUMN trip_type VARCHAR(50) NULL AFTER cluster_ids"],
+      ['transport_mode', "ALTER TABLE itineraries ADD COLUMN transport_mode VARCHAR(50) NULL AFTER trip_type"],
+      ['group_type', "ALTER TABLE itineraries ADD COLUMN group_type VARCHAR(50) NULL AFTER transport_mode"],
+    ];
+    for (const [colName, alterSql] of itinCols) {
+      const [cols]: any = await pool.execute(
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'itineraries' AND COLUMN_NAME = ?",
+        [colName]
+      );
+      if (cols.length === 0) {
+        logger.info(`[STARTUP] Adding itineraries.${colName} column...`);
+        await pool.execute(alterSql);
+      }
+    }
+
+    // --- itinerary_destinations.day_number ---
+    const [dayNumCols]: any = await pool.execute(
+      "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'itinerary_destinations' AND COLUMN_NAME = 'day_number'"
+    );
+    if (dayNumCols.length === 0) {
+      logger.info('[STARTUP] Adding itinerary_destinations.day_number column...');
+      await pool.execute("ALTER TABLE itinerary_destinations ADD COLUMN day_number INT NOT NULL DEFAULT 1 AFTER itinerary_id");
+    }
+
+    logger.info('[STARTUP] Migration 002 check complete.');
+  } catch (error) {
+    logger.error('[STARTUP] Migration 002 check failed:', error);
+    // Non-fatal: server continues, but cluster/guide routes may fail
+  }
+};
+
 const startServer = async (): Promise<void> => {
   try {
     // Test database connection
     await testConnection();
+
+    // Auto-apply migration 002 if tables/columns are missing
+    await ensureMigration002();
 
     // Ensure default admin user exists
     await ensureAdminExists();

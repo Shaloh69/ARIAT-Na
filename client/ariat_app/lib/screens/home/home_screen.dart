@@ -36,32 +36,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadData() async {
     setState(() => _loading = true);
-    try {
-      final api = context.read<ApiService>();
-      final results = await Future.wait([
-        api.get('/destinations/featured'),
-        api.get('/clusters'),
-        api.get('/guides?featured=true'),
-      ]);
+    final api = context.read<ApiService>();
 
-      final featuredData = results[0]['data'] as List? ?? [];
-      final clusterData = results[1]['data'] as List? ?? [];
-      final guideData = results[2]['data'] as List? ?? [];
-      final cached = results[0]['cached'] == true;
+    // Fetch independently — a missing/broken endpoint (e.g. guides table not yet seeded)
+    // should not prevent destinations and clusters from loading.
+    final Map<String, dynamic> emptyResult = {'data': [], 'success': true};
+    final results = await Future.wait([
+      api.get('/destinations/featured').catchError((_) => emptyResult),
+      api.get('/clusters').catchError((_) => emptyResult),
+      api.get('/guides?featured=true').catchError((_) => emptyResult),
+    ]);
 
-      setState(() {
-        _featured = featuredData.map((d) => Destination.fromJson(d as Map<String, dynamic>)).toList();
-        _clusters = clusterData.map((c) => Cluster.fromJson(c as Map<String, dynamic>)).toList();
-        _guides = guideData.map((g) => CuratedGuide.fromJson(g as Map<String, dynamic>)).toList();
-        _loading = false;
-        _fromCache = cached;
-      });
+    final featuredData = results[0]['data'] as List? ?? [];
+    final clusterData  = results[1]['data'] as List? ?? [];
+    final guideData    = results[2]['data'] as List? ?? [];
+    final cached = results[0]['cached'] == true;
 
-      if (cached && mounted) AppToast.info(context, 'Showing cached data');
-    } catch (e) {
-      setState(() => _loading = false);
-      if (mounted) AppToast.error(context, 'Could not load data. Check connection.');
+    // Show error toast only if ALL requests returned empty (likely an offline/URL issue)
+    final allEmpty = featuredData.isEmpty && clusterData.isEmpty && guideData.isEmpty;
+    if (mounted && allEmpty && !(results[0]['success'] == true)) {
+      AppToast.error(context, 'Could not load data. Check connection.');
     }
+
+    setState(() {
+      _featured = featuredData.map((d) => Destination.fromJson(d as Map<String, dynamic>)).toList();
+      _clusters = clusterData.map((c) => Cluster.fromJson(c as Map<String, dynamic>)).toList();
+      _guides = guideData.map((g) => CuratedGuide.fromJson(g as Map<String, dynamic>)).toList();
+      _loading = false;
+      _fromCache = cached;
+    });
+
+    if (cached && mounted) AppToast.info(context, 'Showing cached data');
   }
 
   @override

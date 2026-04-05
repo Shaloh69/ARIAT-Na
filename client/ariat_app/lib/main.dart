@@ -72,8 +72,6 @@ class _AriatNaAppState extends State<AriatNaApp> {
       ],
       child: Consumer2<AuthService, ThemeService>(
         builder: (context, auth, themeService, _) {
-          _apiService.baseUrl = auth.baseUrl;
-
           // Only propagate a custom URL — never override with stale emulator address
           if (auth.baseUrl != AuthService.defaultBaseUrl) {
             _apiService.baseUrl = auth.baseUrl;
