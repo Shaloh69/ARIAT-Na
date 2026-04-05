@@ -72,6 +72,33 @@ class _KioskClaimScreenState extends State<KioskClaimScreen> {
     }
   }
 
+  /// Start navigating with the itinerary immediately — no account needed.
+  void _startWithoutAccount() {
+    if (_multiDay != null && _multiDay!.days.isNotEmpty) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        FluentPageRoute(
+          builder: (_) => DayDetailScreen(
+            day: _multiDay!.days.first,
+            allDays: _multiDay!.days,
+          ),
+        ),
+        (route) => route.isFirst,
+      );
+    } else if (_singleDay != null) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        FluentPageRoute(
+          builder: (_) => DayDetailScreen(
+            day: _singleDay!,
+            allDays: [_singleDay!],
+          ),
+        ),
+        (route) => route.isFirst,
+      );
+    }
+  }
+
   Future<void> _claim() async {
     final auth = context.read<AuthService>();
     if (!auth.isAuthenticated) {
@@ -300,35 +327,11 @@ class _KioskClaimScreenState extends State<KioskClaimScreen> {
               ),
             )
           else ...[
-            // Auth note if not logged in
-            if (!auth.isAuthenticated)
-              Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppColors.amber.withAlpha(20),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.amber.withAlpha(60)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(FluentIcons.info, size: 16, color: AppColors.amber),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Sign in to save this itinerary to your account.',
-                        style: TextStyle(color: AppColors.amber, fontSize: 13),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            // Claim button
+            // Primary CTA — start immediately, no account needed
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: _claiming ? null : () => _claim(),
+                onPressed: _startWithoutAccount,
                 style: ButtonStyle(
                   backgroundColor: WidgetStateProperty.all(AppColors.red500),
                   shape: WidgetStateProperty.all(
@@ -338,15 +341,62 @@ class _KioskClaimScreenState extends State<KioskClaimScreen> {
                     const EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
+                child: const Text(
+                  '🚀 Start Trip Now',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // Secondary CTA — save to account
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: auth.isAuthenticated ? AppColors.green : c.borderLight,
+                ),
+              ),
+              child: Button(
+                onPressed: _claiming ? null : () => _claim(),
+                style: ButtonStyle(
+                  shape: WidgetStateProperty.all(
+                    RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  padding: WidgetStateProperty.all(
+                    const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
                 child: _claiming
-                    ? ProgressRing(strokeWidth: 2, activeColor: Colors.white)
-                    : Text(
-                        auth.isAuthenticated ? '🚀 Claim & Start Trip' : '🔑 Sign In to Claim',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
+                    ? ProgressRing(strokeWidth: 2, activeColor: AppColors.green)
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            auth.isAuthenticated
+                                ? FluentIcons.save
+                                : FluentIcons.contact,
+                            size: 15,
+                            color: auth.isAuthenticated ? AppColors.green : c.textMuted,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            auth.isAuthenticated
+                                ? 'Save to My Account'
+                                : 'Sign In & Save',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: auth.isAuthenticated ? AppColors.green : c.textMuted,
+                            ),
+                          ),
+                        ],
                       ),
               ),
             ),

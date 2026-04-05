@@ -62,6 +62,8 @@ export const generateKioskItinerary = async (req: Request, res: Response): Promi
     budget = 0,
     max_stops = 4,
     cluster_ids = [],
+    // Manual destination selection — if provided, skip AI ranking entirely
+    pinned_destination_ids = [],
   } = req.body;
 
   // Validate start coords
@@ -78,19 +80,43 @@ export const generateKioskItinerary = async (req: Request, res: Response): Promi
 
   if (!Array.isArray(interests)) throw new AppError('interests must be an array', 400);
   if (!Array.isArray(cluster_ids)) throw new AppError('cluster_ids must be an array', 400);
+  if (!Array.isArray(pinned_destination_ids)) throw new AppError('pinned_destination_ids must be an array', 400);
 
-  // Rank destinations
-  const ranked = await rankDestinations(
-    startLat, startLon,
-    interests as string[],
-    budgetNum,
-    maxStops * numDays * 3,
-    cluster_ids.length > 0 ? cluster_ids as string[] : undefined,
-    group_type as string | undefined,
-  );
+  let ranked: import('../services/recommendation.service').ScoredDestination[];
+
+  if (pinned_destination_ids.length > 0) {
+    // ── Manual mode: user explicitly selected destinations ────────────────────
+    // Fetch them in the order provided, preserving user's selection order.
+    const ids = (pinned_destination_ids as string[]).filter(Boolean);
+    const placeholders = ids.map(() => '?').join(',');
+    const [pinnedRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT d.*, c.name AS category_name, c.slug AS category_slug,
+         cl.name AS cluster_name, cl.slug AS cluster_slug, cl.id AS cluster_id
+       FROM destinations d
+       JOIN categories c ON d.category_id = c.id
+       LEFT JOIN clusters cl ON d.cluster_id = cl.id
+       WHERE d.id IN (${placeholders}) AND d.is_active = TRUE`,
+      ids,
+    );
+    // Re-order to match user selection order
+    const rowMap = new Map((pinnedRows as any[]).map((r) => [r.id, r]));
+    ranked = ids
+      .filter((id) => rowMap.has(id))
+      .map((id) => ({ destination: rowMap.get(id)!, score: 999, reason: 'Selected by user' }));
+  } else {
+    // ── AI mode: rank by interests, budget, distance ──────────────────────────
+    ranked = await rankDestinations(
+      startLat, startLon,
+      interests as string[],
+      budgetNum,
+      maxStops * numDays * 3,
+      cluster_ids.length > 0 ? cluster_ids as string[] : undefined,
+      group_type as string | undefined,
+    );
+  }
 
   if (ranked.length === 0) {
-    throw new AppError('No destinations found for the given preferences. Try different interests or regions.', 404);
+    throw new AppError('No destinations found. Try selecting different destinations or interests.', 404);
   }
 
   // Build itinerary
