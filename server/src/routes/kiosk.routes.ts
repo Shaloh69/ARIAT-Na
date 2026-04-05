@@ -1,0 +1,32 @@
+import { Router } from 'express';
+import { authenticate } from '../middleware/auth.middleware';
+import {
+  generateKioskItinerary,
+  previewKioskSession,
+  claimKioskSession,
+} from '../controllers/kiosk.controller';
+import { asyncHandler } from '../middleware/error.middleware';
+
+const router = Router();
+
+/**
+ * POST /kiosk/generate
+ * Generate itinerary from kiosk — no auth required.
+ * Body: { start_lat, start_lon, interests[], group_type, transport_mode, days, hours_per_day, budget, max_stops, cluster_ids[] }
+ */
+router.post('/generate', asyncHandler(generateKioskItinerary));
+
+/**
+ * GET /kiosk/preview/:token
+ * Preview a kiosk session — no auth required.
+ */
+router.get('/preview/:token', asyncHandler(previewKioskSession));
+
+/**
+ * POST /kiosk/claim/:token
+ * Claim a kiosk session (save to user account) — auth required.
+ * Body: { title?: string, description?: string }
+ */
+router.post('/claim/:token', authenticate, asyncHandler(claimKioskSession));
+
+export default router;

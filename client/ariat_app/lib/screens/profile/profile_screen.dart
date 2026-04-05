@@ -8,6 +8,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/toast_overlay.dart';
+import '../kiosk/kiosk_scan_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -209,6 +210,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text('Kiosk', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textStrong)),
+                    SizedBox(height: 16),
+                    _actionTile(
+                      'Scan Kiosk QR',
+                      FluentIcons.q_r_code,
+                      AppColors.purple,
+                      () => Navigator.push(
+                        context,
+                        FluentPageRoute(builder: (_) => const KioskScanScreen()),
+                      ),
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(delay: 500.ms, duration: 500.ms),
+
+              SizedBox(height: 20),
+
+              GlassCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text('Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textStrong)),
                     SizedBox(height: 16),
                     _actionTile('Sign Out', FluentIcons.sign_out, Color(0xFFDC2626), () async {
@@ -218,7 +241,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     }),
                   ],
                 ),
-              ).animate().fadeIn(delay: 500.ms, duration: 500.ms),
+              ).animate().fadeIn(delay: 600.ms, duration: 500.ms),
             ],
           ),
         ),

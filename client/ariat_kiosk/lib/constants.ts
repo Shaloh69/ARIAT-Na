@@ -7,4 +7,6 @@ export const API_ENDPOINTS = {
   CATEGORIES: "/categories",
   CLUSTERS: "/clusters",
   GUIDES: "/guides",
+  KIOSK_GENERATE: "/kiosk/generate",
+  KIOSK_PREVIEW: "/kiosk/preview",
 };

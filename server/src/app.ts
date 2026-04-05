@@ -26,6 +26,7 @@ import clusterRoutes from './routes/cluster.routes';
 import guideRoutes from './routes/guide.routes';
 import fareConfigRoutes from './routes/fareconfig.routes';
 import transitRoutes from './routes/transit.routes';
+import kioskRoutes from './routes/kiosk.routes';
 
 // Create Express application
 const app: Application = express();
@@ -106,6 +107,7 @@ app.use(`${apiPrefix}/clusters`, clusterRoutes);
 app.use(`${apiPrefix}/guides`, guideRoutes);
 app.use(`${apiPrefix}/fare-configs`, fareConfigRoutes);
 app.use(`${apiPrefix}/transit`, transitRoutes);
+app.use(`${apiPrefix}/kiosk`, kioskRoutes);
 
 // =====================================================
 // ERROR HANDLING
@@ -325,6 +327,31 @@ const ensureMigration002 = async (): Promise<void> => {
     if (dayNumCols.length === 0) {
       logger.info('[STARTUP] Adding itinerary_destinations.day_number column...');
       await pool.execute("ALTER TABLE itinerary_destinations ADD COLUMN day_number INT NOT NULL DEFAULT 1 AFTER itinerary_id");
+    }
+
+    // --- kiosk_sessions table ---
+    const [kioskTables]: any = await pool.execute(
+      "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'kiosk_sessions'"
+    );
+    if (kioskTables.length === 0) {
+      logger.info('[STARTUP] Creating kiosk_sessions table...');
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS kiosk_sessions (
+          id VARCHAR(36) PRIMARY KEY,
+          token VARCHAR(16) UNIQUE NOT NULL,
+          itinerary_data LONGTEXT NOT NULL,
+          days INT DEFAULT 1,
+          transport_mode VARCHAR(50) DEFAULT 'private_car',
+          is_claimed BOOLEAN DEFAULT FALSE,
+          claimed_by VARCHAR(36) NULL,
+          claimed_at TIMESTAMP NULL,
+          expires_at TIMESTAMP NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_token (token),
+          INDEX idx_expires (expires_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      logger.info('[STARTUP] kiosk_sessions table created.');
     }
 
     logger.info('[STARTUP] Migration 002 check complete.');

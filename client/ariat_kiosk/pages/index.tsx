@@ -210,17 +210,25 @@ const KioskHome: NextPage = () => {
             </p>
             <div className="home-hero-btns">
               <Button
-                className="home-cta-primary"
+                className="home-cta-plan"
                 color="primary"
                 size="lg"
+                onPress={() => void router.push("/plan")}
+              >
+                ✨ Plan My Trip
+              </Button>
+              <Button
+                className="home-cta-primary"
+                size="lg"
+                variant="bordered"
                 onPress={() => void router.push("/explore")}
               >
-                Browse All Destinations
+                Browse Destinations
               </Button>
               <Button
                 className="home-cta-secondary"
                 size="lg"
-                variant="bordered"
+                variant="flat"
                 onPress={() => void router.push("/map")}
               >
                 🗺️ View on Map
