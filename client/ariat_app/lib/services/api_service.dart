@@ -13,7 +13,7 @@ class ApiException implements Exception {
 }
 
 class ApiService {
-  static const String _defaultBaseUrl = 'http://10.0.2.2:5000/api/v1';
+  static const String _defaultBaseUrl = 'https://ariat-na-server.onrender.com/api/v1';
   String baseUrl;
   final AuthService _authService;
   final CacheService _cache;

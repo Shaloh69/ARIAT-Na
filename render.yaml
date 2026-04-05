@@ -23,10 +23,10 @@
 services:
   - type: web
     name: airat-na-api
-    env: node
+    runtime: node
     rootDir: server
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /health
     autoDeploy: true
@@ -38,7 +38,7 @@ services:
 
   - type: web
     name: airat-na-web
-    env: node
+    runtime: node
     rootDir: client/ariat_web
     plan: free
     buildCommand: npm install && npm run build
