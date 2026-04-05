@@ -1,10 +1,11 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { Button } from "@heroui/button";
 import { Chip } from "@heroui/chip";
 
+import AttractScreen from "@/components/AttractScreen";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 
 interface KioskLayoutProps {
@@ -12,8 +13,7 @@ interface KioskLayoutProps {
   title?: string;
 }
 
-const IDLE_TIMEOUT_MS = 3 * 60 * 1000;
-const WARN_BEFORE_MS = 30 * 1000;
+const IDLE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes → attract screen
 
 export default function KioskLayout({
   children,
@@ -21,43 +21,33 @@ export default function KioskLayout({
 }: KioskLayoutProps) {
   const router = useRouter();
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const warnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [showIdleWarning, setShowIdleWarning] = useState(false);
-  const [countdown, setCountdown] = useState(30);
+  const [showAttract, setShowAttract] = useState(false);
   const [clock, setClock] = useState("");
 
   const resetIdle = useCallback(() => {
     if (idleTimer.current) clearTimeout(idleTimer.current);
-    if (warnTimer.current) clearTimeout(warnTimer.current);
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    setShowIdleWarning(false);
-    setCountdown(30);
-
-    warnTimer.current = setTimeout(() => {
-      setShowIdleWarning(true);
-      setCountdown(30);
-      countdownRef.current = setInterval(() => {
-        setCountdown((c) => {
-          if (c <= 1) {
-            if (countdownRef.current) clearInterval(countdownRef.current);
-
-            return 0;
-          }
-
-          return c - 1;
-        });
-      }, 1000);
-    }, IDLE_TIMEOUT_MS - WARN_BEFORE_MS);
+    setShowAttract(false);
 
     idleTimer.current = setTimeout(() => {
-      setShowIdleWarning(false);
-      if (router.pathname !== "/") {
-        void router.push("/");
-      }
+      setShowAttract(true);
+    }, IDLE_TIMEOUT_MS);
+  }, []);
+
+  const handleAttractDismiss = useCallback(() => {
+    setShowAttract(false);
+    if (idleTimer.current) clearTimeout(idleTimer.current);
+
+    // Reset idle timer, navigate home
+    if (router.pathname !== "/") {
+      void router.push("/");
+    }
+
+    idleTimer.current = setTimeout(() => {
+      setShowAttract(true);
     }, IDLE_TIMEOUT_MS);
   }, [router]);
 
+  // Clock — update every 10s in PH timezone
   useEffect(() => {
     const updateClock = () =>
       setClock(
@@ -73,8 +63,16 @@ export default function KioskLayout({
     return () => clearInterval(interval);
   }, []);
 
+  // Idle detection
   useEffect(() => {
-    const events = ["touchstart", "touchmove", "click", "mousemove", "keydown", "scroll"];
+    const events = [
+      "touchstart",
+      "touchmove",
+      "click",
+      "mousemove",
+      "keydown",
+      "scroll",
+    ];
     const passiveOpts = { passive: true };
 
     events.forEach((ev) => window.addEventListener(ev, resetIdle, passiveOpts));
@@ -83,8 +81,6 @@ export default function KioskLayout({
     return () => {
       events.forEach((ev) => window.removeEventListener(ev, resetIdle));
       if (idleTimer.current) clearTimeout(idleTimer.current);
-      if (warnTimer.current) clearTimeout(warnTimer.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
     };
   }, [resetIdle]);
 
@@ -102,71 +98,75 @@ export default function KioskLayout({
         <div className="bg-animated" />
         <div className="bg-noise" />
 
-        {/* Top bar */}
-        <header className="glass-topbar sticky top-0 z-50 flex items-center justify-between px-8 py-4">
-          <div className="flex items-center gap-3">
-            <span
-              className="text-2xl font-extrabold tracking-tight"
-              style={{ color: "var(--red-500)" }}
-            >
-              AIRAT-NA
-            </span>
+        {/* ── Top bar ─────────────────────────────────────────────────── */}
+        <header className="glass-topbar sticky top-0 z-50 flex items-center justify-between px-10 py-0 h-[68px]">
+          <div className="flex items-center gap-4">
+            {/* Logo */}
+            <div className="flex items-center gap-2">
+              <div className="kiosk-logo-mark" />
+              <span className="kiosk-logo-text">AIRAT-NA</span>
+            </div>
             <Chip color="primary" size="sm" variant="flat">
               Kiosk Mode
             </Chip>
           </div>
+
           <div className="flex items-center gap-5">
-            {clock && (
-              <span
-                className="text-base font-mono tabular-nums"
-                style={{ color: "var(--text-muted)" }}
-              >
-                {clock}
-              </span>
-            )}
+            {/* Nav links */}
+            <nav className="flex items-center gap-1">
+              <NavLink
+                active={router.pathname === "/"}
+                label="Home"
+                onClick={() => void router.push("/")}
+              />
+              <NavLink
+                active={router.pathname === "/map"}
+                label="Map"
+                onClick={() => void router.push("/map")}
+              />
+              <NavLink
+                active={router.pathname === "/explore"}
+                label="Explore"
+                onClick={() => void router.push("/explore")}
+              />
+            </nav>
+
+            {clock && <span className="kiosk-clock">{clock}</span>}
             <ThemeSwitch />
           </div>
         </header>
 
-        {/* Page content */}
+        {/* ── Page content ────────────────────────────────────────────── */}
         <main className="relative z-10">{children}</main>
 
-        {/* Idle warning overlay */}
-        {showIdleWarning && (
-          <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center"
-            style={{ background: "rgba(2,6,23,0.93)" }}
-          >
-            <div
-              className="rounded-2xl p-12 text-center"
-              style={{
-                background: "var(--bg-2)",
-                border: "1px solid var(--border-strong)",
-                maxWidth: 400,
-              }}
-            >
-              <div
-                className="text-8xl font-black mb-4 tabular-nums"
-                style={{ color: "var(--red-500)" }}
-              >
-                {countdown}
-              </div>
-              <p
-                className="text-xl font-semibold mb-2"
-                style={{ color: "var(--text-strong)" }}
-              >
-                Still here?
-              </p>
-              <p className="text-base mb-8" style={{ color: "var(--text-muted)" }}>
-                Returning to home in {countdown} second{countdown !== 1 ? "s" : ""}
-              </p>
-              <Button color="primary" size="lg" onPress={resetIdle}>
-                I&apos;m still here
-              </Button>
-            </div>
+        {/* ── Attract / idle screen ───────────────────────────────────── */}
+        {showAttract && (
+          <div className="fixed inset-0 z-[9999]">
+            <AttractScreen onDismiss={handleAttractDismiss} />
           </div>
         )}
       </div>
     </>
+  );
+}
+
+function NavLink({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="kiosk-nav-link"
+      data-active={active}
+      type="button"
+      onClick={onClick}
+    >
+      {label}
+    </button>
   );
 }

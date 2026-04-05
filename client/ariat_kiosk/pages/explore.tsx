@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import type { NextPage } from "next";
 
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { Button } from "@heroui/button";
 import { Card, CardBody } from "@heroui/card";
@@ -16,27 +17,27 @@ import { toast } from "@/lib/toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Cluster {
-  id: string;
-  name: string;
-}
-
 interface Category {
   id: string;
   name: string;
 }
 
-interface Destination {
+interface Cluster {
   id: string;
   name: string;
+}
+
+interface Destination {
   category_name?: string;
   category_id?: string;
   cluster_id?: string;
-  municipality?: string;
-  images?: string[];
-  rating?: number;
   entrance_fee_local?: number;
+  id: string;
+  images?: string[];
   is_featured?: boolean;
+  municipality?: string;
+  name: string;
+  rating?: number;
 }
 
 interface QRTarget {
@@ -48,7 +49,11 @@ interface QRTarget {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function buildDeepLink(id: string, name?: string): string {
-  const params = new URLSearchParams({ id, source: "kiosk", type: "destination" });
+  const params = new URLSearchParams({
+    id,
+    source: "kiosk",
+    type: "destination",
+  });
 
   if (name) params.set("name", name);
 
@@ -71,7 +76,7 @@ const PAGE_SIZE = 12;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function KioskExplore() {
+const KioskExplore: NextPage = () => {
   const router = useRouter();
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -93,17 +98,21 @@ export default function KioskExplore() {
   }, [search]);
 
   useEffect(() => {
-    const base = API_BASE_URL;
-
     const fetchMeta = async () => {
       setLoadingMeta(true);
       try {
         const [clRes, catRes] = await Promise.all([
-          fetch(`${base}${API_ENDPOINTS.CLUSTERS}`),
-          fetch(`${base}${API_ENDPOINTS.CATEGORIES}`),
+          fetch(`${API_BASE_URL}${API_ENDPOINTS.CLUSTERS}`),
+          fetch(`${API_BASE_URL}${API_ENDPOINTS.CATEGORIES}`),
         ]);
-        const clJson = (await clRes.json()) as { success: boolean; data: Cluster[] };
-        const catJson = (await catRes.json()) as { success: boolean; data: Category[] };
+        const clJson = (await clRes.json()) as {
+          data: Cluster[];
+          success: boolean;
+        };
+        const catJson = (await catRes.json()) as {
+          data: Category[];
+          success: boolean;
+        };
 
         if (clJson.success && clJson.data) setClusters(clJson.data);
         if (catJson.success && catJson.data) setCategories(catJson.data);
@@ -118,8 +127,6 @@ export default function KioskExplore() {
   }, []);
 
   const fetchDestinations = useCallback(async () => {
-    const base = API_BASE_URL;
-
     setLoadingDests(true);
     try {
       const params = new URLSearchParams({
@@ -129,14 +136,17 @@ export default function KioskExplore() {
 
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (selectedCluster !== "all") params.set("cluster_id", selectedCluster);
-      if (selectedCategory !== "all") params.set("category_id", selectedCategory);
+      if (selectedCategory !== "all")
+        params.set("category_id", selectedCategory);
 
-      const res = await fetch(`${base}${API_ENDPOINTS.DESTINATIONS}?${params.toString()}`);
+      const res = await fetch(
+        `${API_BASE_URL}${API_ENDPOINTS.DESTINATIONS}?${params.toString()}`,
+      );
       const json = (await res.json()) as {
-        success: boolean;
         data: Destination[];
-        total?: number;
         pagination?: { total: number };
+        success: boolean;
+        total?: number;
       };
 
       if (json.success && json.data) {
@@ -158,24 +168,23 @@ export default function KioskExplore() {
     setPage(1);
   }, [debouncedSearch, selectedCluster, selectedCategory]);
 
-  const openQR = (dest: Destination) => {
+  const openQR = (dest: Destination) =>
     setQrTarget({
       deepLink: buildDeepLink(dest.id, dest.name),
       subtitle: dest.municipality ?? dest.category_name,
       title: dest.name,
     });
-  };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <KioskLayout title="Explore Destinations — AIRAT-NA Kiosk">
-      <div className="px-8 pb-12 max-w-7xl mx-auto">
-
-        {/* ── Header ────────────────────────────────────────────────────── */}
-        <div className="pt-8 flex items-center gap-4 mb-8">
+      <div className="px-10 pb-14 max-w-[1600px] mx-auto">
+        {/* ── Header ────────────────────────────────────────────────── */}
+        <div className="pt-8 flex items-center gap-5 mb-8">
           <Button
-            size="md"
+            className="h-12 px-6 text-base"
+            size="lg"
             variant="flat"
             onPress={() => void router.push("/")}
           >
@@ -183,76 +192,69 @@ export default function KioskExplore() {
           </Button>
           <div>
             <h1
-              className="text-3xl font-black tracking-tight"
+              className="text-4xl font-black tracking-tight"
               style={{ color: "var(--text-strong)" }}
             >
               Explore Destinations
             </h1>
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              {total > 0 ? `${total} destinations found` : "Search and filter below"}
+            <p
+              className="text-base mt-0.5"
+              style={{ color: "var(--text-muted)" }}
+            >
+              {total > 0
+                ? `${total} destinations across Cebu`
+                : "Search and filter below"}
             </p>
           </div>
         </div>
 
-        {/* ── Search ────────────────────────────────────────────────────── */}
+        {/* ── Search ────────────────────────────────────────────────── */}
         <Input
           classNames={{
             base: "mb-6",
             input: "text-lg",
-            inputWrapper: "h-14 px-5",
+            inputWrapper: "h-16 px-6 text-lg",
           }}
-          placeholder="Search destinations, municipalities, categories..."
+          placeholder="Search destinations, areas, categories…"
           size="lg"
           startContent={
-            <span style={{ color: "var(--text-faint)", fontSize: 20 }}>🔍</span>
+            <span style={{ color: "var(--text-faint)", fontSize: 22 }}>🔍</span>
           }
           value={search}
           onValueChange={setSearch}
         />
 
-        {/* ── Cluster Filter ────────────────────────────────────────────── */}
+        {/* ── Region filter ─────────────────────────────────────────── */}
         {loadingMeta ? (
           <div className="flex gap-3 mb-5">
             {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="rounded-full h-9 w-28" />
+              <Skeleton key={i} className="rounded-full h-11 w-32" />
             ))}
           </div>
         ) : (
-          <div className="flex flex-wrap gap-2 mb-5">
-            <Chip
-              className="cursor-pointer h-auto px-4 py-2 text-sm"
-              color={selectedCluster === "all" ? "primary" : "default"}
-              size="lg"
-              variant={selectedCluster === "all" ? "solid" : "flat"}
+          <div className="flex flex-wrap gap-3 mb-5">
+            <FilterChip
+              active={selectedCluster === "all"}
+              label="All Regions"
               onClick={() => setSelectedCluster("all")}
-            >
-              All Regions
-            </Chip>
+            />
             {clusters.map((cl) => (
-              <Chip
+              <FilterChip
                 key={cl.id}
-                className="cursor-pointer h-auto px-4 py-2 text-sm"
-                color={selectedCluster === cl.id ? "primary" : "default"}
-                size="lg"
-                style={
-                  selectedCluster !== cl.id
-                    ? { borderColor: clusterColor(cl.name) + "60" }
-                    : undefined
-                }
-                variant={selectedCluster === cl.id ? "solid" : "flat"}
+                active={selectedCluster === cl.id}
+                color={clusterColor(cl.name)}
+                label={cl.name}
                 onClick={() => setSelectedCluster(cl.id)}
-              >
-                {cl.name}
-              </Chip>
+              />
             ))}
           </div>
         )}
 
-        {/* ── Category Filter ───────────────────────────────────────────── */}
+        {/* ── Category filter ───────────────────────────────────────── */}
         {!loadingMeta && categories.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-8">
             <Chip
-              className="cursor-pointer h-auto px-3 text-sm"
+              className="explore-cat-chip cursor-pointer"
               color={selectedCategory === "all" ? "secondary" : "default"}
               size="md"
               variant={selectedCategory === "all" ? "solid" : "flat"}
@@ -263,7 +265,7 @@ export default function KioskExplore() {
             {categories.map((cat) => (
               <Chip
                 key={cat.id}
-                className="cursor-pointer h-auto px-3 text-sm"
+                className="explore-cat-chip cursor-pointer"
                 color={selectedCategory === cat.id ? "secondary" : "default"}
                 size="md"
                 variant={selectedCategory === cat.id ? "solid" : "flat"}
@@ -275,23 +277,26 @@ export default function KioskExplore() {
           </div>
         )}
 
-        {/* ── Destination Grid ──────────────────────────────────────────── */}
+        {/* ── Destination grid ──────────────────────────────────────── */}
         {loadingDests && destinations.length === 0 ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+          <div className="grid grid-cols-4 gap-5">
             {Array.from({ length: PAGE_SIZE }).map((_, i) => (
-              <Skeleton key={i} className="rounded-2xl" style={{ height: 240 }} />
+              <Skeleton key={i} className="rounded-3xl h-80" />
             ))}
           </div>
         ) : destinations.length === 0 ? (
           <div
-            className="flex flex-col items-center justify-center py-20 text-center"
+            className="flex flex-col items-center justify-center py-28 text-center"
             style={{ color: "var(--text-faint)" }}
           >
-            <span className="text-5xl mb-4">🗺️</span>
-            <p className="text-lg font-medium">No destinations found</p>
-            <p className="text-sm mt-1">Try adjusting your filters or search</p>
+            <span className="text-6xl mb-5">🗺️</span>
+            <p className="text-xl font-semibold">No destinations found</p>
+            <p className="text-base mt-2">
+              Try adjusting your filters or search
+            </p>
             <Button
-              className="mt-4"
+              className="mt-6 h-12 px-8 text-base"
+              size="lg"
               variant="flat"
               onPress={() => {
                 setSearch("");
@@ -299,22 +304,21 @@ export default function KioskExplore() {
                 setSelectedCategory("all");
               }}
             >
-              Clear Filters
+              Clear All Filters
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+          <div className="grid grid-cols-4 gap-5">
             {destinations.map((dest) => (
               <Card
                 key={dest.id}
                 isPressable
-                className="rounded-2xl overflow-hidden border transition-transform active:scale-95"
+                className="dest-card rounded-3xl overflow-hidden transition-all active:scale-[0.97]"
                 style={{ borderColor: "var(--border)" }}
                 onPress={() => openQR(dest)}
               >
-                <div className="relative" style={{ height: 140 }}>
+                <div className="relative h-48">
                   {dest.images?.[0] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       alt={dest.name}
                       className="w-full h-full object-cover"
@@ -322,49 +326,45 @@ export default function KioskExplore() {
                     />
                   ) : (
                     <div
-                      className="w-full h-full flex items-center justify-center text-4xl"
+                      className="w-full h-full flex items-center justify-center text-5xl"
                       style={{ background: "var(--bg-1)" }}
                     >
                       🗺️
                     </div>
                   )}
+                  <div className="dest-card-gradient" />
                   {dest.is_featured && (
-                    <div className="absolute top-2 left-2">
+                    <div className="absolute top-3 left-3">
                       <Chip color="warning" size="sm" variant="solid">
-                        Featured
+                        ⭐ Featured
                       </Chip>
                     </div>
                   )}
                 </div>
-                <CardBody className="gap-1 px-3 py-3">
-                  <p
-                    className="text-sm font-semibold leading-tight truncate"
-                    style={{ color: "var(--text-strong)" }}
-                  >
-                    {dest.name}
-                  </p>
-                  <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
-                    {dest.municipality ?? dest.category_name ?? "Cebu"}
+                <CardBody className="gap-2 px-4 py-4">
+                  <p className="dest-card-name">{dest.name}</p>
+                  <p className="dest-card-location">
+                    📍 {dest.municipality ?? dest.category_name ?? "Cebu"}
                   </p>
                   {!!dest.rating && dest.rating > 0 && (
-                    <p className="text-xs" style={{ color: "#f59e0b" }}>
+                    <p className="text-sm" style={{ color: "#f59e0b" }}>
                       {"★".repeat(Math.round(dest.rating))}
                       {"☆".repeat(5 - Math.round(dest.rating))}
                     </p>
                   )}
                   {!!dest.entrance_fee_local && dest.entrance_fee_local > 0 && (
-                    <p className="text-xs" style={{ color: "var(--text-faint)" }}>
+                    <p className="dest-card-fee">
                       ₱{dest.entrance_fee_local} entrance
                     </p>
                   )}
                   <Button
-                    className="mt-2 w-full"
+                    className="mt-2 w-full h-12 text-base"
                     color="primary"
-                    size="sm"
+                    size="md"
                     variant="flat"
                     onPress={() => openQR(dest)}
                   >
-                    Start Journey
+                    Start Journey →
                   </Button>
                 </CardBody>
               </Card>
@@ -372,13 +372,14 @@ export default function KioskExplore() {
           </div>
         )}
 
-        {/* ── Pagination ────────────────────────────────────────────────── */}
+        {/* ── Pagination ────────────────────────────────────────────── */}
         {totalPages > 1 && !loadingDests && (
-          <div className="flex justify-center mt-10">
+          <div className="flex justify-center mt-12">
             <Pagination
               showControls
               color="primary"
               page={page}
+              size="lg"
               total={totalPages}
               onChange={setPage}
             />
@@ -387,12 +388,11 @@ export default function KioskExplore() {
 
         {loadingDests && destinations.length > 0 && (
           <div className="flex justify-center mt-8">
-            <Spinner color="primary" />
+            <Spinner color="primary" size="lg" />
           </div>
         )}
       </div>
 
-      {/* ── QR Modal ──────────────────────────────────────────────────────── */}
       <QRHandoffModal
         deepLink={qrTarget?.deepLink ?? ""}
         isOpen={qrTarget !== null}
@@ -401,5 +401,35 @@ export default function KioskExplore() {
         onClose={() => setQrTarget(null)}
       />
     </KioskLayout>
+  );
+};
+
+export default KioskExplore;
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function FilterChip({
+  active,
+  color,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  color?: string;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="filter-chip"
+      data-active={active}
+      style={
+        !active && color ? { borderColor: color + "55", color } : undefined
+      }
+      type="button"
+      onClick={onClick}
+    >
+      {label}
+    </button>
   );
 }
