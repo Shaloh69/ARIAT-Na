@@ -12,6 +12,8 @@ class ItineraryStop {
   final int dayNumber;
   final double legFare;                  // PHP transit fare for this leg
   final List<TransportLeg>? multiModalLegs; // null for private car
+  /// Route geometry for the leg leading TO this stop: [[lat, lon], ...]
+  final List<List<double>>? routeGeometry;
 
   ItineraryStop({
     required this.destination,
@@ -24,10 +26,12 @@ class ItineraryStop {
     this.dayNumber = 1,
     this.legFare = 0,
     this.multiModalLegs,
+    this.routeGeometry,
   });
 
   factory ItineraryStop.fromJson(Map<String, dynamic> json) {
     final rawLegs = json['multi_modal_legs'] as List?;
+    final rawGeom = json['route_geometry'] as List?;
     return ItineraryStop(
       destination: Destination.fromJson(
         json['destination'] as Map<String, dynamic>? ?? json,
@@ -42,6 +46,9 @@ class ItineraryStop {
       legFare: (json['leg_fare'] as num?)?.toDouble() ?? 0,
       multiModalLegs: rawLegs
           ?.map((l) => TransportLeg.fromJson(l as Map<String, dynamic>))
+          .toList(),
+      routeGeometry: rawGeom
+          ?.map((c) => (c as List).map((v) => (v as num).toDouble()).toList())
           .toList(),
     );
   }
@@ -71,12 +78,22 @@ class DayItinerary {
   factory DayItinerary.fromJson(Map<String, dynamic> json) {
     final itin = json['itinerary'] as Map<String, dynamic>? ?? json;
     final rawStops = (itin['stops'] as List?) ?? (json['stops'] as List?) ?? [];
+    final rawLegs  = (itin['legs']  as List?) ?? (json['legs']  as List?) ?? [];
     final dayNum = json['dayNumber'] ?? json['day_number'] ?? 1;
     return DayItinerary(
       dayNumber: dayNum,
-      stops: rawStops
-          .map((s) => ItineraryStop.fromJson({...(s as Map<String, dynamic>), 'day_number': dayNum}))
-          .toList(),
+      stops: rawStops.asMap().entries.map((entry) {
+        final i = entry.key;
+        final s = entry.value as Map<String, dynamic>;
+        final legGeom = i < rawLegs.length
+            ? (rawLegs[i] as Map<String, dynamic>)['routeGeometry'] as List?
+            : null;
+        return ItineraryStop.fromJson({
+          ...s,
+          'day_number': dayNum,
+          if (legGeom != null) 'route_geometry': legGeom,
+        });
+      }).toList(),
       totalDistance: (itin['totalDistance'] as num?)?.toDouble() ?? 0,
       estimatedTravelTime: itin['estimatedTravelTime'] ?? 0,
       estimatedVisitTime: itin['estimatedVisitTime'] ?? 0,

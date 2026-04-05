@@ -1,5 +1,6 @@
 import type { NextPage } from "next";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@heroui/button";
 import { Card, CardBody } from "@heroui/card";
@@ -10,6 +11,14 @@ import KioskLayout from "@/components/KioskLayout";
 import QRHandoffModal from "@/components/QRHandoffModal";
 import { API_BASE_URL, API_ENDPOINTS } from "@/lib/constants";
 import { toast } from "@/lib/toast";
+
+// Leaflet requires window — dynamic import with no SSR
+const ItineraryMap = dynamic(() => import("@/components/ItineraryMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="plan-map-skeleton" />
+  ),
+});
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,6 +41,8 @@ interface Category {
 interface GeneratedResult {
   deep_link: string;
   days: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  itinerary: Record<string, any>;
   title: string;
   token: string;
   total_stops: number;
@@ -539,35 +550,33 @@ const KioskPlanPage: NextPage = () => {
               </div>
             ) : result ? (
               <div className="plan-result-content">
+                {/* Map — full width, shows stops + routes */}
+                <div className="plan-result-map-wrap">
+                  <ItineraryMap
+                    days={result.days}
+                    height={380}
+                    itinerary={result.itinerary}
+                  />
+                </div>
+
+                {/* Title + chips */}
                 <div className="plan-result-header">
-                  <div className="plan-result-icon">🗺️</div>
                   <h2 className="plan-result-title">{result.title}</h2>
-                  <p className="plan-result-sub">
-                    {result.days} day{result.days > 1 ? "s" : ""} ·{" "}
-                    {result.total_stops} stop
-                    {result.total_stops !== 1 ? "s" : ""}
-                  </p>
+                  <div className="plan-result-stats">
+                    <Chip color="primary" size="md" variant="flat">
+                      {TRANSPORT_MODES.find((t) => t.value === result.transport_mode)?.emoji}{" "}
+                      {TRANSPORT_MODES.find((t) => t.value === result.transport_mode)?.label ?? result.transport_mode}
+                    </Chip>
+                    <Chip color="success" size="md" variant="flat">
+                      📅 {result.days} Day{result.days > 1 ? "s" : ""}
+                    </Chip>
+                    <Chip color="warning" size="md" variant="flat">
+                      📍 {result.total_stops} Stop{result.total_stops !== 1 ? "s" : ""}
+                    </Chip>
+                  </div>
                 </div>
 
-                <div className="plan-result-stats">
-                  <Chip color="primary" size="lg" variant="flat">
-                    {
-                      TRANSPORT_MODES.find(
-                        (t) => t.value === result.transport_mode,
-                      )?.emoji
-                    }{" "}
-                    {TRANSPORT_MODES.find(
-                      (t) => t.value === result.transport_mode,
-                    )?.label ?? result.transport_mode}
-                  </Chip>
-                  <Chip color="success" size="lg" variant="flat">
-                    📅 {result.days} Day{result.days > 1 ? "s" : ""}
-                  </Chip>
-                  <Chip color="warning" size="lg" variant="flat">
-                    📍 {result.total_stops} Stop{result.total_stops !== 1 ? "s" : ""}
-                  </Chip>
-                </div>
-
+                {/* CTA */}
                 <div className="plan-result-cta">
                   <Button
                     className="plan-start-btn"
@@ -588,8 +597,7 @@ const KioskPlanPage: NextPage = () => {
                 </div>
 
                 <p className="plan-result-note">
-                  Scan the QR code with your phone to open this itinerary in
-                  the AIRAT-NA app — no account needed.
+                  Scan the QR code with your phone to open this itinerary — no account needed.
                 </p>
               </div>
             ) : null}
