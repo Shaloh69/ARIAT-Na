@@ -718,12 +718,39 @@ export default function DestinationsPage() {
                     </div>
                   )}
                   <label>
-                    <UploadButton label="Upload Images" disabled={uploading} onClick={() => imageInputRef.current?.click()}
-                      icon={<svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+                    <UploadButton
+                      disabled={uploading}
+                      icon={
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                          />
+                        </svg>
+                      }
+                      label="Upload Images"
+                      onClick={() => imageInputRef.current?.click()}
                     />
-                    <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} disabled={uploading} />
+                    <input
+                      multiple
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploading}
+                      ref={imageInputRef}
+                      type="file"
+                      onChange={handleImageUpload}
+                    />
                   </label>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>JPG, PNG, GIF · Max 5MB each · First image is the cover</p>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    JPG, PNG, GIF · Max 5MB each · First image is the cover
+                  </p>
                 </div>
               </div>
 
@@ -733,20 +760,59 @@ export default function DestinationsPage() {
                 {formVideos.length > 0 && (
                   <div className="space-y-2 mb-3">
                     {formVideos.map((url, i) => (
-                      <div key={i} className="flex items-center gap-3 p-2 rounded-lg" style={{ background: "var(--bg-3)" }}>
-                        <span className="text-sm truncate flex-1">{url.split("/").pop()}</span>
-                        <Button size="sm" color="danger" variant="flat" onClick={() => removeMedia(url, setFormVideos)}>Remove</Button>
+                      <div
+                        key={i}
+                        className="flex items-center gap-3 p-2 rounded-lg"
+                        style={{ background: "var(--bg-3)" }}
+                      >
+                        <span className="text-sm truncate flex-1">
+                          {url.split("/").pop()}
+                        </span>
+                        <Button
+                          color="danger"
+                          size="sm"
+                          variant="flat"
+                          onClick={() => removeMedia(url, setFormVideos)}
+                        >
+                          Remove
+                        </Button>
                       </div>
                     ))}
                   </div>
                 )}
                 <label>
-                  <UploadButton label="Upload Video" disabled={uploading} onClick={() => videoInputRef.current?.click()}
-                    icon={<svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}
+                  <UploadButton
+                    disabled={uploading}
+                    icon={
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                        />
+                      </svg>
+                    }
+                    label="Upload Video"
+                    onClick={() => videoInputRef.current?.click()}
                   />
-                  <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideoUpload} disabled={uploading} />
+                  <input
+                    accept="video/*"
+                    className="hidden"
+                    disabled={uploading}
+                    ref={videoInputRef}
+                    type="file"
+                    onChange={handleVideoUpload}
+                  />
                 </label>
-                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>MP4, WebM, MOV · Max 50MB</p>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                  MP4, WebM, MOV · Max 50MB
+                </p>
               </div>
 
               {/* ── Restaurant-specific ─────────────────────────────────────── */}
@@ -754,12 +820,29 @@ export default function DestinationsPage() {
                 <div>
                   <SectionTitle>🍽 Restaurant Details</SectionTitle>
                   <div className="space-y-4">
-                    <Input label="Cuisine Types" placeholder="Filipino, Seafood, Asian, Western..." value={formCuisineTypes} onChange={(e) => setFormCuisineTypes(e.target.value)} description="Comma-separated" />
+                    <Input
+                      description="Comma-separated"
+                      label="Cuisine Types"
+                      placeholder="Filipino, Seafood, Asian, Western..."
+                      value={formCuisineTypes}
+                      onChange={(e) => setFormCuisineTypes(e.target.value)}
+                    />
                     {formCuisineTypes && (
                       <div className="flex flex-wrap gap-1">
-                        {formCuisineTypes.split(",").map((c) => c.trim()).filter(Boolean).map((c, i) => (
-                          <Chip key={i} size="sm" variant="flat" color="warning">{c}</Chip>
-                        ))}
+                        {formCuisineTypes
+                          .split(",")
+                          .map((c) => c.trim())
+                          .filter(Boolean)
+                          .map((c, i) => (
+                            <Chip
+                              key={i}
+                              color="warning"
+                              size="sm"
+                              variant="flat"
+                            >
+                              {c}
+                            </Chip>
+                          ))}
                       </div>
                     )}
                     <div>
@@ -769,8 +852,14 @@ export default function DestinationsPage() {
                           <Chip
                             key={key}
                             className="cursor-pointer"
-                            color={formServiceTypes.includes(key) ? "primary" : "default"}
-                            variant={formServiceTypes.includes(key) ? "solid" : "flat"}
+                            color={
+                              formServiceTypes.includes(key)
+                                ? "primary"
+                                : "default"
+                            }
+                            variant={
+                              formServiceTypes.includes(key) ? "solid" : "flat"
+                            }
                             onClick={() => toggleServiceType(key)}
                           >
                             {label}
@@ -778,7 +867,13 @@ export default function DestinationsPage() {
                         ))}
                       </div>
                     </div>
-                    <Input label="Seating Capacity" type="number" placeholder="e.g. 50" value={formSeatingCapacity} onChange={(e) => setFormSeatingCapacity(e.target.value)} />
+                    <Input
+                      label="Seating Capacity"
+                      placeholder="e.g. 50"
+                      type="number"
+                      value={formSeatingCapacity}
+                      onChange={(e) => setFormSeatingCapacity(e.target.value)}
+                    />
 
                     {/* Menu Images */}
                     <div>
@@ -786,18 +881,57 @@ export default function DestinationsPage() {
                       {formMenuImages.length > 0 && (
                         <div className="grid grid-cols-4 gap-2 mb-3">
                           {formMenuImages.map((url, i) => (
-                            <div key={i} className="relative group rounded-lg overflow-hidden h-24">
-                              <img src={url} alt="" className="w-full h-full object-cover" />
-                              <button onClick={() => removeMedia(url, setFormMenuImages)} className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                            <div
+                              key={i}
+                              className="relative group rounded-lg overflow-hidden h-24"
+                            >
+                              <img
+                                alt=""
+                                className="w-full h-full object-cover"
+                                src={url}
+                              />
+                              <button
+                                className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() =>
+                                  removeMedia(url, setFormMenuImages)
+                                }
+                              >
+                                ×
+                              </button>
                             </div>
                           ))}
                         </div>
                       )}
                       <label>
-                        <UploadButton label="Upload Menu Images" disabled={uploading} onClick={() => menuImageInputRef.current?.click()}
-                          icon={<svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>}
+                        <UploadButton
+                          disabled={uploading}
+                          icon={
+                            <svg
+                              className="h-4 w-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                              />
+                            </svg>
+                          }
+                          label="Upload Menu Images"
+                          onClick={() => menuImageInputRef.current?.click()}
                         />
-                        <input ref={menuImageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleMenuImageUpload} disabled={uploading} />
+                        <input
+                          multiple
+                          accept="image/*"
+                          className="hidden"
+                          disabled={uploading}
+                          ref={menuImageInputRef}
+                          type="file"
+                          onChange={handleMenuImageUpload}
+                        />
                       </label>
                     </div>
                   </div>
