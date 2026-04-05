@@ -395,7 +395,7 @@ const seedDestinations = async (): Promise<void> => {
       destination.id,
       destination.name,
       destination.description,
-      destination.category_id,
+      destination.category_id ?? null,
       destination.latitude,
       destination.longitude,
       destination.address,
@@ -409,7 +409,7 @@ const seedDestinations = async (): Promise<void> => {
       destination.amenities,
       true,
       true,
-    ]);
+    ] as any[]);
   }
 
   console.log(`✅ Seeded ${destinations.length} sample destinations`);

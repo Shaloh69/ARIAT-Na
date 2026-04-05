@@ -373,8 +373,11 @@ export default function DestinationsPage() {
   };
 
   const removeMedia = async (url: string, setter: React.Dispatch<React.SetStateAction<string[]>>) => {
-    try { await apiClient.delete(API_ENDPOINTS.UPLOAD_DELETE, { data: { url } }); }
-    catch { toast.warning("Could not delete from server, removed from form"); }
+    try {
+      await apiClient.delete(API_ENDPOINTS.UPLOAD_DELETE, { data: { url } });
+    } catch {
+      toast.warning("Could not delete from server, removed from form");
+    }
     setter((p) => p.filter((u) => u !== url));
   };
 
@@ -426,13 +429,20 @@ export default function DestinationsPage() {
       menu_images: formMenuImages.length > 0 ? formMenuImages : undefined,
       // Hotel
       star_rating: formStarRating > 0 ? formStarRating : undefined,
-      accommodation_pricing: (formPerNightMin || formPerNightMax || formPerHour)
-        ? {
-            per_night_min: formPerNightMin ? parseFloat(formPerNightMin) : undefined,
-            per_night_max: formPerNightMax ? parseFloat(formPerNightMax) : undefined,
-            per_hour: formPerHour ? parseFloat(formPerHour) : undefined,
-          }
-        : undefined,
+      accommodation_pricing:
+        formPerNightMin || formPerNightMax || formPerHour
+          ? {
+              per_night_min: formPerNightMin
+                ? parseFloat(formPerNightMin)
+                : undefined,
+              per_night_max: formPerNightMax
+                ? parseFloat(formPerNightMax)
+                : undefined,
+              per_hour: formPerHour
+                ? parseFloat(formPerHour)
+                : undefined,
+            }
+          : undefined,
       check_in_time: formCheckIn || undefined,
       check_out_time: formCheckOut || undefined,
     };
@@ -961,14 +971,51 @@ export default function DestinationsPage() {
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                      <Input label="Check-in Time" type="time" value={formCheckIn} onChange={(e) => setFormCheckIn(e.target.value)} />
-                      <Input label="Check-out Time" type="time" value={formCheckOut} onChange={(e) => setFormCheckOut(e.target.value)} />
+                      <Input
+                        label="Check-in Time"
+                        type="time"
+                        value={formCheckIn}
+                        onChange={(e) => setFormCheckIn(e.target.value)}
+                      />
+                      <Input
+                        label="Check-out Time"
+                        type="time"
+                        value={formCheckOut}
+                        onChange={(e) => setFormCheckOut(e.target.value)}
+                      />
                     </div>
                     <p className="text-sm font-medium">Room Pricing</p>
                     <div className="grid grid-cols-3 gap-4">
-                      <Input label="Nightly Rate From (₱)" type="number" placeholder="1500" value={formPerNightMin} onChange={(e) => setFormPerNightMin(e.target.value)} startContent={<span className="text-gray-400 text-sm">₱</span>} />
-                      <Input label="Nightly Rate To (₱)" type="number" placeholder="5000" value={formPerNightMax} onChange={(e) => setFormPerNightMax(e.target.value)} startContent={<span className="text-gray-400 text-sm">₱</span>} />
-                      <Input label="Hourly Rate (₱)" type="number" placeholder="Optional" value={formPerHour} onChange={(e) => setFormPerHour(e.target.value)} startContent={<span className="text-gray-400 text-sm">₱</span>} />
+                      <Input
+                        label="Nightly Rate From (₱)"
+                        placeholder="1500"
+                        startContent={
+                          <span className="text-gray-400 text-sm">₱</span>
+                        }
+                        type="number"
+                        value={formPerNightMin}
+                        onChange={(e) => setFormPerNightMin(e.target.value)}
+                      />
+                      <Input
+                        label="Nightly Rate To (₱)"
+                        placeholder="5000"
+                        startContent={
+                          <span className="text-gray-400 text-sm">₱</span>
+                        }
+                        type="number"
+                        value={formPerNightMax}
+                        onChange={(e) => setFormPerNightMax(e.target.value)}
+                      />
+                      <Input
+                        label="Hourly Rate (₱)"
+                        placeholder="Optional"
+                        startContent={
+                          <span className="text-gray-400 text-sm">₱</span>
+                        }
+                        type="number"
+                        value={formPerHour}
+                        onChange={(e) => setFormPerHour(e.target.value)}
+                      />
                     </div>
                   </div>
                 </div>
@@ -979,13 +1026,64 @@ export default function DestinationsPage() {
                 <SectionTitle>Contact & Social Media</SectionTitle>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <Input label="Phone" placeholder="+63 917 123 4567" value={formContact.contact_phone} onChange={(e) => setFormContact({ ...formContact, contact_phone: e.target.value })} />
-                    <Input label="Email" type="email" placeholder="info@example.com" value={formContact.contact_email} onChange={(e) => setFormContact({ ...formContact, contact_email: e.target.value })} />
+                    <Input
+                      label="Phone"
+                      placeholder="+63 917 123 4567"
+                      value={formContact.contact_phone}
+                      onChange={(e) =>
+                        setFormContact({
+                          ...formContact,
+                          contact_phone: e.target.value,
+                        })
+                      }
+                    />
+                    <Input
+                      label="Email"
+                      placeholder="info@example.com"
+                      type="email"
+                      value={formContact.contact_email}
+                      onChange={(e) =>
+                        setFormContact({
+                          ...formContact,
+                          contact_email: e.target.value,
+                        })
+                      }
+                    />
                   </div>
-                  <Input label="Website URL" placeholder="https://example.com" value={formContact.website_url} onChange={(e) => setFormContact({ ...formContact, website_url: e.target.value })} />
+                  <Input
+                    label="Website URL"
+                    placeholder="https://example.com"
+                    value={formContact.website_url}
+                    onChange={(e) =>
+                      setFormContact({
+                        ...formContact,
+                        website_url: e.target.value,
+                      })
+                    }
+                  />
                   <div className="grid grid-cols-2 gap-4">
-                    <Input label="Facebook Page URL" placeholder="https://facebook.com/page" value={formContact.facebook_url} onChange={(e) => setFormContact({ ...formContact, facebook_url: e.target.value })} />
-                    <Input label="Instagram URL" placeholder="https://instagram.com/handle" value={formContact.instagram_url} onChange={(e) => setFormContact({ ...formContact, instagram_url: e.target.value })} />
+                    <Input
+                      label="Facebook Page URL"
+                      placeholder="https://facebook.com/page"
+                      value={formContact.facebook_url}
+                      onChange={(e) =>
+                        setFormContact({
+                          ...formContact,
+                          facebook_url: e.target.value,
+                        })
+                      }
+                    />
+                    <Input
+                      label="Instagram URL"
+                      placeholder="https://instagram.com/handle"
+                      value={formContact.instagram_url}
+                      onChange={(e) =>
+                        setFormContact({
+                          ...formContact,
+                          instagram_url: e.target.value,
+                        })
+                      }
+                    />
                   </div>
                 </div>
               </div>
@@ -994,39 +1092,64 @@ export default function DestinationsPage() {
               <div>
                 <div className="flex items-center gap-3 mb-3">
                   <SectionTitle>Operating Hours</SectionTitle>
-                  <Switch isSelected={formHoursEnabled} onValueChange={setFormHoursEnabled} size="sm">
+                  <Switch
+                    isSelected={formHoursEnabled}
+                    size="sm"
+                    onValueChange={setFormHoursEnabled}
+                  >
                     {formHoursEnabled ? "Enabled" : "Not set"}
                   </Switch>
                 </div>
                 {formHoursEnabled && (
-                  <div className="space-y-2 rounded-lg p-3" style={{ background: "var(--bg-3)" }}>
+                  <div
+                    className="space-y-2 rounded-lg p-3"
+                    style={{ background: "var(--bg-3)" }}
+                  >
                     {DAYS.map(({ key, label }) => (
                       <div key={key} className="flex items-center gap-3">
-                        <span className="text-sm w-24 font-medium">{label}</span>
+                        <span className="text-sm w-24 font-medium">
+                          {label}
+                        </span>
                         <Switch
-                          isSelected={formHours[key]?.closed ?? false}
-                          onValueChange={(v) => updateDayHour(key, "closed", v)}
-                          size="sm"
                           color="danger"
+                          isSelected={formHours[key]?.closed ?? false}
+                          size="sm"
+                          onValueChange={(v) =>
+                            updateDayHour(key, "closed", v)
+                          }
                         >
-                          <span className="text-xs">{formHours[key]?.closed ? "Closed" : "Open"}</span>
+                          <span className="text-xs">
+                            {formHours[key]?.closed ? "Closed" : "Open"}
+                          </span>
                         </Switch>
                         {!formHours[key]?.closed && (
                           <>
                             <input
+                              className="text-sm px-2 py-1 rounded border"
+                              style={{
+                                borderColor: "var(--border-medium)",
+                                background: "var(--bg-2)",
+                                color: "var(--text)",
+                              }}
                               type="time"
                               value={formHours[key]?.open ?? "08:00"}
-                              onChange={(e) => updateDayHour(key, "open", e.target.value)}
-                              className="text-sm px-2 py-1 rounded border"
-                              style={{ borderColor: "var(--border-medium)", background: "var(--bg-2)", color: "var(--text)" }}
+                              onChange={(e) =>
+                                updateDayHour(key, "open", e.target.value)
+                              }
                             />
                             <span className="text-gray-400 text-xs">to</span>
                             <input
+                              className="text-sm px-2 py-1 rounded border"
+                              style={{
+                                borderColor: "var(--border-medium)",
+                                background: "var(--bg-2)",
+                                color: "var(--text)",
+                              }}
                               type="time"
                               value={formHours[key]?.close ?? "18:00"}
-                              onChange={(e) => updateDayHour(key, "close", e.target.value)}
-                              className="text-sm px-2 py-1 rounded border"
-                              style={{ borderColor: "var(--border-medium)", background: "var(--bg-2)", color: "var(--text)" }}
+                              onChange={(e) =>
+                                updateDayHour(key, "close", e.target.value)
+                              }
                             />
                           </>
                         )}
@@ -1041,10 +1164,37 @@ export default function DestinationsPage() {
                 <SectionTitle>Location</SectionTitle>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <Input label="Latitude" type="number" step="0.000001" placeholder="10.3157" value={formData.latitude} onChange={(e) => setFormData({ ...formData, latitude: e.target.value })} isRequired />
-                    <Input label="Longitude" type="number" step="0.000001" placeholder="123.8854" value={formData.longitude} onChange={(e) => setFormData({ ...formData, longitude: e.target.value })} isRequired />
+                    <Input
+                      isRequired
+                      label="Latitude"
+                      placeholder="10.3157"
+                      step="0.000001"
+                      type="number"
+                      value={formData.latitude}
+                      onChange={(e) =>
+                        setFormData({ ...formData, latitude: e.target.value })
+                      }
+                    />
+                    <Input
+                      isRequired
+                      label="Longitude"
+                      placeholder="123.8854"
+                      step="0.000001"
+                      type="number"
+                      value={formData.longitude}
+                      onChange={(e) =>
+                        setFormData({ ...formData, longitude: e.target.value })
+                      }
+                    />
                   </div>
-                  <Input label="Address" placeholder="Full address" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} />
+                  <Input
+                    label="Address"
+                    placeholder="Full address"
+                    value={formData.address}
+                    onChange={(e) =>
+                      setFormData({ ...formData, address: e.target.value })
+                    }
+                  />
                 </div>
               </div>
 
@@ -1053,12 +1203,60 @@ export default function DestinationsPage() {
                 <SectionTitle>Fees &amp; Visiting Info</SectionTitle>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <Input label="Entrance Fee (Local)" type="number" step="0.01" value={formData.entrance_fee_local} onChange={(e) => setFormData({ ...formData, entrance_fee_local: e.target.value })} startContent={<span className="text-gray-400 text-sm">₱</span>} />
-                    <Input label="Entrance Fee (Foreign)" type="number" step="0.01" value={formData.entrance_fee_foreign} onChange={(e) => setFormData({ ...formData, entrance_fee_foreign: e.target.value })} startContent={<span className="text-gray-400 text-sm">$</span>} />
+                    <Input
+                      label="Entrance Fee (Local)"
+                      startContent={
+                        <span className="text-gray-400 text-sm">₱</span>
+                      }
+                      step="0.01"
+                      type="number"
+                      value={formData.entrance_fee_local}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          entrance_fee_local: e.target.value,
+                        })
+                      }
+                    />
+                    <Input
+                      label="Entrance Fee (Foreign)"
+                      startContent={
+                        <span className="text-gray-400 text-sm">$</span>
+                      }
+                      step="0.01"
+                      type="number"
+                      value={formData.entrance_fee_foreign}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          entrance_fee_foreign: e.target.value,
+                        })
+                      }
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <Input label="Avg Visit Duration (min)" type="number" value={formData.average_visit_duration} onChange={(e) => setFormData({ ...formData, average_visit_duration: e.target.value })} />
-                    <Input label="Best Time to Visit" placeholder="e.g. Morning, Dry Season" value={formData.best_time_to_visit} onChange={(e) => setFormData({ ...formData, best_time_to_visit: e.target.value })} />
+                    <Input
+                      label="Avg Visit Duration (min)"
+                      type="number"
+                      value={formData.average_visit_duration}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          average_visit_duration: e.target.value,
+                        })
+                      }
+                    />
+                    <Input
+                      label="Best Time to Visit"
+                      placeholder="e.g. Morning, Dry Season"
+                      value={formData.best_time_to_visit}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          best_time_to_visit: e.target.value,
+                        })
+                      }
+                    />
                   </div>
                 </div>
               </div>
@@ -1076,9 +1274,20 @@ export default function DestinationsPage() {
                 />
                 {formData.amenities && (
                   <div className="flex flex-wrap gap-1 mt-2">
-                    {formData.amenities.split(",").map((a) => a.trim()).filter(Boolean).map((a, i) => (
-                      <Chip key={i} size="sm" variant="flat" color="primary">{a}</Chip>
-                    ))}
+                    {formData.amenities
+                      .split(",")
+                      .map((a) => a.trim())
+                      .filter(Boolean)
+                      .map((a, i) => (
+                        <Chip
+                          key={i}
+                          color="primary"
+                          size="sm"
+                          variant="flat"
+                        >
+                          {a}
+                        </Chip>
+                      ))}
                   </div>
                 )}
               </div>
@@ -1086,7 +1295,10 @@ export default function DestinationsPage() {
               {/* ── Routing Flags ─────────────────────────────────────────────── */}
               <div>
                 <SectionTitle>Routing Flags</SectionTitle>
-                <Switch isSelected={formIsIsland} onValueChange={setFormIsIsland}>
+                <Switch
+                  isSelected={formIsIsland}
+                  onValueChange={setFormIsIsland}
+                >
                   <span className="font-medium">Island Destination</span>
                   <span className="text-sm text-gray-500 ml-2">Routes will go through a pier (ferry travel required)</span>
                 </Switch>
@@ -1095,8 +1307,18 @@ export default function DestinationsPage() {
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button color="danger" variant="flat" onClick={handleCloseModal}>Cancel</Button>
-            <Button color="primary" onClick={handleSubmit} isLoading={saving}>
+            <Button
+              color="danger"
+              variant="flat"
+              onClick={handleCloseModal}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="primary"
+              isLoading={saving}
+              onClick={handleSubmit}
+            >
               {editingDestination ? "Update" : "Create"}
             </Button>
           </ModalFooter>
