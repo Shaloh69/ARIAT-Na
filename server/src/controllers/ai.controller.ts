@@ -8,8 +8,18 @@ import { Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { AuthRequest, AppError } from '../types';
 import { pool } from '../config/database';
-import { rankDestinations } from '../services/recommendation.service';
+import { rankDestinations, ScoredDestination } from '../services/recommendation.service';
 import { buildItinerary, buildMultiDayItinerary } from '../services/itinerary.service';
+import { RowDataPacket } from 'mysql2';
+
+// --- Haversine (local, not exported from recommendation.service) ---
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 // =====================================================
 // POST /ai/itinerary/generate
@@ -29,6 +39,8 @@ export const generateItinerary = async (req: AuthRequest, res: Response): Promis
     group_type,
     trip_type,
     transport_mode,
+    // Pinned destinations — injected at top of ranking with max score
+    pinned_destination_ids = [],
   } = req.body;
 
   // Validate start
@@ -58,7 +70,7 @@ export const generateItinerary = async (req: AuthRequest, res: Response): Promis
   if (!Array.isArray(cluster_ids)) throw new AppError('cluster_ids must be an array', 400);
 
   // Score and rank destinations (with cluster + group filter)
-  const ranked = await rankDestinations(
+  let ranked = await rankDestinations(
     startLat, startLon,
     interests as string[],
     budgetNum,
@@ -66,6 +78,34 @@ export const generateItinerary = async (req: AuthRequest, res: Response): Promis
     cluster_ids.length > 0 ? cluster_ids as string[] : undefined,
     group_type as string | undefined
   );
+
+  // Inject pinned destinations at the front with score=999 so they are always included first
+  if (Array.isArray(pinned_destination_ids) && pinned_destination_ids.length > 0) {
+    const pinnedIds = (pinned_destination_ids as string[]).filter(Boolean);
+    if (pinnedIds.length > 0) {
+      const placeholders = pinnedIds.map(() => '?').join(',');
+      const [pinnedRows] = await pool.execute<RowDataPacket[]>(
+        `SELECT d.*, c.name AS category_name, c.slug AS category_slug,
+           cl.name AS cluster_name, cl.slug AS cluster_slug, cl.id AS cluster_id
+         FROM destinations d
+         JOIN categories c ON d.category_id = c.id
+         LEFT JOIN clusters cl ON d.cluster_id = cl.id
+         WHERE d.id IN (${placeholders}) AND d.is_active = TRUE`,
+        pinnedIds
+      );
+      const pinnedScored: ScoredDestination[] = (pinnedRows as any[]).map((row) => ({
+        destination: row,
+        score: 999,
+        reason: 'Pinned by user',
+      }));
+      // Remove from ranked if they already appear (avoid duplicates)
+      const pinnedSet = new Set(pinnedIds);
+      ranked = [
+        ...pinnedScored,
+        ...ranked.filter((r) => !pinnedSet.has(r.destination.id)),
+      ];
+    }
+  }
 
   if (ranked.length === 0) {
     res.json({
@@ -85,6 +125,107 @@ export const generateItinerary = async (req: AuthRequest, res: Response): Promis
     const itinerary = await buildItinerary(ranked, startLat, startLon, hoursPerDay, maxStops, optimize_for as 'distance' | 'time', 600, transport_mode as string | undefined);
     res.json({ success: true, data: itinerary });
   }
+};
+
+// =====================================================
+// POST /ai/recommend/nearby
+// Context-aware recommendations based on current position and time of day.
+// Used after arriving at a stop to suggest: mealtime spots, walking-distance attractions, don't-miss picks.
+// =====================================================
+export const recommendNearby = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { lat, lon, visited_ids = [], cluster_id } = req.body;
+
+  if (lat === undefined || lat === null || lon === undefined || lon === null) {
+    throw new AppError('lat and lon are required', 400);
+  }
+  const latN = parseFloat(lat);
+  const lonN = parseFloat(lon);
+  if (isNaN(latN) || isNaN(lonN)) throw new AppError('lat and lon must be valid numbers', 400);
+
+  // Bounding box: ~5 km radius (generous — Haversine filters later)
+  const latDelta = 0.045;  // ~5 km
+  const lonDelta = 0.05;
+
+  // Time-of-day (Philippines UTC+8)
+  const nowUtc = new Date();
+  const phHour = (nowUtc.getUTCHours() + 8) % 24;
+  const isMealtime = (phHour >= 11 && phHour < 14) || (phHour >= 18 && phHour < 21);
+  const mealLabel = phHour >= 18 ? 'Dinner' : 'Lunch';
+
+  // Build visited set
+  const visitedSet = new Set<string>(Array.isArray(visited_ids) ? visited_ids as string[] : []);
+
+  // Fetch nearby destinations from DB
+  let query = `
+    SELECT d.id, d.name, d.latitude, d.longitude, d.entrance_fee_local,
+      d.average_visit_duration, d.rating, d.review_count, d.images, d.municipality,
+      d.budget_level, d.is_featured, d.tags, d.family_friendly,
+      c.name AS category_name, c.slug AS category_slug,
+      cl.name AS cluster_name, cl.id AS cluster_id
+    FROM destinations d
+    JOIN categories c ON d.category_id = c.id
+    LEFT JOIN clusters cl ON d.cluster_id = cl.id
+    WHERE d.is_active = TRUE
+      AND d.latitude BETWEEN ? AND ?
+      AND d.longitude BETWEEN ? AND ?
+  `;
+  const params: any[] = [latN - latDelta, latN + latDelta, lonN - lonDelta, lonN + lonDelta];
+
+  if (cluster_id) {
+    query += ' AND d.cluster_id = ?';
+    params.push(cluster_id);
+  }
+
+  const [rows] = await pool.execute<RowDataPacket[]>(query, params);
+  const destinations = rows as any[];
+
+  // Attach distances and filter out visited
+  const withDist = destinations
+    .filter((d) => !visitedSet.has(d.id))
+    .map((d) => ({
+      ...d,
+      distanceKm: haversineKm(latN, lonN, d.latitude, d.longitude),
+      images: typeof d.images === 'string' ? JSON.parse(d.images) : (d.images ?? []),
+      tags: typeof d.tags === 'string' ? JSON.parse(d.tags) : (d.tags ?? []),
+    }))
+    .sort((a, b) => a.distanceKm - b.distanceKm);
+
+  // Mealtime: food/restaurant categories within 1.5 km
+  const mealCategories = new Set(['food', 'restaurant', 'café', 'cafe', 'dining', 'eatery', 'bar']);
+  const mealtime = isMealtime
+    ? withDist
+        .filter((d) => {
+          const slug = (d.category_slug ?? '').toLowerCase();
+          const name = (d.category_name ?? '').toLowerCase();
+          return (mealCategories.has(slug) || mealCategories.has(name)) && d.distanceKm <= 1.5;
+        })
+        .slice(0, 5)
+    : [];
+
+  // Walking distance: any category, ≤ 0.5 km, not already in mealtime
+  const mealtimeIds = new Set(mealtime.map((d) => d.id));
+  const nearby = withDist
+    .filter((d) => d.distanceKm <= 0.5 && !mealtimeIds.has(d.id))
+    .slice(0, 6);
+
+  // Don't miss: rating ≥ 4.0, ≤ 3 km, not already in above lists
+  const shownIds = new Set([...mealtimeIds, ...nearby.map((d) => d.id)]);
+  const dontMiss = withDist
+    .filter((d) => d.rating >= 4.0 && d.distanceKm <= 3.0 && !shownIds.has(d.id))
+    .sort((a, b) => b.rating - a.rating)
+    .slice(0, 5);
+
+  res.json({
+    success: true,
+    data: {
+      is_mealtime: isMealtime,
+      meal_label: mealLabel,
+      current_hour: phHour,
+      mealtime,
+      nearby,
+      dont_miss: dontMiss,
+    },
+  });
 };
 
 // =====================================================

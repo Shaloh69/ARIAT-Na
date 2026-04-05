@@ -14,6 +14,13 @@ class LocationService extends ChangeNotifier {
   final Set<String> _arrivedAt = {};
   final Set<String> _approachNotified = {};
 
+  // Broadcast stream so UI layers (e.g. DayDetailScreen) can react to arrivals
+  final StreamController<String> _arrivedController =
+      StreamController<String>.broadcast();
+
+  /// Stream emits the destination ID each time the user arrives at a monitored stop.
+  Stream<String> get arrivedStream => _arrivedController.stream;
+
   Position? get currentPosition => _currentPosition;
   bool get isTracking => _tracking;
 
@@ -84,6 +91,7 @@ class LocationService extends ChangeNotifier {
       if (dist <= 50 && !_arrivedAt.contains(dest.id)) {
         _arrivedAt.add(dest.id);
         NotificationService.showDestinationArrived(dest.name);
+        _arrivedController.add(dest.id);
       } else if (dist <= 200 && !_approachNotified.contains(dest.id)) {
         _approachNotified.add(dest.id);
         NotificationService.showApproaching(dest.name);
@@ -113,6 +121,7 @@ class LocationService extends ChangeNotifier {
   @override
   void dispose() {
     _positionStream?.cancel();
+    _arrivedController.close();
     super.dispose();
   }
 }

@@ -9,6 +9,7 @@ class TripSetupParams {
   final int maxStopsPerDay;
   final List<String> interests;
   final String optimizeFor;     // time | distance
+  final List<String> pinnedDestinationIds; // User-pinned must-visit destinations
 
   const TripSetupParams({
     this.clusterIds = const [],
@@ -21,6 +22,7 @@ class TripSetupParams {
     this.maxStopsPerDay = 4,
     this.interests = const [],
     this.optimizeFor = 'time',
+    this.pinnedDestinationIds = const [],
   });
 
   TripSetupParams copyWith({
@@ -34,6 +36,7 @@ class TripSetupParams {
     int? maxStopsPerDay,
     List<String>? interests,
     String? optimizeFor,
+    List<String>? pinnedDestinationIds,
   }) {
     return TripSetupParams(
       clusterIds: clusterIds ?? this.clusterIds,
@@ -46,6 +49,7 @@ class TripSetupParams {
       maxStopsPerDay: maxStopsPerDay ?? this.maxStopsPerDay,
       interests: interests ?? this.interests,
       optimizeFor: optimizeFor ?? this.optimizeFor,
+      pinnedDestinationIds: pinnedDestinationIds ?? this.pinnedDestinationIds,
     );
   }
 
@@ -63,6 +67,8 @@ class TripSetupParams {
       'group_type': groupType,
       'trip_type': tripType,
       'transport_mode': transportMode,
+      if (pinnedDestinationIds.isNotEmpty)
+        'pinned_destination_ids': pinnedDestinationIds,
     };
   }
 }

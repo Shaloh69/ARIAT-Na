@@ -6,6 +6,7 @@ import {
   getSavedItineraries,
   getSavedItineraryById,
   deleteItinerary,
+  recommendNearby,
 } from '../controllers/ai.controller';
 import { asyncHandler } from '../middleware/error.middleware';
 
@@ -42,5 +43,13 @@ router.get('/itinerary/:id', authenticate, asyncHandler(getSavedItineraryById));
  * Delete a saved itinerary (must belong to the authenticated user).
  */
 router.delete('/itinerary/:id', authenticate, asyncHandler(deleteItinerary));
+
+/**
+ * POST /ai/recommend/nearby
+ * Context-aware recommendations based on current GPS position and time of day.
+ * Body: { lat, lon, visited_ids?: string[], cluster_id?: string }
+ * Returns: { mealtime[], nearby[], dont_miss[], is_mealtime, meal_label }
+ */
+router.post('/recommend/nearby', authenticate, asyncHandler(recommendNearby));
 
 export default router;
