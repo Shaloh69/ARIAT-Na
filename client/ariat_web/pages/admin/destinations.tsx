@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import AdminLayout from "@/layouts/admin";
 import Head from "next/head";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
@@ -15,6 +14,8 @@ import {
 import { Chip } from "@heroui/chip";
 import { Switch } from "@heroui/switch";
 import { Tooltip } from "@heroui/tooltip";
+
+import AdminLayout from "@/layouts/admin";
 import { toast } from "@/lib/toast";
 import { modalClassNames } from "@/lib/modal-styles";
 import { apiClient } from "@/lib/api";
@@ -53,12 +54,19 @@ interface Destination {
   is_island?: boolean;
   images?: string[];
   menu_images?: string[];
-  operating_hours?: Record<string, { open: string; close: string; closed: boolean }> | null;
+  operating_hours?: Record<
+    string,
+    { open: string; close: string; closed: boolean }
+  > | null;
   amenities?: string[];
   cuisine_types?: string[];
   service_types?: string[];
   seating_capacity?: number;
-  accommodation_pricing?: { per_night_min?: number; per_night_max?: number; per_hour?: number } | null;
+  accommodation_pricing?: {
+    per_night_min?: number;
+    per_night_max?: number;
+    per_hour?: number;
+  } | null;
   star_rating?: number;
   check_in_time?: string;
   check_out_time?: string;
@@ -92,7 +100,10 @@ const DAYS: { key: string; label: string }[] = [
 
 const DEFAULT_HOURS = (): Record<string, DayHours> =>
   Object.fromEntries(
-    DAYS.map(({ key }) => [key, { open: "08:00", close: "18:00", closed: key === "sun" }])
+    DAYS.map(({ key }) => [
+      key,
+      { open: "08:00", close: "18:00", closed: key === "sun" },
+    ]),
   );
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
@@ -104,8 +115,15 @@ const SERVICE_TYPE_LABELS: Record<string, string> = {
 // Detect category type from slug or name
 function detectCatType(slug: string, name: string) {
   const s = (slug + " " + name).toLowerCase();
-  const isRestaurant = /restaurant|food|cafe|caf|dining|bar|bistro|eatery|kitchen|restobar|fastfood|fast.food/.test(s);
-  const isHotel = /hotel|resort|lodge|accommodation|hostel|pension|villa|inn|motel|bed.and|b&b|airbnb/.test(s);
+  const isRestaurant =
+    /restaurant|food|cafe|caf|dining|bar|bistro|eatery|kitchen|restobar|fastfood|fast.food/.test(
+      s,
+    );
+  const isHotel =
+    /hotel|resort|lodge|accommodation|hostel|pension|villa|inn|motel|bed.and|b&b|airbnb/.test(
+      s,
+    );
+
   return { isRestaurant, isHotel };
 }
 
@@ -121,7 +139,8 @@ export default function DestinationsPage() {
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingDestination, setEditingDestination] = useState<Destination | null>(null);
+  const [editingDestination, setEditingDestination] =
+    useState<Destination | null>(null);
   const [saving, setSaving] = useState(false);
 
   // ── Basic form fields ──────────────────────────────────────────────────────
@@ -160,7 +179,8 @@ export default function DestinationsPage() {
 
   // ── Operating hours ────────────────────────────────────────────────────────
   const [formHoursEnabled, setFormHoursEnabled] = useState(false);
-  const [formHours, setFormHours] = useState<Record<string, DayHours>>(DEFAULT_HOURS());
+  const [formHours, setFormHours] =
+    useState<Record<string, DayHours>>(DEFAULT_HOURS());
 
   // ── Contact & social ──────────────────────────────────────────────────────
   const [formContact, setFormContact] = useState({
@@ -185,10 +205,12 @@ export default function DestinationsPage() {
   const [formCheckOut, setFormCheckOut] = useState("12:00");
 
   // ── Derived ────────────────────────────────────────────────────────────────
-  const selectedCategory = categories.find((c) => c.id === formData.category_id);
+  const selectedCategory = categories.find(
+    (c) => c.id === formData.category_id,
+  );
   const { isRestaurant, isHotel } = detectCatType(
     selectedCategory?.slug ?? "",
-    selectedCategory?.name ?? ""
+    selectedCategory?.name ?? "",
   );
 
   // ─── Data fetching ────────────────────────────────────────────────────────
@@ -203,11 +225,13 @@ export default function DestinationsPage() {
     try {
       setLoading(true);
       const res = await apiClient.get<any>(
-        `${API_ENDPOINTS.DESTINATIONS}?limit=500&active=false`
+        `${API_ENDPOINTS.DESTINATIONS}?limit=500&active=false`,
       );
+
       if (res.success) {
         // Server returns { success, data: [...], pagination: {...} }
         const list = Array.isArray(res.data) ? res.data : [];
+
         setDestinations(list);
       }
     } catch {
@@ -220,6 +244,7 @@ export default function DestinationsPage() {
   const fetchCategories = async () => {
     try {
       const res = await apiClient.get<Category[]>(API_ENDPOINTS.CATEGORIES);
+
       if (res.success && res.data) setCategories(res.data);
     } catch {
       toast.error("Failed to fetch categories");
@@ -229,6 +254,7 @@ export default function DestinationsPage() {
   const fetchClusters = async () => {
     try {
       const res = await apiClient.get<Cluster[]>("/clusters");
+
       if (res.success && res.data) setClusters(res.data);
     } catch {
       // clusters optional — not critical
@@ -238,16 +264,48 @@ export default function DestinationsPage() {
   // ─── Modal helpers ────────────────────────────────────────────────────────
 
   const resetForm = useCallback(() => {
-    setFormData({ name: "", description: "", category_id: "", latitude: "", longitude: "", address: "", entrance_fee_local: "0", entrance_fee_foreign: "0", average_visit_duration: "120", best_time_to_visit: "", amenities: "" });
-    setFormClusterId(""); setFormMunicipality(""); setFormBudgetLevel("mid");
-    setFormTags(""); setFormFamilyFriendly(false); setFormIsActive(true);
-    setFormIsIsland(false); setFormIsFeatured(false);
-    setFormImages([]); setFormVideos([]); setFormMenuImages([]);
-    setFormHoursEnabled(false); setFormHours(DEFAULT_HOURS());
-    setFormContact({ contact_phone: "", contact_email: "", website_url: "", facebook_url: "", instagram_url: "" });
-    setFormCuisineTypes(""); setFormServiceTypes([]); setFormSeatingCapacity("");
-    setFormStarRating(0); setFormPerNightMin(""); setFormPerNightMax(""); setFormPerHour("");
-    setFormCheckIn("14:00"); setFormCheckOut("12:00");
+    setFormData({
+      name: "",
+      description: "",
+      category_id: "",
+      latitude: "",
+      longitude: "",
+      address: "",
+      entrance_fee_local: "0",
+      entrance_fee_foreign: "0",
+      average_visit_duration: "120",
+      best_time_to_visit: "",
+      amenities: "",
+    });
+    setFormClusterId("");
+    setFormMunicipality("");
+    setFormBudgetLevel("mid");
+    setFormTags("");
+    setFormFamilyFriendly(false);
+    setFormIsActive(true);
+    setFormIsIsland(false);
+    setFormIsFeatured(false);
+    setFormImages([]);
+    setFormVideos([]);
+    setFormMenuImages([]);
+    setFormHoursEnabled(false);
+    setFormHours(DEFAULT_HOURS());
+    setFormContact({
+      contact_phone: "",
+      contact_email: "",
+      website_url: "",
+      facebook_url: "",
+      instagram_url: "",
+    });
+    setFormCuisineTypes("");
+    setFormServiceTypes([]);
+    setFormSeatingCapacity("");
+    setFormStarRating(0);
+    setFormPerNightMin("");
+    setFormPerNightMax("");
+    setFormPerHour("");
+    setFormCheckIn("14:00");
+    setFormCheckOut("12:00");
   }, []);
 
   const handleOpenModal = (destination?: Destination) => {
@@ -262,7 +320,9 @@ export default function DestinationsPage() {
         address: destination.address || "",
         entrance_fee_local: String(destination.entrance_fee_local ?? 0),
         entrance_fee_foreign: String(destination.entrance_fee_foreign ?? 0),
-        average_visit_duration: String(destination.average_visit_duration ?? 120),
+        average_visit_duration: String(
+          destination.average_visit_duration ?? 120,
+        ),
         best_time_to_visit: destination.best_time_to_visit || "",
         amenities: (destination.amenities ?? []).join(", "),
       });
@@ -270,15 +330,25 @@ export default function DestinationsPage() {
       setFormMunicipality(destination.municipality || "");
       setFormBudgetLevel(destination.budget_level || "mid");
       setFormTags((destination.tags ?? []).join(", "));
-      setFormFamilyFriendly(destination.family_friendly === true || (destination.family_friendly as any) === 1);
+      setFormFamilyFriendly(
+        destination.family_friendly === true ||
+          (destination.family_friendly as any) === 1,
+      );
       setFormIsActive(destination.is_active !== false);
-      setFormIsIsland(destination.is_island === true || (destination.is_island as any) === 1);
-      setFormIsFeatured(destination.is_featured === true || (destination.is_featured as any) === 1);
+      setFormIsIsland(
+        destination.is_island === true || (destination.is_island as any) === 1,
+      );
+      setFormIsFeatured(
+        destination.is_featured === true ||
+          (destination.is_featured as any) === 1,
+      );
       const allMedia = destination.images || [];
+
       setFormImages(allMedia.filter((u) => !isVideoUrl(u)));
       setFormVideos(allMedia.filter(isVideoUrl));
       setFormMenuImages(destination.menu_images || []);
       const oh = destination.operating_hours;
+
       if (oh && typeof oh === "object" && Object.keys(oh).length > 0) {
         setFormHoursEnabled(true);
         setFormHours({ ...DEFAULT_HOURS(), ...oh });
@@ -295,9 +365,14 @@ export default function DestinationsPage() {
       });
       setFormCuisineTypes((destination.cuisine_types ?? []).join(", "));
       setFormServiceTypes(destination.service_types ?? []);
-      setFormSeatingCapacity(destination.seating_capacity ? String(destination.seating_capacity) : "");
+      setFormSeatingCapacity(
+        destination.seating_capacity
+          ? String(destination.seating_capacity)
+          : "",
+      );
       setFormStarRating(destination.star_rating ?? 0);
       const ap = destination.accommodation_pricing;
+
       setFormPerNightMin(ap?.per_night_min ? String(ap.per_night_min) : "");
       setFormPerNightMax(ap?.per_night_max ? String(ap.per_night_max) : "");
       setFormPerHour(ap?.per_hour ? String(ap.per_hour) : "");
@@ -317,19 +392,37 @@ export default function DestinationsPage() {
 
   // ─── Upload handlers ──────────────────────────────────────────────────────
 
-  const uploadImages = async (files: FileList, onDone: (urls: string[]) => void) => {
+  const uploadImages = async (
+    files: FileList,
+    onDone: (urls: string[]) => void,
+  ) => {
     for (const file of Array.from(files)) {
-      if (!file.type.startsWith("image/")) { toast.error(`"${file.name}" is not an image`); return; }
-      if (file.size > 5 * 1024 * 1024) { toast.error(`"${file.name}" exceeds 5MB`); return; }
+      if (!file.type.startsWith("image/")) {
+        toast.error(`"${file.name}" is not an image`);
+
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`"${file.name}" exceeds 5MB`);
+
+        return;
+      }
     }
     try {
       setUploading(true);
       const fd = new FormData();
+
       Array.from(files).forEach((f) => fd.append("files", f));
       fd.append("folder", "destinations");
-      const res = await apiClient.post<any>(API_ENDPOINTS.UPLOAD_IMAGES, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const res = await apiClient.post<any>(API_ENDPOINTS.UPLOAD_IMAGES, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
       if (res.success && res.data) {
-        const urls = Array.isArray(res.data) ? res.data.map((r: any) => r.url) : [res.data.url];
+        const urls = Array.isArray(res.data)
+          ? res.data.map((r: any) => r.url)
+          : [res.data.url];
+
         onDone(urls);
         toast.success(`${urls.length} image(s) uploaded`);
       }
@@ -342,28 +435,48 @@ export default function DestinationsPage() {
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
-    uploadImages(e.target.files, (urls) => setFormImages((p) => [...p, ...urls]));
+    uploadImages(e.target.files, (urls) =>
+      setFormImages((p) => [...p, ...urls]),
+    );
     if (imageInputRef.current) imageInputRef.current.value = "";
   };
 
   const handleMenuImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
-    uploadImages(e.target.files, (urls) => setFormMenuImages((p) => [...p, ...urls]));
+    uploadImages(e.target.files, (urls) =>
+      setFormMenuImages((p) => [...p, ...urls]),
+    );
     if (menuImageInputRef.current) menuImageInputRef.current.value = "";
   };
 
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+
     if (!file) return;
-    if (!file.type.startsWith("video/")) { toast.error("Please select a video file"); return; }
-    if (file.size > 50 * 1024 * 1024) { toast.error("Video must be less than 50MB"); return; }
+    if (!file.type.startsWith("video/")) {
+      toast.error("Please select a video file");
+
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error("Video must be less than 50MB");
+
+      return;
+    }
     try {
       setUploading(true);
       const fd = new FormData();
+
       fd.append("file", file);
       fd.append("folder", "destinations");
-      const res = await apiClient.post<any>(API_ENDPOINTS.UPLOAD_VIDEO, fd, { headers: { "Content-Type": "multipart/form-data" } });
-      if (res.success && res.data) { setFormVideos((p) => [...p, res.data.url]); toast.success("Video uploaded"); }
+      const res = await apiClient.post<any>(API_ENDPOINTS.UPLOAD_VIDEO, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      if (res.success && res.data) {
+        setFormVideos((p) => [...p, res.data.url]);
+        toast.success("Video uploaded");
+      }
     } catch (e: any) {
       toast.error(e.response?.data?.message || "Video upload failed");
     } finally {
@@ -372,7 +485,10 @@ export default function DestinationsPage() {
     }
   };
 
-  const removeMedia = async (url: string, setter: React.Dispatch<React.SetStateAction<string[]>>) => {
+  const removeMedia = async (
+    url: string,
+    setter: React.Dispatch<React.SetStateAction<string[]>>,
+  ) => {
     try {
       await apiClient.delete(API_ENDPOINTS.UPLOAD_DELETE, { data: { url } });
     } catch {
@@ -384,13 +500,34 @@ export default function DestinationsPage() {
   // ─── Submit ───────────────────────────────────────────────────────────────
 
   const handleSubmit = async () => {
-    if (!formData.name.trim()) { toast.error("Name is required"); return; }
-    if (!formData.category_id) { toast.error("Category is required"); return; }
-    if (!formData.latitude || !formData.longitude) { toast.error("Latitude and longitude are required"); return; }
+    if (!formData.name.trim()) {
+      toast.error("Name is required");
 
-    const amenitiesList = formData.amenities.split(",").map((a) => a.trim()).filter(Boolean);
-    const tagsList = formTags.split(",").map((t) => t.trim()).filter(Boolean);
-    const cuisineList = formCuisineTypes.split(",").map((c) => c.trim()).filter(Boolean);
+      return;
+    }
+    if (!formData.category_id) {
+      toast.error("Category is required");
+
+      return;
+    }
+    if (!formData.latitude || !formData.longitude) {
+      toast.error("Latitude and longitude are required");
+
+      return;
+    }
+
+    const amenitiesList = formData.amenities
+      .split(",")
+      .map((a) => a.trim())
+      .filter(Boolean);
+    const tagsList = formTags
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const cuisineList = formCuisineTypes
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean);
     const allMedia = [...formImages, ...formVideos];
 
     const payload: Record<string, any> = {
@@ -425,7 +562,9 @@ export default function DestinationsPage() {
       // Restaurant
       cuisine_types: cuisineList.length > 0 ? cuisineList : undefined,
       service_types: formServiceTypes.length > 0 ? formServiceTypes : undefined,
-      seating_capacity: formSeatingCapacity ? parseInt(formSeatingCapacity) : undefined,
+      seating_capacity: formSeatingCapacity
+        ? parseInt(formSeatingCapacity)
+        : undefined,
       menu_images: formMenuImages.length > 0 ? formMenuImages : undefined,
       // Hotel
       star_rating: formStarRating > 0 ? formStarRating : undefined,
@@ -438,9 +577,7 @@ export default function DestinationsPage() {
               per_night_max: formPerNightMax
                 ? parseFloat(formPerNightMax)
                 : undefined,
-              per_hour: formPerHour
-                ? parseFloat(formPerHour)
-                : undefined,
+              per_hour: formPerHour ? parseFloat(formPerHour) : undefined,
             }
           : undefined,
       check_in_time: formCheckIn || undefined,
@@ -450,7 +587,11 @@ export default function DestinationsPage() {
     try {
       setSaving(true);
       if (editingDestination) {
-        const res = await apiClient.put(`${API_ENDPOINTS.DESTINATIONS}/${editingDestination.id}`, payload);
+        const res = await apiClient.put(
+          `${API_ENDPOINTS.DESTINATIONS}/${editingDestination.id}`,
+          payload,
+        );
+
         if (res.success) {
           toast.success("Destination updated");
           fetchDestinations();
@@ -460,6 +601,7 @@ export default function DestinationsPage() {
         }
       } else {
         const res = await apiClient.post(API_ENDPOINTS.DESTINATIONS, payload);
+
         if (res.success) {
           toast.success("Destination created");
           fetchDestinations();
@@ -474,6 +616,7 @@ export default function DestinationsPage() {
         error.response?.data?.error ||
         error.message ||
         "Failed to save destination";
+
       toast.error(msg);
     } finally {
       setSaving(false);
@@ -484,42 +627,81 @@ export default function DestinationsPage() {
     if (!confirm("Delete this destination permanently?")) return;
     try {
       const res = await apiClient.delete(`${API_ENDPOINTS.DESTINATIONS}/${id}`);
-      if (res.success) { toast.success("Destination deleted"); fetchDestinations(); }
-    } catch { toast.error("Failed to delete destination"); }
+
+      if (res.success) {
+        toast.success("Destination deleted");
+        fetchDestinations();
+      }
+    } catch {
+      toast.error("Failed to delete destination");
+    }
   };
 
   const handleToggleFeatured = async (destination: Destination) => {
     try {
-      const res = await apiClient.put(`${API_ENDPOINTS.DESTINATIONS}/${destination.id}`, { is_featured: !destination.is_featured });
-      if (res.success) { toast.success(destination.is_featured ? "Unfeatured" : "Featured"); fetchDestinations(); }
-    } catch { toast.error("Failed to update destination"); }
+      const res = await apiClient.put(
+        `${API_ENDPOINTS.DESTINATIONS}/${destination.id}`,
+        { is_featured: !destination.is_featured },
+      );
+
+      if (res.success) {
+        toast.success(destination.is_featured ? "Unfeatured" : "Featured");
+        fetchDestinations();
+      }
+    } catch {
+      toast.error("Failed to update destination");
+    }
   };
 
   const toggleServiceType = (type: string) => {
     setFormServiceTypes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
     );
   };
 
-  const updateDayHour = (day: string, field: keyof DayHours, value: string | boolean) => {
-    setFormHours((prev) => ({ ...prev, [day]: { ...prev[day], [field]: value } }));
+  const updateDayHour = (
+    day: string,
+    field: keyof DayHours,
+    value: string | boolean,
+  ) => {
+    setFormHours((prev) => ({
+      ...prev,
+      [day]: { ...prev[day], [field]: value },
+    }));
   };
 
   // ─── Render helpers ───────────────────────────────────────────────────────
 
   const SectionTitle = ({ children }: { children: React.ReactNode }) => (
-    <h4 className="font-semibold text-sm uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
+    <h4
+      className="font-semibold text-sm uppercase tracking-wider mb-3"
+      style={{ color: "var(--text-muted)" }}
+    >
       {children}
     </h4>
   );
 
-  const UploadButton = ({ label, icon, onClick, disabled }: { label: string; icon: React.ReactNode; onClick: () => void; disabled?: boolean }) => (
+  const UploadButton = ({
+    label,
+    icon,
+    onClick,
+    disabled,
+  }: {
+    label: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+    disabled?: boolean;
+  }) => (
     <button
+      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50"
+      disabled={disabled}
+      style={{
+        borderColor: "var(--border-medium)",
+        color: "var(--text)",
+        background: "var(--bg-3)",
+      }}
       type="button"
       onClick={onClick}
-      disabled={disabled}
-      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50"
-      style={{ borderColor: "var(--border-medium)", color: "var(--text)", background: "var(--bg-3)" }}
     >
       {icon}
       {label}
@@ -544,25 +726,62 @@ export default function DestinationsPage() {
           </div>
           <div className="flex gap-2">
             <Tooltip
-              classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+              showArrow
+              classNames={{
+                content:
+                  "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+              }}
               content="Add a destination manually without placing it on the map"
-              delay={700} showArrow placement="left"
+              delay={700}
+              placement="left"
             >
-              <Button color="default" variant="flat" onClick={() => handleOpenModal()}>
-                <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              <Button
+                color="default"
+                variant="flat"
+                onClick={() => handleOpenModal()}
+              >
+                <svg
+                  className="h-4 w-4 mr-1"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M12 4v16m8-8H4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                  />
                 </svg>
                 Add Destination
               </Button>
             </Tooltip>
             <Tooltip
-              classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+              showArrow
+              classNames={{
+                content:
+                  "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+              }}
               content="Open Map Manager to place a new destination on the map"
-              delay={700} showArrow placement="left"
+              delay={700}
+              placement="left"
             >
-              <Button color="primary" onClick={() => (window.location.href = "/admin/map")}>
-                <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <Button
+                color="primary"
+                onClick={() => (window.location.href = "/admin/map")}
+              >
+                <svg
+                  className="h-4 w-4 mr-1"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                  />
                 </svg>
                 Add on Map
               </Button>
@@ -571,68 +790,184 @@ export default function DestinationsPage() {
         </div>
 
         {loading ? (
-          <Card><CardBody className="text-center py-12"><p className="text-gray-600">Loading destinations...</p></CardBody></Card>
+          <Card>
+            <CardBody className="text-center py-12">
+              <p className="text-gray-600">Loading destinations...</p>
+            </CardBody>
+          </Card>
         ) : destinations.length === 0 ? (
           <Card>
             <CardBody className="text-center py-12">
-              <p className="text-gray-600 dark:text-gray-400 mb-2">No destinations yet</p>
-              <p className="text-sm text-gray-500 mb-4">Use the Map Manager to create destinations</p>
-              <Button color="primary" size="sm" onClick={() => (window.location.href = "/admin/map")}>Go to Map Manager</Button>
+              <p className="text-gray-600 dark:text-gray-400 mb-2">
+                No destinations yet
+              </p>
+              <p className="text-sm text-gray-500 mb-4">
+                Use the Map Manager to create destinations
+              </p>
+              <Button
+                color="primary"
+                size="sm"
+                onClick={() => (window.location.href = "/admin/map")}
+              >
+                Go to Map Manager
+              </Button>
             </CardBody>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {destinations.map((dest) => {
-              const cover = (dest.images || []).filter((u) => !isVideoUrl(u))[0];
-              const { isRestaurant: isR, isHotel: isH } = detectCatType(dest.category_slug ?? "", dest.category_name ?? "");
+              const cover = (dest.images || []).filter(
+                (u) => !isVideoUrl(u),
+              )[0];
+              const { isRestaurant: isR, isHotel: isH } = detectCatType(
+                dest.category_slug ?? "",
+                dest.category_name ?? "",
+              );
+
               return (
-                <Card key={dest.id} className="hover:shadow-lg transition-shadow">
+                <Card
+                  key={dest.id}
+                  className="hover:shadow-lg transition-shadow"
+                >
                   {cover && (
                     <div className="h-40 overflow-hidden rounded-t-xl">
-                      <img src={cover} alt={dest.name} className="w-full h-full object-cover" />
+                      <img
+                        alt={dest.name}
+                        className="w-full h-full object-cover"
+                        src={cover}
+                      />
                     </div>
                   )}
                   <CardHeader className="flex-col items-start gap-1 pb-0">
                     <div className="flex items-start justify-between w-full gap-2">
-                      <h3 className="font-semibold text-base leading-snug">{dest.name}</h3>
+                      <h3 className="font-semibold text-base leading-snug">
+                        {dest.name}
+                      </h3>
                       <div className="flex gap-1 flex-shrink-0">
-                        {dest.is_featured && <Chip size="sm" color="warning" variant="flat">Featured</Chip>}
-                        <Chip size="sm" color={dest.is_active ? "success" : "default"} variant="flat">
+                        {dest.is_featured && (
+                          <Chip color="warning" size="sm" variant="flat">
+                            Featured
+                          </Chip>
+                        )}
+                        <Chip
+                          color={dest.is_active ? "success" : "default"}
+                          size="sm"
+                          variant="flat"
+                        >
                           {dest.is_active ? "Active" : "Inactive"}
                         </Chip>
                       </div>
                     </div>
-                    {dest.category_name && <p className="text-xs text-gray-400">{dest.category_name}{dest.municipality ? ` · ${dest.municipality}` : ""}</p>}
-                    <p className="text-sm text-gray-500 line-clamp-2">{dest.description || "No description"}</p>
+                    {dest.category_name && (
+                      <p className="text-xs text-gray-400">
+                        {dest.category_name}
+                        {dest.municipality ? ` · ${dest.municipality}` : ""}
+                      </p>
+                    )}
+                    <p className="text-sm text-gray-500 line-clamp-2">
+                      {dest.description || "No description"}
+                    </p>
                   </CardHeader>
                   <CardBody className="pt-2">
                     <div className="space-y-1 text-sm">
                       <div className="flex items-center gap-2">
                         <span className="text-gray-400 text-xs">📍</span>
                         <span className="text-gray-600 dark:text-gray-400 text-xs">
-                          {Number(dest.latitude).toFixed(4)}, {Number(dest.longitude).toFixed(4)}
+                          {Number(dest.latitude).toFixed(4)},{" "}
+                          {Number(dest.longitude).toFixed(4)}
                         </span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-xs text-gray-500">₱{Number(dest.entrance_fee_local).toFixed(0)} local</span>
-                        <span className="text-yellow-500 text-xs">★ {Number(dest.rating).toFixed(1)}</span>
-                        {isR && <span className="text-xs text-orange-400">🍽 Restaurant</span>}
-                        {isH && <span className="text-xs text-blue-400">🏨 Hotel</span>}
-                        {dest.is_island && <span className="text-xs text-purple-400">⛴ Island</span>}
+                        <span className="text-xs text-gray-500">
+                          ₱{Number(dest.entrance_fee_local).toFixed(0)} local
+                        </span>
+                        <span className="text-yellow-500 text-xs">
+                          ★ {Number(dest.rating).toFixed(1)}
+                        </span>
+                        {isR && (
+                          <span className="text-xs text-orange-400">
+                            🍽 Restaurant
+                          </span>
+                        )}
+                        {isH && (
+                          <span className="text-xs text-blue-400">
+                            🏨 Hotel
+                          </span>
+                        )}
+                        {dest.is_island && (
+                          <span className="text-xs text-purple-400">
+                            ⛴ Island
+                          </span>
+                        )}
                       </div>
-                      {dest.contact_phone && <p className="text-xs text-gray-500">📞 {dest.contact_phone}</p>}
+                      {dest.contact_phone && (
+                        <p className="text-xs text-gray-500">
+                          📞 {dest.contact_phone}
+                        </p>
+                      )}
                     </div>
                     <div className="flex gap-2 mt-3 flex-wrap">
-                      <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }} content="Edit all destination details" delay={700} showArrow placement="top">
-                        <Button size="sm" color="primary" variant="flat" onClick={() => handleOpenModal(dest)}>Edit</Button>
+                      <Tooltip
+                        showArrow
+                        classNames={{
+                          content:
+                            "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+                        }}
+                        content="Edit all destination details"
+                        delay={700}
+                        placement="top"
+                      >
+                        <Button
+                          color="primary"
+                          size="sm"
+                          variant="flat"
+                          onClick={() => handleOpenModal(dest)}
+                        >
+                          Edit
+                        </Button>
                       </Tooltip>
-                      <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }} content={dest.is_featured ? "Remove from featured" : "Highlight in featured section"} delay={700} showArrow placement="top">
-                        <Button size="sm" color="warning" variant="flat" onClick={() => handleToggleFeatured(dest)}>
+                      <Tooltip
+                        showArrow
+                        classNames={{
+                          content:
+                            "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+                        }}
+                        content={
+                          dest.is_featured
+                            ? "Remove from featured"
+                            : "Highlight in featured section"
+                        }
+                        delay={700}
+                        placement="top"
+                      >
+                        <Button
+                          color="warning"
+                          size="sm"
+                          variant="flat"
+                          onClick={() => handleToggleFeatured(dest)}
+                        >
                           {dest.is_featured ? "Unfeature" : "Feature"}
                         </Button>
                       </Tooltip>
-                      <Tooltip classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }} content="Permanently delete" delay={700} showArrow placement="top" color="danger">
-                        <Button size="sm" color="danger" variant="flat" onClick={() => handleDelete(dest.id)}>Delete</Button>
+                      <Tooltip
+                        showArrow
+                        classNames={{
+                          content:
+                            "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+                        }}
+                        color="danger"
+                        content="Permanently delete"
+                        delay={700}
+                        placement="top"
+                      >
+                        <Button
+                          color="danger"
+                          size="sm"
+                          variant="flat"
+                          onClick={() => handleDelete(dest.id)}
+                        >
+                          Delete
+                        </Button>
                       </Tooltip>
                     </div>
                   </CardBody>
@@ -644,26 +979,56 @@ export default function DestinationsPage() {
       </div>
 
       {/* ─── Add / Edit Modal ─────────────────────────────────────────────────── */}
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} size="4xl" scrollBehavior="inside" classNames={modalClassNames}>
+      <Modal
+        classNames={modalClassNames}
+        isOpen={isModalOpen}
+        scrollBehavior="inside"
+        size="4xl"
+        onClose={handleCloseModal}
+      >
         <ModalContent>
-          <ModalHeader>{editingDestination ? "Edit Destination" : "Add Destination"}</ModalHeader>
+          <ModalHeader>
+            {editingDestination ? "Edit Destination" : "Add Destination"}
+          </ModalHeader>
           <ModalBody>
             <div className="space-y-8">
-
               {/* ── Basic Information ───────────────────────────────────────── */}
               <div>
                 <SectionTitle>Basic Information</SectionTitle>
                 <div className="space-y-4">
-                  <Input label="Name" placeholder="Destination name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} isRequired />
-                  <Textarea label="Description" placeholder="Complete description — history, what to do, tips for visitors..." value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} minRows={4} maxRows={10} />
+                  <Input
+                    isRequired
+                    label="Name"
+                    placeholder="Destination name"
+                    value={formData.name}
+                    onChange={(e) =>
+                      setFormData({ ...formData, name: e.target.value })
+                    }
+                  />
+                  <Textarea
+                    label="Description"
+                    maxRows={10}
+                    minRows={4}
+                    placeholder="Complete description — history, what to do, tips for visitors..."
+                    value={formData.description}
+                    onChange={(e) =>
+                      setFormData({ ...formData, description: e.target.value })
+                    }
+                  />
                   <Select
+                    isRequired
                     label="Category"
                     placeholder="Select a category"
-                    selectedKeys={formData.category_id ? [formData.category_id] : []}
-                    onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                    isRequired
+                    selectedKeys={
+                      formData.category_id ? [formData.category_id] : []
+                    }
+                    onChange={(e) =>
+                      setFormData({ ...formData, category_id: e.target.value })
+                    }
                   >
-                    {categories.map((c) => <SelectItem key={c.id}>{c.name}</SelectItem>)}
+                    {categories.map((c) => (
+                      <SelectItem key={c.id}>{c.name}</SelectItem>
+                    ))}
                   </Select>
                 </div>
               </div>
@@ -680,10 +1045,17 @@ export default function DestinationsPage() {
                         selectedKeys={formClusterId ? [formClusterId] : []}
                         onChange={(e) => setFormClusterId(e.target.value)}
                       >
-                        {clusters.map((cl) => <SelectItem key={cl.id}>{cl.name}</SelectItem>)}
+                        {clusters.map((cl) => (
+                          <SelectItem key={cl.id}>{cl.name}</SelectItem>
+                        ))}
                       </Select>
                     )}
-                    <Input label="Municipality" placeholder="e.g. Cebu City, Lapu-Lapu" value={formMunicipality} onChange={(e) => setFormMunicipality(e.target.value)} />
+                    <Input
+                      label="Municipality"
+                      placeholder="e.g. Cebu City, Lapu-Lapu"
+                      value={formMunicipality}
+                      onChange={(e) => setFormMunicipality(e.target.value)}
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <Select
@@ -695,19 +1067,50 @@ export default function DestinationsPage() {
                       <SelectItem key="mid">💰💰 Mid-range</SelectItem>
                       <SelectItem key="premium">💰💰💰 Premium</SelectItem>
                     </Select>
-                    <Input label="Tags" placeholder="Comma-separated: nature, heritage, beach..." value={formTags} onChange={(e) => setFormTags(e.target.value)} />
+                    <Input
+                      label="Tags"
+                      placeholder="Comma-separated: nature, heritage, beach..."
+                      value={formTags}
+                      onChange={(e) => setFormTags(e.target.value)}
+                    />
                   </div>
                   {formTags && (
                     <div className="flex flex-wrap gap-1">
-                      {formTags.split(",").map((t) => t.trim()).filter(Boolean).map((tag, i) => (
-                        <Chip key={i} size="sm" variant="flat" color="secondary">{tag}</Chip>
-                      ))}
+                      {formTags
+                        .split(",")
+                        .map((t) => t.trim())
+                        .filter(Boolean)
+                        .map((tag, i) => (
+                          <Chip
+                            key={i}
+                            color="secondary"
+                            size="sm"
+                            variant="flat"
+                          >
+                            {tag}
+                          </Chip>
+                        ))}
                     </div>
                   )}
                   <div className="flex flex-wrap gap-6">
-                    <Switch isSelected={formFamilyFriendly} onValueChange={setFormFamilyFriendly}>Family-friendly</Switch>
-                    <Switch isSelected={formIsActive} onValueChange={setFormIsActive}>Active (visible in app)</Switch>
-                    <Switch isSelected={formIsFeatured} onValueChange={setFormIsFeatured}>Featured</Switch>
+                    <Switch
+                      isSelected={formFamilyFriendly}
+                      onValueChange={setFormFamilyFriendly}
+                    >
+                      Family-friendly
+                    </Switch>
+                    <Switch
+                      isSelected={formIsActive}
+                      onValueChange={setFormIsActive}
+                    >
+                      Active (visible in app)
+                    </Switch>
+                    <Switch
+                      isSelected={formIsFeatured}
+                      onValueChange={setFormIsFeatured}
+                    >
+                      Featured
+                    </Switch>
                   </div>
                 </div>
               </div>
@@ -719,10 +1122,26 @@ export default function DestinationsPage() {
                   {formImages.length > 0 && (
                     <div className="grid grid-cols-4 gap-2">
                       {formImages.map((url, i) => (
-                        <div key={i} className="relative group rounded-lg overflow-hidden h-24">
-                          <img src={url} alt="" className="w-full h-full object-cover" />
-                          <button onClick={() => removeMedia(url, setFormImages)} className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">×</button>
-                          {i === 0 && <span className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">Cover</span>}
+                        <div
+                          key={i}
+                          className="relative group rounded-lg overflow-hidden h-24"
+                        >
+                          <img
+                            alt=""
+                            className="w-full h-full object-cover"
+                            src={url}
+                          />
+                          <button
+                            className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => removeMedia(url, setFormImages)}
+                          >
+                            ×
+                          </button>
+                          {i === 0 && (
+                            <span className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
+                              Cover
+                            </span>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -738,10 +1157,10 @@ export default function DestinationsPage() {
                           viewBox="0 0 24 24"
                         >
                           <path
+                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth={2}
-                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                           />
                         </svg>
                       }
@@ -749,11 +1168,11 @@ export default function DestinationsPage() {
                       onClick={() => imageInputRef.current?.click()}
                     />
                     <input
+                      ref={imageInputRef}
                       multiple
                       accept="image/*"
                       className="hidden"
                       disabled={uploading}
-                      ref={imageInputRef}
                       type="file"
                       onChange={handleImageUpload}
                     />
@@ -801,10 +1220,10 @@ export default function DestinationsPage() {
                         viewBox="0 0 24 24"
                       >
                         <path
+                          d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
                           strokeLinecap="round"
                           strokeLinejoin="round"
                           strokeWidth={2}
-                          d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
                         />
                       </svg>
                     }
@@ -812,15 +1231,18 @@ export default function DestinationsPage() {
                     onClick={() => videoInputRef.current?.click()}
                   />
                   <input
+                    ref={videoInputRef}
                     accept="video/*"
                     className="hidden"
                     disabled={uploading}
-                    ref={videoInputRef}
                     type="file"
                     onChange={handleVideoUpload}
                   />
                 </label>
-                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                <p
+                  className="text-xs mt-1"
+                  style={{ color: "var(--text-muted)" }}
+                >
                   MP4, WebM, MOV · Max 50MB
                 </p>
               </div>
@@ -858,23 +1280,27 @@ export default function DestinationsPage() {
                     <div>
                       <p className="text-sm font-medium mb-2">Service Types</p>
                       <div className="flex gap-2">
-                        {Object.entries(SERVICE_TYPE_LABELS).map(([key, label]) => (
-                          <Chip
-                            key={key}
-                            className="cursor-pointer"
-                            color={
-                              formServiceTypes.includes(key)
-                                ? "primary"
-                                : "default"
-                            }
-                            variant={
-                              formServiceTypes.includes(key) ? "solid" : "flat"
-                            }
-                            onClick={() => toggleServiceType(key)}
-                          >
-                            {label}
-                          </Chip>
-                        ))}
+                        {Object.entries(SERVICE_TYPE_LABELS).map(
+                          ([key, label]) => (
+                            <Chip
+                              key={key}
+                              className="cursor-pointer"
+                              color={
+                                formServiceTypes.includes(key)
+                                  ? "primary"
+                                  : "default"
+                              }
+                              variant={
+                                formServiceTypes.includes(key)
+                                  ? "solid"
+                                  : "flat"
+                              }
+                              onClick={() => toggleServiceType(key)}
+                            >
+                              {label}
+                            </Chip>
+                          ),
+                        )}
                       </div>
                     </div>
                     <Input
@@ -923,10 +1349,10 @@ export default function DestinationsPage() {
                               viewBox="0 0 24 24"
                             >
                               <path
+                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
                                 strokeWidth={2}
-                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
                               />
                             </svg>
                           }
@@ -934,11 +1360,11 @@ export default function DestinationsPage() {
                           onClick={() => menuImageInputRef.current?.click()}
                         />
                         <input
+                          ref={menuImageInputRef}
                           multiple
                           accept="image/*"
                           className="hidden"
                           disabled={uploading}
-                          ref={menuImageInputRef}
                           type="file"
                           onChange={handleMenuImageUpload}
                         />
@@ -959,15 +1385,24 @@ export default function DestinationsPage() {
                         {[1, 2, 3, 4, 5].map((n) => (
                           <button
                             key={n}
-                            type="button"
-                            onClick={() => setFormStarRating(n === formStarRating ? 0 : n)}
                             className="text-2xl transition-colors"
-                            style={{ color: n <= formStarRating ? "#f59e0b" : "#d1d5db" }}
+                            style={{
+                              color:
+                                n <= formStarRating ? "#f59e0b" : "#d1d5db",
+                            }}
+                            type="button"
+                            onClick={() =>
+                              setFormStarRating(n === formStarRating ? 0 : n)
+                            }
                           >
                             ★
                           </button>
                         ))}
-                        {formStarRating > 0 && <span className="text-sm self-center ml-2 text-gray-500">{formStarRating}-star</span>}
+                        {formStarRating > 0 && (
+                          <span className="text-sm self-center ml-2 text-gray-500">
+                            {formStarRating}-star
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -1114,9 +1549,7 @@ export default function DestinationsPage() {
                           color="danger"
                           isSelected={formHours[key]?.closed ?? false}
                           size="sm"
-                          onValueChange={(v) =>
-                            updateDayHour(key, "closed", v)
-                          }
+                          onValueChange={(v) => updateDayHour(key, "closed", v)}
                         >
                           <span className="text-xs">
                             {formHours[key]?.closed ? "Closed" : "Open"}
@@ -1265,12 +1698,14 @@ export default function DestinationsPage() {
               <div>
                 <SectionTitle>Amenities</SectionTitle>
                 <Textarea
+                  description="Comma-separated list"
                   label="Amenities"
+                  minRows={2}
                   placeholder="Parking, Restroom, WiFi, Restaurant, Tour Guide, Gift Shop..."
                   value={formData.amenities}
-                  onChange={(e) => setFormData({ ...formData, amenities: e.target.value })}
-                  minRows={2}
-                  description="Comma-separated list"
+                  onChange={(e) =>
+                    setFormData({ ...formData, amenities: e.target.value })
+                  }
                 />
                 {formData.amenities && (
                   <div className="flex flex-wrap gap-1 mt-2">
@@ -1279,12 +1714,7 @@ export default function DestinationsPage() {
                       .map((a) => a.trim())
                       .filter(Boolean)
                       .map((a, i) => (
-                        <Chip
-                          key={i}
-                          color="primary"
-                          size="sm"
-                          variant="flat"
-                        >
+                        <Chip key={i} color="primary" size="sm" variant="flat">
                           {a}
                         </Chip>
                       ))}
@@ -1300,25 +1730,18 @@ export default function DestinationsPage() {
                   onValueChange={setFormIsIsland}
                 >
                   <span className="font-medium">Island Destination</span>
-                  <span className="text-sm text-gray-500 ml-2">Routes will go through a pier (ferry travel required)</span>
+                  <span className="text-sm text-gray-500 ml-2">
+                    Routes will go through a pier (ferry travel required)
+                  </span>
                 </Switch>
               </div>
-
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button
-              color="danger"
-              variant="flat"
-              onClick={handleCloseModal}
-            >
+            <Button color="danger" variant="flat" onClick={handleCloseModal}>
               Cancel
             </Button>
-            <Button
-              color="primary"
-              isLoading={saving}
-              onClick={handleSubmit}
-            >
+            <Button color="primary" isLoading={saving} onClick={handleSubmit}>
               {editingDestination ? "Update" : "Create"}
             </Button>
           </ModalFooter>
