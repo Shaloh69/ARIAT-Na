@@ -291,7 +291,7 @@ const seedDestinations = async (): Promise<void> => {
 
   // Get category IDs
   const [categories]: any = await pool.execute('SELECT id, slug FROM categories');
-  const categoryMap = new Map(categories.map((c: any) => [c.slug, c.id]));
+  const categoryMap = new Map<string, string>(categories.map((c: any) => [c.slug, c.id] as [string, string]));
 
   const destinations = [
     {
