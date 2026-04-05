@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
 import '../../models/destination.dart';
@@ -219,9 +220,9 @@ class _TripSetupScreenState extends State<TripSetupScreen> {
   }
 }
 
-// ─── Step 1: Area ─────────────────────────────────────────────────────────────
+// ─── Step 1: Area (interactive Cebu map) ─────────────────────────────────────
 
-class _AreaStep extends StatelessWidget {
+class _AreaStep extends StatefulWidget {
   final List<Cluster> clusters;
   final bool loading;
   final List<String> selected;
@@ -235,116 +236,290 @@ class _AreaStep extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final c = context.appColors;
-    if (loading) return const Center(child: ProgressRing());
+  State<_AreaStep> createState() => _AreaStepState();
+}
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Which part of Cebu?',
-              style: TextStyle(fontSize: 14, color: c.textMuted)),
-          Text('Select one or more areas', style: TextStyle(fontSize: 12, color: c.textFaint)),
-          const SizedBox(height: 16),
-          // "All Cebu" option
-          _areaRow(
-            context, c,
-            id: '',
-            name: 'All Cebu',
-            desc: 'Let AI pick the best spots island-wide',
-            icon: FluentIcons.globe,
-            color: AppColors.red400,
-          ),
-          const SizedBox(height: 10),
-          ...clusters.asMap().entries.map((e) {
-            final cl = e.value;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _areaRow(context, c,
-                id: cl.id,
-                name: cl.name,
-                desc: cl.recommendedTripLength != null ? '${cl.recommendedTripLength} · ${cl.destinationCount} spots' : '${cl.destinationCount} spots',
-                icon: _iconFor(cl.regionType),
-                color: _colorFor(cl.regionType),
-              ).animate().fadeIn(delay: (e.key * 60).ms, duration: 350.ms),
-            );
-          }),
-        ],
-      ),
-    );
+class _AreaStepState extends State<_AreaStep> {
+  // Cebu island center
+  static const _cebuCenter = LatLng(10.45, 123.85);
+
+  static const _clusterColors = {
+    'metro':   Color(0xFF3B82F6),
+    'south':   Color(0xFF10B981),
+    'north':   Color(0xFFF59E0B),
+    'islands': Color(0xFF8B5CF6),
+    'west':    Color(0xFF06B6D4),
+  };
+
+  static const _clusterEmoji = {
+    'metro':   '🏙️',
+    'south':   '🌊',
+    'north':   '🧭',
+    'islands': '🏝️',
+    'west':    '⛰️',
+  };
+
+  bool _allCebu(List<String> sel) => sel.isEmpty;
+
+  void _toggle(String id) {
+    if (id.isEmpty) {
+      widget.onChanged([]);
+      return;
+    }
+    final next = List<String>.from(widget.selected);
+    if (next.contains(id)) {
+      next.remove(id);
+    } else {
+      next.add(id);
+    }
+    widget.onChanged(next);
   }
 
-  Widget _areaRow(BuildContext context, AppColorScheme c, {
-    required String id,
-    required String name,
-    required String desc,
-    required IconData icon,
-    required Color color,
-  }) {
-    final isSelected = id.isEmpty ? selected.isEmpty : selected.contains(id);
-    return GestureDetector(
-      onTap: () {
-        if (id.isEmpty) {
-          onChanged([]);
-        } else {
-          final next = List<String>.from(selected);
-          if (next.contains(id)) { next.remove(id); } else { next.add(id); }
-          onChanged(next);
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withAlpha(20) : c.surfaceCard.withAlpha(200),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: isSelected ? color : c.borderMedium, width: isSelected ? 1.5 : 1),
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    if (widget.loading) return const Center(child: ProgressRing());
+
+    final mappable = widget.clusters
+        .where((cl) => cl.centerLat != null && cl.centerLng != null)
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Subtitle
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+          child: Text('Tap a region on the map to select it',
+              style: TextStyle(fontSize: 12, color: c.textFaint)),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(color: color.withAlpha(25), borderRadius: BorderRadius.circular(12)),
-              child: Icon(icon, color: color, size: 22),
+
+        // "All Cebu" toggle
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+          child: GestureDetector(
+            onTap: () => _toggle(''),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: _allCebu(widget.selected)
+                    ? AppColors.red400.withAlpha(25)
+                    : c.surfaceCard.withAlpha(200),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _allCebu(widget.selected) ? AppColors.red400 : c.borderMedium,
+                  width: _allCebu(widget.selected) ? 1.5 : 1,
+                ),
+              ),
+              child: Row(children: [
+                Icon(FluentIcons.globe, size: 18, color: AppColors.red400),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('All Cebu',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.textStrong)),
+                      Text('Let AI pick the best spots island-wide',
+                          style: TextStyle(fontSize: 11, color: c.textMuted)),
+                    ],
+                  ),
+                ),
+                if (_allCebu(widget.selected))
+                  Icon(FluentIcons.check_mark, size: 14, color: AppColors.red400),
+              ]),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+        ),
+
+        // Map
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
                 children: [
-                  Text(name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.textStrong)),
-                  Text(desc, style: TextStyle(fontSize: 11, color: c.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  FlutterMap(
+                    options: MapOptions(
+                      initialCenter: _cebuCenter,
+                      initialZoom: 8.2,
+                      interactionOptions: const InteractionOptions(
+                        flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
+                      ),
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                        subdomains: const ['a', 'b', 'c', 'd'],
+                        userAgentPackageName: 'com.airatna.app',
+                      ),
+                      // Glow circles for each cluster
+                      CircleLayer(
+                        circles: mappable.map((cl) {
+                          final color = _clusterColors[cl.regionType] ?? AppColors.red400;
+                          final isSel = widget.selected.contains(cl.id);
+                          return CircleMarker(
+                            point: LatLng(cl.centerLat!, cl.centerLng!),
+                            radius: isSel ? 52 : 38,
+                            color: isSel
+                                ? color.withAlpha(70)
+                                : color.withAlpha(30),
+                            borderColor: isSel ? color : color.withAlpha(120),
+                            borderStrokeWidth: isSel ? 2.5 : 1.5,
+                          );
+                        }).toList(),
+                      ),
+                      // Label markers
+                      MarkerLayer(
+                        markers: mappable.map((cl) {
+                          final color = _clusterColors[cl.regionType] ?? AppColors.red400;
+                          final emoji = _clusterEmoji[cl.regionType] ?? '📍';
+                          final isSel = widget.selected.contains(cl.id);
+                          return Marker(
+                            point: LatLng(cl.centerLat!, cl.centerLng!),
+                            width: 130,
+                            height: 56,
+                            child: GestureDetector(
+                              onTap: () => _toggle(cl.id),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  AnimatedContainer(
+                                    duration: const Duration(milliseconds: 180),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 9, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: isSel
+                                          ? color
+                                          : color.withAlpha(210),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: isSel
+                                          ? Border.all(
+                                              color: Colors.white.withAlpha(180),
+                                              width: 1.5)
+                                          : null,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: color.withAlpha(isSel ? 100 : 60),
+                                          blurRadius: isSel ? 10 : 5,
+                                          spreadRadius: isSel ? 1 : 0,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(emoji,
+                                            style: const TextStyle(fontSize: 13)),
+                                        const SizedBox(width: 5),
+                                        Flexible(
+                                          child: Text(
+                                            cl.name,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (isSel) ...[
+                                          const SizedBox(width: 4),
+                                          const Icon(FluentIcons.check_mark,
+                                              size: 10, color: Colors.white),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                  // Hint pill
+                  Positioned(
+                    top: 10, left: 0, right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withAlpha(150),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          'Tap regions to select  ·  Pinch to zoom',
+                          style: TextStyle(
+                              color: Color(0xB3FFFFFF),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-            if (isSelected)
-              Icon(FluentIcons.check_mark, size: 16, color: color),
-          ],
+          ),
         ),
-      ),
+
+        // Selected area chips
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+          child: widget.selected.isEmpty
+              ? Text(
+                  'No specific area selected — AI picks island-wide',
+                  style: TextStyle(fontSize: 11, color: c.textFaint),
+                )
+              : SizedBox(
+                  height: 30,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: widget.clusters
+                        .where((cl) => widget.selected.contains(cl.id))
+                        .map((cl) {
+                      final color =
+                          _clusterColors[cl.regionType] ?? AppColors.red400;
+                      return Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: color.withAlpha(25),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: color),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(cl.name,
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: color,
+                                    fontWeight: FontWeight.w600)),
+                            const SizedBox(width: 5),
+                            GestureDetector(
+                              onTap: () => _toggle(cl.id),
+                              child: Icon(FluentIcons.clear,
+                                  size: 10, color: color),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+        ),
+        const SizedBox(height: 6),
+      ],
     );
-  }
-
-  IconData _iconFor(String type) {
-    switch (type) {
-      case 'south': return FluentIcons.nav2_d_map_view;
-      case 'north': return FluentIcons.compass_n_w;
-      case 'islands': return FluentIcons.globe;
-      case 'west': return FluentIcons.mountain_climbing;
-      default: return FluentIcons.city_next;
-    }
-  }
-
-  Color _colorFor(String type) {
-    switch (type) {
-      case 'south': return AppColors.green;
-      case 'north': return AppColors.amber;
-      case 'islands': return AppColors.purple;
-      case 'west': return AppColors.cyan;
-      default: return AppColors.blue;
-    }
   }
 }
 

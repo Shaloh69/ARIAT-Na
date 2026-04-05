@@ -42,7 +42,13 @@ class _AriatNaAppState extends State<AriatNaApp> {
     _apiService = ApiService(_authService, _cacheService, _connectivityService);
 
     _authService.init().then((_) {
-      _apiService.baseUrl = _authService.baseUrl;
+      // Only sync baseUrl if the user has explicitly saved a custom URL.
+      // Otherwise always use the production default to avoid stale emulator
+      // addresses from old SharedPreferences overriding the correct URL.
+      final saved = _authService.baseUrl;
+      if (saved != AuthService.defaultBaseUrl) {
+        _apiService.baseUrl = saved;
+      }
     });
   }
 
@@ -67,6 +73,11 @@ class _AriatNaAppState extends State<AriatNaApp> {
       child: Consumer2<AuthService, ThemeService>(
         builder: (context, auth, themeService, _) {
           _apiService.baseUrl = auth.baseUrl;
+
+          // Only propagate a custom URL — never override with stale emulator address
+          if (auth.baseUrl != AuthService.defaultBaseUrl) {
+            _apiService.baseUrl = auth.baseUrl;
+          }
 
           return FluentApp(
             title: 'AIRAT-NA',

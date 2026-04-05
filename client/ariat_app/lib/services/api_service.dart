@@ -39,7 +39,8 @@ class ApiService {
       try {
         final uri =
             Uri.parse('$baseUrl$path').replace(queryParameters: query);
-        final response = await http.get(uri, headers: _headers(auth: auth));
+        final response = await http.get(uri, headers: _headers(auth: auth))
+            .timeout(const Duration(seconds: 30));
         final body = _handleResponse(response);
 
         // Cache certain endpoints
@@ -62,7 +63,8 @@ class ApiService {
     final uri = Uri.parse('$baseUrl$path');
     final response = await http.post(uri,
         headers: _headers(auth: auth),
-        body: body != null ? jsonEncode(body) : null);
+        body: body != null ? jsonEncode(body) : null)
+        .timeout(const Duration(seconds: 30));
     return _handleResponse(response);
   }
 
@@ -74,7 +76,8 @@ class ApiService {
     final uri = Uri.parse('$baseUrl$path');
     final response = await http.put(uri,
         headers: _headers(auth: auth),
-        body: body != null ? jsonEncode(body) : null);
+        body: body != null ? jsonEncode(body) : null)
+        .timeout(const Duration(seconds: 30));
     return _handleResponse(response);
   }
 
@@ -84,8 +87,8 @@ class ApiService {
       throw ApiException('No internet connection. This action requires online access.', 0);
     }
     final uri = Uri.parse('$baseUrl$path');
-    final response =
-        await http.delete(uri, headers: _headers(auth: auth));
+    final response = await http.delete(uri, headers: _headers(auth: auth))
+        .timeout(const Duration(seconds: 30));
     return _handleResponse(response);
   }
 
