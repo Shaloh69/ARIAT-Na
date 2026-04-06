@@ -583,6 +583,9 @@ export default function MapManager({
   >([]);
   const [roadPoints, setRoadPoints] = useState<[number, number][]>([]);
   const [snappedIndices, setSnappedIndices] = useState<Set<number>>(new Set());
+  const [isCancelRoadModalOpen, setIsCancelRoadModalOpen] = useState(false);
+  // Ref holds the latest undoLastPoint so the keydown handler stays stable
+  const undoRef = useRef<() => void>(() => {});
 
   // Point modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -625,7 +628,23 @@ export default function MapManager({
   // Track whether any modal is open to disable the control panel
   const isAnyModalOpen = isModalOpen || isRoadModalOpen || isDestModalOpen;
 
+  // Ctrl+Z → undo last road point while in road-drawing mode.
+  // undoRef always points to the latest undoLastPoint so the listener never re-subscribes.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        undoRef.current();
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   // Load existing points from GeoJSON
+
   useEffect(() => {
     if (geojsonData?.features) {
       const existingMarkers = geojsonData.features.map((feature) => ({
@@ -984,14 +1003,37 @@ export default function MapManager({
     }
   };
 
-  const cancelRoad = () => {
-    if (roadPoints.length > 0) {
-      if (!confirm("Are you sure? All drawn road points will be discarded."))
-        return;
-    }
+  const undoLastPoint = () => {
+    if (mode !== "add_road" || roadPoints.length === 0) return;
+    const lastIdx = roadPoints.length - 1;
+
+    setRoadPoints((prev) => prev.slice(0, -1));
+    setSnappedIndices((prev) => {
+      const next = new Set(prev);
+
+      next.delete(lastIdx);
+
+      return next;
+    });
+    toast.info(`Point ${lastIdx + 1} removed`);
+  };
+
+  // Keep undoRef current after every render so the stable keydown handler calls latest version
+  undoRef.current = undoLastPoint;
+
+  const discardAllRoadPoints = () => {
     setRoadPoints([]);
     setSnappedIndices(new Set());
+    setIsCancelRoadModalOpen(false);
     toast.info("Road creation cancelled");
+  };
+
+  const cancelRoad = () => {
+    if (roadPoints.length === 0) {
+      discardAllRoadPoints();
+      return;
+    }
+    setIsCancelRoadModalOpen(true);
   };
 
   const finishRoad = () => {
@@ -1018,7 +1060,12 @@ export default function MapManager({
   };
 
   const handleCancelRoad = () => {
-    if (!confirm("Discard this road? All drawn points will be lost.")) return;
+    // Close the Save Road modal and go back to drawing — don't discard points
+    setIsRoadModalOpen(false);
+    toast.info("Returned to road drawing. Add more points or finish again.");
+  };
+
+  const handleDiscardRoadFromModal = () => {
     setIsRoadModalOpen(false);
     setRoadName("");
     setRoadPoints([]);
@@ -1278,6 +1325,16 @@ export default function MapManager({
                     onClick={finishRoad}
                   >
                     Finish Road
+                  </Button>
+                  <Button
+                    color="warning"
+                    isDisabled={roadPoints.length === 0}
+                    size="sm"
+                    title="Undo last point (Ctrl+Z)"
+                    variant="flat"
+                    onClick={undoLastPoint}
+                  >
+                    ↩ Undo
                   </Button>
                   <Button
                     color="danger"
@@ -2461,16 +2518,68 @@ export default function MapManager({
                 </p>
               </div>
               <p className="text-xs text-amber-400">
-                Closing this modal will discard the drawn road.
+                &ldquo;Back to Drawing&rdquo; keeps your points.{" "}
+                &ldquo;Discard&rdquo; removes them.
               </p>
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button color="danger" variant="flat" onClick={handleCancelRoad}>
+            <Button
+              color="danger"
+              variant="flat"
+              onClick={handleDiscardRoadFromModal}
+            >
               Discard Road
+            </Button>
+            <Button variant="flat" onClick={handleCancelRoad}>
+              ← Back to Drawing
             </Button>
             <Button color="success" onClick={handleSaveRoad}>
               Save Road
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Cancel road confirmation modal */}
+      <Modal
+        classNames={modalClassNames}
+        isOpen={isCancelRoadModalOpen}
+        size="sm"
+        onClose={() => setIsCancelRoadModalOpen(false)}
+      >
+        <ModalContent>
+          <ModalHeader>Cancel Road Drawing?</ModalHeader>
+          <ModalBody>
+            <p className="text-sm" style={{ color: "#374151" }}>
+              You have{" "}
+              <span className="font-semibold">
+                {roadPoints.length} point{roadPoints.length !== 1 ? "s" : ""}
+              </span>{" "}
+              drawn. What would you like to do?
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              size="sm"
+              variant="flat"
+              onClick={() => setIsCancelRoadModalOpen(false)}
+            >
+              Keep Drawing
+            </Button>
+            <Button
+              color="warning"
+              size="sm"
+              variant="flat"
+              onClick={() => {
+                setIsCancelRoadModalOpen(false);
+                undoLastPoint();
+              }}
+            >
+              ↩ Undo Last Point
+            </Button>
+            <Button color="danger" size="sm" onClick={discardAllRoadPoints}>
+              Discard All
             </Button>
           </ModalFooter>
         </ModalContent>

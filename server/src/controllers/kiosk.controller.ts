@@ -146,6 +146,7 @@ export const generateKioskItinerary = async (req: Request, res: Response): Promi
     itineraryData = await buildItinerary(
       ranked, startLat, startLon,
       hoursPerDay, maxStops, 'time' as const,
+      600, transport_mode as string,
     );
   }
 

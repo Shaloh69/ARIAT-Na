@@ -69,6 +69,39 @@ export interface MultiDayItinerary {
  */
 const MULTIMODAL_MODES = new Set(['bus_commute', 'bus', 'bus_ac', 'jeepney', 'taxi', 'ferry', 'habal_habal', 'tricycle', 'walk']);
 
+// ── Haversine fallback ────────────────────────────────────────────────────────
+const SPEED_KMH: Record<string, number> = {
+  private_car: 40, taxi: 35, bus: 25, bus_commute: 25,
+  ferry: 20, walk: 5, habal_habal: 30, tricycle: 20,
+};
+
+function haversineDist(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** Straight-line leg estimate used when the road graph cannot route a candidate. */
+function fallbackLeg(
+  fromLat: number, fromLon: number,
+  toLat: number, toLon: number,
+  transportMode?: string,
+): RouteLeg {
+  const dist = haversineDist(fromLat, fromLon, toLat, toLon);
+  const speed = SPEED_KMH[transportMode ?? ''] ?? 35;
+  const timeMin = Math.max(1, Math.ceil((dist / speed) * 60));
+  return {
+    success: true,
+    totalDistance: Math.round(dist * 100) / 100,
+    estimatedTime: timeMin,
+    routeGeometry: [[fromLon, fromLat], [toLon, toLat]],
+    steps: [{ instruction: 'Head to destination', roadName: '', distance: dist, time: timeMin, from: 'Start', to: 'Destination' }],
+  };
+}
+
 export async function buildItinerary(
   ranked: ScoredDestination[],
   startLat: number,
@@ -135,11 +168,14 @@ export async function buildItinerary(
           ) as RouteLeg;
         }
       } catch {
-        // Pathfinding failure for this candidate — skip
-        continue;
+        // Pathfinding threw — use straight-line estimate so the stop isn't lost
+        leg = fallbackLeg(currentLat, currentLon, candidate.destination.latitude, candidate.destination.longitude, transportMode);
       }
 
-      if (!leg.success) continue;
+      // If the router returned a failure result, use the fallback estimate
+      if (!leg.success) {
+        leg = fallbackLeg(currentLat, currentLon, candidate.destination.latitude, candidate.destination.longitude, transportMode);
+      }
 
       const legMinutes = leg.estimatedTime; // already in minutes from pathfinding service
       const visitMinutes = candidate.destination.average_visit_duration || 60;
