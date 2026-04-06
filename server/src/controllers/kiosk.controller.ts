@@ -113,10 +113,24 @@ export const generateKioskItinerary = async (req: Request, res: Response): Promi
       cluster_ids.length > 0 ? cluster_ids as string[] : undefined,
       group_type as string | undefined,
     );
+
+    // If the selected regions yielded nothing (e.g. empty clusters), fall back
+    // to a region-unfiltered search so the kiosk never hard-errors on this.
+    if (ranked.length === 0 && cluster_ids.length > 0) {
+      logger.warn(`[KIOSK] cluster_ids ${JSON.stringify(cluster_ids)} returned 0 destinations — falling back to all regions`);
+      ranked = await rankDestinations(
+        startLat, startLon,
+        interests as string[],
+        budgetNum,
+        maxStops * numDays * 3,
+        undefined,
+        group_type as string | undefined,
+      );
+    }
   }
 
   if (ranked.length === 0) {
-    throw new AppError('No destinations found. Try selecting different destinations or interests.', 404);
+    throw new AppError('No destinations found matching your preferences. Please try different interests or regions.', 404);
   }
 
   // Build itinerary

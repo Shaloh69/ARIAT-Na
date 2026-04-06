@@ -112,7 +112,7 @@ const KioskPlanPage: NextPage = () => {
   const [aiStep, setAiStep] = useState<AiStep>("interests");
   const [interests, setInterests] = useState<string[]>([]);
   const [groupType, setGroupType] = useState<string>("couple");
-  const [clusters, setClusters] = useState<Array<{ description?: string; id: string; name: string }>>([]);
+  const [clusters, setClusters] = useState<Array<{ description?: string; destination_count?: number; id: string; name: string }>>([]);
   const [selectedClusters, setSelectedClusters] = useState<string[]>([]);
   const [days, setDays] = useState<number>(1);
   const [hoursPerDay, setHoursPerDay] = useState<number>(8);
@@ -516,35 +516,74 @@ const KioskPlanPage: NextPage = () => {
         {planMode === "ai" && aiStep === "regions" && (
           <div className="plan-step">
             {loadingClusters ? (
-              <div className="grid grid-cols-5 gap-4">
+              <div className="plan-cluster-grid">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} className="rounded-3xl h-28" />
+                  <Skeleton key={i} className="rounded-3xl h-36" />
                 ))}
+              </div>
+            ) : clusters.length === 0 ? (
+              <div className="plan-cluster-empty">
+                <p>⚠️ Could not load regions.</p>
+                <button
+                  className="plan-cluster-retry"
+                  type="button"
+                  onClick={() => {
+                    setLoadingClusters(true);
+                    fetch(`${API_BASE_URL}${API_ENDPOINTS.CLUSTERS}`)
+                      .then((r) => r.json())
+                      .then((json: { data: typeof clusters; success: boolean }) => {
+                        if (json.success && json.data) setClusters(json.data);
+                      })
+                      .catch(() => toast.error("Failed to load regions"))
+                      .finally(() => setLoadingClusters(false));
+                  }}
+                >
+                  Retry
+                </button>
               </div>
             ) : (
               <div className="plan-cluster-grid">
                 {clusters.map((cluster) => {
                   const { color, icon } = clusterMeta(cluster.name);
                   const active = selectedClusters.includes(cluster.id);
+                  const count = Number(cluster.destination_count ?? 0);
+                  const isEmpty = count === 0;
                   return (
                     <button
                       key={cluster.id}
-                      className={`plan-cluster-card ${active ? "plan-cluster-active" : ""}`}
-                      style={{ background: active ? color + "30" : color + "10", borderColor: active ? color : color + "40", boxShadow: active ? `0 0 0 2px ${color}` : "none" }}
+                      className={`plan-cluster-card ${active ? "plan-cluster-active" : ""} ${isEmpty ? "plan-cluster-empty-card" : ""}`}
+                      style={{
+                        background: active ? color + "30" : color + "10",
+                        borderColor: active ? color : color + "40",
+                        boxShadow: active ? `0 0 0 2px ${color}` : "none",
+                        opacity: isEmpty ? 0.45 : 1,
+                      }}
                       type="button"
-                      onClick={() => setSelectedClusters((prev) =>
-                        prev.includes(cluster.id) ? prev.filter((c) => c !== cluster.id) : [...prev, cluster.id]
-                      )}
+                      onClick={() => {
+                        if (isEmpty) return;
+                        setSelectedClusters((prev) =>
+                          prev.includes(cluster.id)
+                            ? prev.filter((c) => c !== cluster.id)
+                            : [...prev, cluster.id],
+                        );
+                      }}
                     >
                       <span className="text-3xl">{icon}</span>
                       <p className="plan-cluster-name" style={{ color }}>{cluster.name}</p>
+                      <p className="plan-cluster-count" style={{ color: isEmpty ? "rgba(255,255,255,0.3)" : color + "cc" }}>
+                        {isEmpty ? "No destinations" : `${count} place${count !== 1 ? "s" : ""}`}
+                      </p>
                       {active && <span className="plan-cluster-check">✓</span>}
                     </button>
                   );
                 })}
               </div>
             )}
-            <p className="plan-hint">{selectedClusters.length === 0 ? "Skip to include all regions" : `${selectedClusters.length} region${selectedClusters.length > 1 ? "s" : ""} selected`}</p>
+            <p className="plan-hint">
+              {selectedClusters.length === 0
+                ? "Select regions to focus on, or skip to explore all of Cebu"
+                : `${selectedClusters.length} region${selectedClusters.length > 1 ? "s" : ""} selected`}
+            </p>
           </div>
         )}
 
