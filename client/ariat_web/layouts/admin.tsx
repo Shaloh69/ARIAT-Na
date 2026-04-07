@@ -7,6 +7,7 @@ import { useAuthStore } from "@/lib/store/auth-store";
 import { ThemeSwitch } from "@/components/theme-switch";
 import AnimatedBackground from "@/components/animated-background";
 import DefaultPasswordWarning from "@/components/default-password-warning";
+import { useAdminSocket } from "@/lib/hooks/useAdminSocket";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -16,6 +17,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const router = useRouter();
   const { isAuthenticated, admin, logout, fetchAdminProfile } = useAuthStore();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const { onlineAdmins } = useAdminSocket();
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -170,6 +172,16 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
             d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+        </svg>
+      ),
+    },
+    {
+      name: "Team",
+      href: "/admin/team",
+      icon: (
+        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
       ),
     },
@@ -479,6 +491,91 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               {navigation.find((item) => item.href === router.pathname)?.name ||
                 "Admin Panel"}
             </h1>
+
+            {/* Online admin avatars */}
+            {onlineAdmins.length > 0 && (
+              <Tooltip
+                classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                content={
+                  <div className="flex flex-col gap-1 p-1">
+                    <p className="font-semibold mb-1">Online now</p>
+                    {onlineAdmins.map((a) => (
+                      <span key={a.adminId}>{a.full_name}</span>
+                    ))}
+                  </div>
+                }
+                delay={300}
+                placement="bottom-end"
+              >
+                <Link href="/admin/team" className="flex items-center gap-2 cursor-pointer">
+                  <div className="flex items-center">
+                    {onlineAdmins.slice(0, 5).map((a, idx) => (
+                      <Tooltip
+                        key={a.adminId}
+                        classNames={{ content: "bg-slate-800 text-white border border-white/10 shadow-lg text-xs" }}
+                        content={
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-semibold">{a.full_name}</span>
+                            <span className="capitalize opacity-70">{a.role.replace("_", " ")}</span>
+                          </div>
+                        }
+                        delay={200}
+                        placement="bottom"
+                      >
+                        <div
+                          className="relative cursor-pointer"
+                          style={{ marginLeft: idx === 0 ? 0 : -10, zIndex: 10 - idx }}
+                        >
+                          {a.profile_image_url ? (
+                            <img
+                              src={a.profile_image_url}
+                              alt={a.full_name}
+                              className="h-8 w-8 rounded-full object-cover"
+                              style={{ boxShadow: "0 0 0 2px var(--bg-card)" }}
+                            />
+                          ) : (
+                            <div
+                              className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold"
+                              style={{
+                                backgroundColor: "rgba(244,63,94,0.15)",
+                                color: "var(--red-600)",
+                                boxShadow: "0 0 0 2px var(--bg-card)",
+                              }}
+                            >
+                              {a.full_name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          {/* Green dot */}
+                          <span
+                            className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2"
+                            style={{
+                              backgroundColor: "#22c55e",
+                              borderColor: "var(--bg-card)",
+                            }}
+                          />
+                        </div>
+                      </Tooltip>
+                    ))}
+                    {onlineAdmins.length > 5 && (
+                      <div
+                        className="h-8 w-8 rounded-full ring-2 flex items-center justify-center text-xs font-bold"
+                        style={{
+                          marginLeft: -10,
+                          backgroundColor: "rgba(244,63,94,0.1)",
+                          color: "var(--red-600)",
+                          boxShadow: "0 0 0 2px var(--bg-card)",
+                        }}
+                      >
+                        +{onlineAdmins.length - 5}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    {onlineAdmins.length} online
+                  </span>
+                </Link>
+              </Tooltip>
+            )}
           </header>
 
           {/* Page content */}

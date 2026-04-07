@@ -45,6 +45,10 @@ export const API_ENDPOINTS = {
   CLUSTERS: "/clusters",
   GUIDES: "/guides",
 
+  // Admin Team
+  ADMIN_TEAM: "/admin/team",
+  ADMIN_TEAM_CHAT: "/admin/team/chat",
+
   // Uploads
   UPLOAD_IMAGE: "/upload/image",
   UPLOAD_IMAGES: "/upload/images",

@@ -27,6 +27,7 @@ import guideRoutes from './routes/guide.routes';
 import fareConfigRoutes from './routes/fareconfig.routes';
 import transitRoutes from './routes/transit.routes';
 import kioskRoutes from './routes/kiosk.routes';
+import adminTeamRoutes from './routes/admin-team.routes';
 
 // Create Express application
 const app: Application = express();
@@ -108,6 +109,7 @@ app.use(`${apiPrefix}/guides`, guideRoutes);
 app.use(`${apiPrefix}/fare-configs`, fareConfigRoutes);
 app.use(`${apiPrefix}/transit`, transitRoutes);
 app.use(`${apiPrefix}/kiosk`, kioskRoutes);
+app.use(`${apiPrefix}/admin/team`, adminTeamRoutes);
 
 // =====================================================
 // ERROR HANDLING
@@ -361,6 +363,59 @@ const ensureMigration002 = async (): Promise<void> => {
   }
 };
 
+/**
+ * Auto-apply admin team migration:
+ *   - admins.last_seen_at, admins.is_online
+ *   - admin_chat_messages table
+ * Safe idempotent checks — runs on every startup.
+ */
+const ensureAdminTeamMigration = async (): Promise<void> => {
+  try {
+    // --- admins.last_seen_at ---
+    const [lsCols]: any = await pool.execute(
+      "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'admins' AND COLUMN_NAME = 'last_seen_at'"
+    );
+    if (lsCols.length === 0) {
+      await pool.execute("ALTER TABLE admins ADD COLUMN last_seen_at TIMESTAMP NULL AFTER last_login_at");
+      logger.info('[STARTUP] Added admins.last_seen_at');
+    }
+
+    // --- admins.is_online ---
+    const [onlineCols]: any = await pool.execute(
+      "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'admins' AND COLUMN_NAME = 'is_online'"
+    );
+    if (onlineCols.length === 0) {
+      await pool.execute("ALTER TABLE admins ADD COLUMN is_online BOOLEAN DEFAULT FALSE AFTER last_seen_at");
+      logger.info('[STARTUP] Added admins.is_online');
+    }
+
+    // Reset all online flags on startup (clean state)
+    await pool.execute("UPDATE admins SET is_online = FALSE");
+
+    // --- admin_chat_messages table ---
+    const [chatTables]: any = await pool.execute(
+      "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'admin_chat_messages'"
+    );
+    if (chatTables.length === 0) {
+      await pool.execute(`
+        CREATE TABLE admin_chat_messages (
+          id VARCHAR(36) PRIMARY KEY,
+          admin_id VARCHAR(36) NOT NULL,
+          message TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_created_at (created_at),
+          FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      logger.info('[STARTUP] Created admin_chat_messages table');
+    }
+
+    logger.info('[STARTUP] Admin team migration check complete.');
+  } catch (error) {
+    logger.error('[STARTUP] Admin team migration failed:', error);
+  }
+};
+
 const startServer = async (): Promise<void> => {
   try {
     // Test database connection
@@ -368,6 +423,9 @@ const startServer = async (): Promise<void> => {
 
     // Auto-apply migration 002 if tables/columns are missing
     await ensureMigration002();
+
+    // Auto-apply admin team migration (presence + chat)
+    await ensureAdminTeamMigration();
 
     // Ensure default admin user exists
     await ensureAdminExists();

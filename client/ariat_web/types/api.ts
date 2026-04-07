@@ -142,6 +142,29 @@ export interface Road {
   updated_at: string;
 }
 
+// Admin Team Types
+export interface AdminTeamMember {
+  id: string;
+  email: string;
+  full_name: string;
+  profile_image_url: string | null;
+  role: "super_admin" | "admin" | "moderator";
+  is_active: boolean;
+  is_online: boolean;
+  last_seen_at: string | null;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  admin_id: string;
+  admin_name: string;
+  profile_image_url: string | null;
+  message: string;
+  created_at: string;
+}
+
 // API Response Types
 export interface ApiResponse<T = any> {
   success: boolean;

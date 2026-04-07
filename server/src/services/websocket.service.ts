@@ -1,14 +1,17 @@
 /**
- * WebSocket Service for Real-Time Navigation
- * Handles live location updates, route recalculation, and navigation events
+ * WebSocket Service
+ * - /          → user navigation (real-time routing)
+ * - /admin     → admin presence & group chat
  */
 
 import { Server as HttpServer } from 'http';
-import { Server, Socket } from 'socket.io';
+import { Server, Socket, Namespace } from 'socket.io';
 import { verifyAccessToken } from '../utils/auth';
 import { recalculateRoute, checkIfOffCourse } from './pathfinding.service';
+import { pool } from '../config/database';
 import { logger } from '../utils/logger';
 import { config } from '../config/env';
+import { v4 as uuidv4 } from 'uuid';
 
 interface NavigationSession {
   userId: string;
@@ -25,6 +28,19 @@ const activeSessions = new Map<string, NavigationSession>();
 
 // Socket.IO server instance
 let io: Server;
+
+// Admin namespace
+let adminNs: Namespace;
+
+// Online admins map: adminId → { socketId, full_name, profile_image_url, role }
+interface OnlineAdmin {
+  socketId: string;
+  adminId: string;
+  full_name: string;
+  profile_image_url: string | null;
+  role: string;
+}
+const onlineAdmins = new Map<string, OnlineAdmin>();
 
 /**
  * Initialize WebSocket server
@@ -267,6 +283,123 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
     });
   }, 10 * 60 * 1000); // Every 10 minutes
 
+  // ─── Admin namespace: /admin ─────────────────────────────────────────────────
+  adminNs = io.of('/admin');
+
+  // Auth middleware — admin only
+  adminNs.use((socket, next) => {
+    try {
+      const token =
+        socket.handshake.auth.token ||
+        socket.handshake.headers.authorization?.replace('Bearer ', '');
+      if (!token) return next(new Error('Authentication required'));
+      const payload = verifyAccessToken(token);
+      if (payload.type !== 'admin') return next(new Error('Admin access required'));
+      socket.data.user = payload;
+      next();
+    } catch {
+      next(new Error('Invalid authentication token'));
+    }
+  });
+
+  adminNs.on('connection', async (socket: Socket) => {
+    const { id: adminId } = socket.data.user;
+
+    // Fetch full admin profile for broadcast
+    try {
+      const [rows]: any = await pool.execute(
+        'SELECT full_name, profile_image_url, role FROM admins WHERE id = ? AND is_active = TRUE',
+        [adminId]
+      );
+      if (rows.length === 0) { socket.disconnect(); return; }
+
+      const { full_name, profile_image_url, role } = rows[0];
+
+      // Register as online
+      onlineAdmins.set(adminId, { socketId: socket.id, adminId, full_name, profile_image_url, role });
+
+      await pool.execute(
+        'UPDATE admins SET is_online = TRUE, last_seen_at = NOW() WHERE id = ?',
+        [adminId]
+      );
+
+      socket.join('admin:room');
+      logger.info(`[ADMIN WS] ${full_name} connected`);
+
+      // Send current online list to the newly connected admin
+      socket.emit('admin:online-list', { admins: Array.from(onlineAdmins.values()) });
+
+      // Broadcast join to everyone else
+      socket.to('admin:room').emit('admin:joined', {
+        adminId, full_name, profile_image_url, role,
+      });
+
+    } catch (err) {
+      logger.error('[ADMIN WS] Error on connect:', err);
+      socket.disconnect();
+      return;
+    }
+
+    // ── Heartbeat — keep last_seen_at fresh ──────────────────────────────────
+    socket.on('admin:heartbeat', async () => {
+      try {
+        await pool.execute(
+          'UPDATE admins SET last_seen_at = NOW() WHERE id = ?',
+          [adminId]
+        );
+      } catch { /* non-fatal */ }
+    });
+
+    // ── Group chat message ────────────────────────────────────────────────────
+    socket.on('admin:chat', async (data: { message: string }) => {
+      const text = (data?.message ?? '').trim();
+      if (!text || text.length > 2000) {
+        socket.emit('admin:error', { message: 'Message must be 1–2000 characters' });
+        return;
+      }
+
+      try {
+        const msgId = uuidv4();
+        const admin = onlineAdmins.get(adminId);
+
+        await pool.execute(
+          'INSERT INTO admin_chat_messages (id, admin_id, message) VALUES (?, ?, ?)',
+          [msgId, adminId, text]
+        );
+
+        const payload = {
+          id: msgId,
+          admin_id: adminId,
+          admin_name: admin?.full_name ?? 'Unknown',
+          profile_image_url: admin?.profile_image_url ?? null,
+          message: text,
+          created_at: new Date().toISOString(),
+        };
+
+        // Broadcast to all admins in the room (including sender)
+        adminNs.to('admin:room').emit('admin:chat', payload);
+
+      } catch (err) {
+        logger.error('[ADMIN WS] Chat save error:', err);
+        socket.emit('admin:error', { message: 'Failed to send message' });
+      }
+    });
+
+    // ── Disconnect ────────────────────────────────────────────────────────────
+    socket.on('disconnect', async (reason) => {
+      onlineAdmins.delete(adminId);
+      try {
+        await pool.execute(
+          'UPDATE admins SET is_online = FALSE, last_seen_at = NOW() WHERE id = ?',
+          [adminId]
+        );
+      } catch { /* non-fatal */ }
+
+      socket.to('admin:room').emit('admin:left', { adminId });
+      logger.info(`[ADMIN WS] ${adminId} disconnected (${reason})`);
+    });
+  });
+
   logger.info('WebSocket server initialized');
   return io;
 }
@@ -311,4 +444,11 @@ export function getActiveSessionsCount(): number {
  */
 export function getSession(sessionId: string): NavigationSession | undefined {
   return activeSessions.get(sessionId);
+}
+
+/**
+ * Get current online admin list (for REST fallback)
+ */
+export function getOnlineAdmins(): OnlineAdmin[] {
+  return Array.from(onlineAdmins.values());
 }
