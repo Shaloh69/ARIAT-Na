@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { io, Socket } from "socket.io-client";
 import type { ActiveUser } from "@/types/api";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { io, Socket } from "socket.io-client";
+
 import { apiClient } from "@/lib/api";
 
 const WS_URL =
@@ -16,6 +18,7 @@ export function useUsersSocket() {
 
   useEffect(() => {
     const token = apiClient.getAccessToken();
+
     if (!token) return;
 
     const socket = io(`${WS_URL}/users-watch`, {
@@ -40,50 +43,66 @@ export function useUsersSocket() {
       setSocketError(err.message);
     });
 
-    // Full snapshot on connect
     socket.on("user:active-list", (data: { users: ActiveUser[] }) => {
       setActiveUsers(data.users);
     });
 
-    // New user came online
     socket.on("user:joined", (user: ActiveUser) => {
       setActiveUsers((prev) => {
         const filtered = prev.filter((u) => u.userId !== user.userId);
+
         return [...filtered, user];
       });
     });
 
-    // User went offline
     socket.on("user:left", (data: { userId: string }) => {
       setActiveUsers((prev) => prev.filter((u) => u.userId !== data.userId));
     });
 
-    // Location update
     socket.on(
       "user:location",
-      (data: { userId: string; lat: number; lon: number; heading: number | null; sessionId: string }) => {
+      (data: {
+        userId: string;
+        lat: number;
+        lon: number;
+        heading: number | null;
+        sessionId: string;
+      }) => {
         setActiveUsers((prev) =>
           prev.map((u) =>
             u.userId === data.userId
-              ? { ...u, lat: data.lat, lon: data.lon, heading: data.heading, sessionId: data.sessionId }
-              : u
-          )
+              ? {
+                  ...u,
+                  lat: data.lat,
+                  lon: data.lon,
+                  heading: data.heading,
+                  sessionId: data.sessionId,
+                }
+              : u,
+          ),
         );
-      }
+      },
     );
 
-    // Itinerary update
     socket.on(
       "user:itinerary",
-      (data: { userId: string; itinerary_title: string | null; itinerary_stop_count: number | null }) => {
+      (data: {
+        userId: string;
+        itinerary_title: string | null;
+        itinerary_stop_count: number | null;
+      }) => {
         setActiveUsers((prev) =>
           prev.map((u) =>
             u.userId === data.userId
-              ? { ...u, itinerary_title: data.itinerary_title, itinerary_stop_count: data.itinerary_stop_count }
-              : u
-          )
+              ? {
+                  ...u,
+                  itinerary_title: data.itinerary_title,
+                  itinerary_stop_count: data.itinerary_stop_count,
+                }
+              : u,
+          ),
         );
-      }
+      },
     );
 
     return () => {
@@ -92,7 +111,6 @@ export function useUsersSocket() {
     };
   }, []);
 
-  /** Remove a user locally after deletion */
   const removeUser = useCallback((userId: string) => {
     setActiveUsers((prev) => prev.filter((u) => u.userId !== userId));
   }, []);

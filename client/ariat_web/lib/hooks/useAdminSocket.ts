@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { io, Socket } from "socket.io-client";
 import type { ChatMessage } from "@/types/api";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { io, Socket } from "socket.io-client";
+
 import { apiClient } from "@/lib/api";
 
 export interface OnlineAdmin {
@@ -27,6 +29,7 @@ export function useAdminSocket() {
 
   useEffect(() => {
     const token = apiClient.getAccessToken();
+
     if (!token) return;
 
     const socket = io(`${WS_URL}/admin`, {
@@ -50,6 +53,7 @@ export function useAdminSocket() {
 
     socket.on("disconnect", () => {
       setIsConnected(false);
+
       if (heartbeatRef.current) {
         clearInterval(heartbeatRef.current);
         heartbeatRef.current = null;
@@ -60,27 +64,22 @@ export function useAdminSocket() {
       setSocketError(err.message);
     });
 
-    // Receive current online list on join
     socket.on("admin:online-list", (data: { admins: OnlineAdmin[] }) => {
       setOnlineAdmins(data.admins);
     });
 
-    // Another admin joined
     socket.on("admin:joined", (data: OnlineAdmin) => {
       setOnlineAdmins((prev) => {
         const filtered = prev.filter((a) => a.adminId !== data.adminId);
+
         return [...filtered, data];
       });
     });
 
-    // Another admin left
     socket.on("admin:left", (data: { adminId: string }) => {
-      setOnlineAdmins((prev) =>
-        prev.filter((a) => a.adminId !== data.adminId)
-      );
+      setOnlineAdmins((prev) => prev.filter((a) => a.adminId !== data.adminId));
     });
 
-    // Chat message (from anyone in the room, including self)
     socket.on("admin:chat", (msg: ChatMessage) => {
       setMessages((prev) => [...prev, msg]);
     });
@@ -108,7 +107,6 @@ export function useAdminSocket() {
     messages,
     socketError,
     sendMessage,
-    /** Prepend history loaded via REST */
     setMessages,
   };
 }
