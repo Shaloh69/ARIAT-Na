@@ -26,11 +26,35 @@ interface NavigationSession {
 // Active navigation sessions
 const activeSessions = new Map<string, NavigationSession>();
 
+// ─── Online user tracking ────────────────────────────────────────────────────
+export interface OnlineUser {
+  socketId: string;
+  userId: string;
+  full_name: string;
+  email: string;
+  profile_image_url: string | null;
+  lat: number | null;
+  lon: number | null;
+  heading: number | null;
+  sessionId: string | null;
+  itinerary_title: string | null;
+  itinerary_stop_count: number | null;
+  connected_at: string;
+}
+const onlineUsers = new Map<string, OnlineUser>();
+
 // Socket.IO server instance
 let io: Server;
 
 // Admin namespace
 let adminNs: Namespace;
+
+// Users-watch namespace (admin-authenticated)
+let usersWatchNs: Namespace | undefined;
+
+function broadcastToWatchers(event: string, data: unknown): void {
+  usersWatchNs?.to('watch:room').emit(event, data);
+}
 
 // Online admins map: adminId → { socketId, full_name, profile_image_url, role }
 interface OnlineAdmin {
@@ -74,7 +98,7 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
   });
 
   // Connection handler
-  io.on('connection', (socket: Socket) => {
+  io.on('connection', async (socket: Socket) => {
     logger.info(`WebSocket client connected: ${socket.id}`, {
       userId: socket.data.user?.id,
       userType: socket.data.user?.type,
@@ -83,6 +107,38 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
     // Join user to their personal room
     if (socket.data.user?.id) {
       socket.join(`user:${socket.data.user.id}`);
+    }
+
+    // ── Track mobile app users ───────────────────────────────────────────────
+    if (socket.data.user?.type === 'user') {
+      const userId: string = socket.data.user.id;
+      try {
+        const [rows]: any = await pool.execute(
+          'SELECT full_name, email, profile_image_url FROM users WHERE id = ? AND is_active = TRUE',
+          [userId]
+        );
+        if (rows.length > 0) {
+          const { full_name, email, profile_image_url } = rows[0];
+          const userEntry: OnlineUser = {
+            socketId: socket.id,
+            userId,
+            full_name,
+            email,
+            profile_image_url: profile_image_url ?? null,
+            lat: null,
+            lon: null,
+            heading: null,
+            sessionId: null,
+            itinerary_title: null,
+            itinerary_stop_count: null,
+            connected_at: new Date().toISOString(),
+          };
+          onlineUsers.set(userId, userEntry);
+          broadcastToWatchers('user:joined', userEntry);
+        }
+      } catch (err) {
+        logger.error('[WS] Failed to register online user:', err);
+      }
     }
 
     // Handle navigation session start
@@ -121,6 +177,21 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
       }
     });
 
+    // ── Mobile: announce active itinerary ────────────────────────────────────
+    socket.on('user:set-itinerary', (data: { title: string; stopCount: number }) => {
+      const userId = socket.data.user?.id;
+      const entry = userId ? onlineUsers.get(userId) : undefined;
+      if (entry) {
+        entry.itinerary_title = data?.title ?? null;
+        entry.itinerary_stop_count = data?.stopCount ?? null;
+        broadcastToWatchers('user:itinerary', {
+          userId,
+          itinerary_title: entry.itinerary_title,
+          itinerary_stop_count: entry.itinerary_stop_count,
+        });
+      }
+    });
+
     // Handle location updates
     socket.on('navigation:location-update', async (data) => {
       try {
@@ -146,6 +217,22 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
         // Update current position
         session.currentPosition = { lat: latitude, lon: longitude };
         session.lastUpdate = new Date();
+
+        // Broadcast location to admin watchers
+        const liveUser = onlineUsers.get(socket.data.user.id);
+        if (liveUser) {
+          liveUser.lat = latitude;
+          liveUser.lon = longitude;
+          liveUser.heading = heading ?? null;
+          liveUser.sessionId = sessionId;
+          broadcastToWatchers('user:location', {
+            userId: socket.data.user.id,
+            lat: latitude,
+            lon: longitude,
+            heading: heading ?? null,
+            sessionId,
+          });
+        }
 
         // Check if user is off course
         if (session.route && session.route.roads && session.route.path) {
@@ -254,6 +341,13 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
     // Handle disconnection
     socket.on('disconnect', (reason) => {
       logger.info(`WebSocket client disconnected: ${socket.id}`, { reason });
+
+      // Remove from online users map and notify watchers
+      if (socket.data.user?.type === 'user') {
+        const userId: string = socket.data.user.id;
+        onlineUsers.delete(userId);
+        broadcastToWatchers('user:left', { userId });
+      }
 
       // Clean up sessions for this user
       activeSessions.forEach((session, sessionId) => {
@@ -400,6 +494,34 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
     });
   });
 
+  // ─── /users-watch namespace — admin clients watch live user positions ────────
+  usersWatchNs = io.of('/users-watch');
+
+  usersWatchNs.use((socket, next) => {
+    try {
+      const token =
+        socket.handshake.auth.token ||
+        socket.handshake.headers.authorization?.replace('Bearer ', '');
+      if (!token) return next(new Error('Authentication required'));
+      const payload = verifyAccessToken(token);
+      if (payload.type !== 'admin') return next(new Error('Admin access required'));
+      socket.data.user = payload;
+      next();
+    } catch {
+      next(new Error('Invalid authentication token'));
+    }
+  });
+
+  usersWatchNs.on('connection', (socket: Socket) => {
+    socket.join('watch:room');
+    socket.emit('user:active-list', { users: Array.from(onlineUsers.values()) });
+    logger.info(`[USERS-WATCH] Admin ${socket.data.user?.id} connected`);
+
+    socket.on('disconnect', () => {
+      logger.info(`[USERS-WATCH] Admin ${socket.data.user?.id} disconnected`);
+    });
+  });
+
   logger.info('WebSocket server initialized');
   return io;
 }
@@ -451,4 +573,11 @@ export function getSession(sessionId: string): NavigationSession | undefined {
  */
 export function getOnlineAdmins(): OnlineAdmin[] {
   return Array.from(onlineAdmins.values());
+}
+
+/**
+ * Get current online mobile users snapshot
+ */
+export function getOnlineUsers(): OnlineUser[] {
+  return Array.from(onlineUsers.values());
 }

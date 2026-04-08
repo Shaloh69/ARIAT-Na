@@ -49,6 +49,10 @@ export const API_ENDPOINTS = {
   ADMIN_TEAM: "/admin/team",
   ADMIN_TEAM_CHAT: "/admin/team/chat",
 
+  // Admin Users
+  ADMIN_USERS: "/admin/users",
+  ADMIN_USERS_ACTIVE: "/admin/users/active",
+
   // Uploads
   UPLOAD_IMAGE: "/upload/image",
   UPLOAD_IMAGES: "/upload/images",

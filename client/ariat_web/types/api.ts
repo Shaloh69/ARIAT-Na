@@ -165,6 +165,36 @@ export interface ChatMessage {
   created_at: string;
 }
 
+// App User Types (mobile users)
+export interface AppUser {
+  id: string;
+  email: string;
+  full_name: string;
+  phone_number: string | null;
+  profile_image_url: string | null;
+  is_verified: boolean;
+  is_active: boolean;
+  is_online: boolean;
+  last_login_at: string | null;
+  created_at: string;
+  itinerary_count: number;
+}
+
+export interface ActiveUser {
+  socketId: string;
+  userId: string;
+  full_name: string;
+  email: string;
+  profile_image_url: string | null;
+  lat: number | null;
+  lon: number | null;
+  heading: number | null;
+  sessionId: string | null;
+  itinerary_title: string | null;
+  itinerary_stop_count: number | null;
+  connected_at: string;
+}
+
 // API Response Types
 export interface ApiResponse<T = any> {
   success: boolean;

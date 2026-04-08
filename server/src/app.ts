@@ -28,6 +28,7 @@ import fareConfigRoutes from './routes/fareconfig.routes';
 import transitRoutes from './routes/transit.routes';
 import kioskRoutes from './routes/kiosk.routes';
 import adminTeamRoutes from './routes/admin-team.routes';
+import adminUsersRoutes from './routes/admin-users.routes';
 
 // Create Express application
 const app: Application = express();
@@ -110,6 +111,7 @@ app.use(`${apiPrefix}/fare-configs`, fareConfigRoutes);
 app.use(`${apiPrefix}/transit`, transitRoutes);
 app.use(`${apiPrefix}/kiosk`, kioskRoutes);
 app.use(`${apiPrefix}/admin/team`, adminTeamRoutes);
+app.use(`${apiPrefix}/admin/users`, adminUsersRoutes);
 
 // =====================================================
 // ERROR HANDLING
