@@ -17,7 +17,6 @@ import { Button } from "@heroui/button";
 import { Card, CardBody } from "@heroui/card";
 import { Select, SelectItem } from "@heroui/select";
 import { Input, Textarea } from "@heroui/input";
-import { Checkbox } from "@heroui/checkbox";
 import {
   Modal,
   ModalContent,
@@ -572,6 +571,7 @@ export default function MapManager({
     useState<NewPoint["point_type"]>("intersection");
   const [roadType, setRoadType] = useState<NewRoad["road_type"]>("local_road");
   const [isBidirectional, setIsBidirectional] = useState(true);
+  const [autoCreateIntersection, setAutoCreateIntersection] = useState(false);
 
   const [markers, setMarkers] = useState<
     Array<{
@@ -586,6 +586,9 @@ export default function MapManager({
   const [isCancelRoadModalOpen, setIsCancelRoadModalOpen] = useState(false);
   // Ref holds the latest undoLastPoint so the keydown handler stays stable
   const undoRef = useRef<() => void>(() => {});
+  // Flags for auto-snap: set when a road-context intersection create is in flight
+  const pendingRoadSnapRef = useRef(false);
+  const roadSnapIndexRef = useRef(-1);
 
   // Point modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -745,6 +748,14 @@ export default function MapManager({
         setRoadPoints([...roadPoints, snapped.position]);
         setSnappedIndices((prev) => new Set(prev).add(roadPoints.length));
         toast.success(`Snapped to "${snapped.name}"`);
+      } else if (autoCreateIntersection) {
+        // Open the point-naming modal; on save the point is appended to roadPoints
+        pendingRoadSnapRef.current = true;
+        roadSnapIndexRef.current = roadPoints.length;
+        setPendingPoint({ lat: latlng.lat, lng: latlng.lng });
+        setPointType("intersection");
+        setNewPointName(getDefaultPointName());
+        setIsModalOpen(true);
       } else {
         setRoadPoints([...roadPoints, [latlng.lat, latlng.lng]]);
         toast.info(`Road point added (${roadPoints.length + 1})`);
@@ -896,7 +907,12 @@ export default function MapManager({
     }
 
     try {
-      if (!onSavePoint) return;
+      if (!onSavePoint) {
+        pendingRoadSnapRef.current = false;
+
+        return;
+      }
+
       await onSavePoint({
         name: newPointName,
         latitude: pendingPoint.lat,
@@ -914,12 +930,28 @@ export default function MapManager({
         },
       ]);
 
+      // If this save was triggered from road-drawing mode, snap the new
+      // intersection onto the road path immediately
+      if (pendingRoadSnapRef.current) {
+        pendingRoadSnapRef.current = false;
+        const snapPos: [number, number] = [pendingPoint.lat, pendingPoint.lng];
+
+        setRoadPoints((prev) => [...prev, snapPos]);
+        setSnappedIndices((prev) =>
+          new Set(prev).add(roadSnapIndexRef.current),
+        );
+        toast.success(
+          `Intersection "${newPointName}" created and snapped to road`,
+        );
+      }
+
       setIsModalOpen(false);
       setNewPointName("");
       setNewPointAddress("");
       setPendingPoint(null);
       // stay on current mode
     } catch {
+      pendingRoadSnapRef.current = false;
       toast.error("Failed to save point");
     }
   };
@@ -1031,6 +1063,7 @@ export default function MapManager({
   const cancelRoad = () => {
     if (roadPoints.length === 0) {
       discardAllRoadPoints();
+
       return;
     }
     setIsCancelRoadModalOpen(true);
@@ -1052,6 +1085,7 @@ export default function MapManager({
       if (!confirm("Discard this point? The placed marker will be removed."))
         return;
     }
+    pendingRoadSnapRef.current = false;
     setIsModalOpen(false);
     setNewPointName("");
     setNewPointAddress("");
@@ -1103,6 +1137,8 @@ export default function MapManager({
     if (newMode !== "add_road") {
       setRoadPoints([]);
       setSnappedIndices(new Set());
+      setAutoCreateIntersection(false);
+      pendingRoadSnapRef.current = false;
     }
     setMode(newMode);
   };
@@ -1282,39 +1318,95 @@ export default function MapManager({
                   <SelectItem key="ferry">Ferry Route</SelectItem>
                 </Select>
 
-                <Checkbox
-                  isSelected={isBidirectional}
-                  size="sm"
-                  onValueChange={setIsBidirectional}
+                {/* Direction toggle */}
+                <div>
+                  <p
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#6b7280",
+                      marginBottom: "4px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    Direction
+                  </p>
+                  <div className="flex gap-1">
+                    <Button
+                      className="flex-1"
+                      color={!isBidirectional ? "primary" : "default"}
+                      size="sm"
+                      variant={!isBidirectional ? "solid" : "flat"}
+                      onClick={() => setIsBidirectional(false)}
+                    >
+                      → 1-Way
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      color={isBidirectional ? "primary" : "default"}
+                      size="sm"
+                      variant={isBidirectional ? "solid" : "flat"}
+                      onClick={() => setIsBidirectional(true)}
+                    >
+                      ↔ 2-Way
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Auto-create intersection toggle */}
+                <div
+                  className="rounded-lg p-2"
+                  style={{
+                    background: autoCreateIntersection
+                      ? "rgba(34,197,94,0.08)"
+                      : "rgba(0,0,0,0.04)",
+                    border: `1px solid ${autoCreateIntersection ? "rgba(34,197,94,0.4)" : "transparent"}`,
+                  }}
                 >
-                  <span style={{ color: "#374151" }}>
-                    Two-way road (bidirectional)
-                  </span>
-                </Checkbox>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#374151",
+                          fontWeight: 500,
+                        }}
+                      >
+                        Auto-create intersections
+                      </p>
+                      <p style={{ fontSize: "0.65rem", color: "#6b7280" }}>
+                        {autoCreateIntersection
+                          ? "Click map → names & snaps new intersection"
+                          : "Click map → free road point"}
+                      </p>
+                    </div>
+                    <Button
+                      color={autoCreateIntersection ? "success" : "default"}
+                      size="sm"
+                      variant={autoCreateIntersection ? "solid" : "flat"}
+                      onClick={() => {
+                        const next = !autoCreateIntersection;
+
+                        setAutoCreateIntersection(next);
+                        if (next) setPointType("intersection");
+                      }}
+                    >
+                      {autoCreateIntersection ? "ON" : "OFF"}
+                    </Button>
+                  </div>
+                </div>
 
                 <div
                   className="space-y-1"
                   style={{ fontSize: "0.875rem", color: "#374151" }}
                 >
                   <p>Points added: {roadPoints.length}</p>
-                  <p>
-                    Direction: {isBidirectional ? "↔ Two-way" : "→ One-way"}
-                  </p>
                   {snappedIndices.size > 0 && (
                     <p style={{ color: "#16a34a" }}>
                       Snapped: {snappedIndices.size} point
                       {snappedIndices.size > 1 ? "s" : ""}
                     </p>
                   )}
-                  <p
-                    style={{
-                      fontSize: "0.75rem",
-                      color: "#6b7280",
-                      fontStyle: "italic",
-                    }}
-                  >
-                    Click near an intersection to snap
-                  </p>
                 </div>
 
                 <div className="flex gap-2">
@@ -2510,12 +2602,29 @@ export default function MapManager({
                   Total Points:{" "}
                   <span className="font-medium">{roadPoints.length}</span>
                 </p>
-                <p>
-                  Direction:{" "}
-                  <span className="font-medium">
-                    {isBidirectional ? "↔ Two-way" : "→ One-way"}
-                  </span>
-                </p>
+                <div>
+                  <p className="mb-1">Direction:</p>
+                  <div className="flex gap-1">
+                    <Button
+                      className="flex-1"
+                      color={!isBidirectional ? "primary" : "default"}
+                      size="sm"
+                      variant={!isBidirectional ? "solid" : "flat"}
+                      onClick={() => setIsBidirectional(false)}
+                    >
+                      → 1-Way
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      color={isBidirectional ? "primary" : "default"}
+                      size="sm"
+                      variant={isBidirectional ? "solid" : "flat"}
+                      onClick={() => setIsBidirectional(true)}
+                    >
+                      ↔ 2-Way
+                    </Button>
+                  </div>
+                </div>
               </div>
               <p className="text-xs text-amber-400">
                 &ldquo;Back to Drawing&rdquo; keeps your points.{" "}
