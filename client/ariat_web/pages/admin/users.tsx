@@ -1,4 +1,4 @@
-import type { AppUser, PaginatedResponse } from "@/types/api";
+import type { AppUser } from "@/types/api";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Head from "next/head";
@@ -109,18 +109,16 @@ export default function UsersPage() {
     try {
       setLoadingUsers(true);
 
-      const res = await apiClient.get<
-        PaginatedResponse<AppUser> & { data: AppUser[] }
-      >(
+      const res = await apiClient.get<any>(
         `${API_ENDPOINTS.ADMIN_USERS}?page=${p}&limit=30&search=${encodeURIComponent(q)}`,
       );
 
-      if (res.success && res.data) {
-        const d = res.data as any;
+      if (res.success) {
+        const r = res as any;
 
-        setUsers(d.data ?? []);
-        setTotal(d.pagination?.total ?? 0);
-        setTotalPages(d.pagination?.totalPages ?? 1);
+        setUsers(r.data ?? []);
+        setTotal(r.pagination?.total ?? 0);
+        setTotalPages(r.pagination?.totalPages ?? 1);
       }
     } catch {
       toast.error("Failed to load users");
