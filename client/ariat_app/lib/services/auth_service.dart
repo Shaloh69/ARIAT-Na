@@ -39,45 +39,60 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> init() async {
-    _accessToken = await _secureStorage.read(key: _tokenKey);
-    _refreshToken = await _secureStorage.read(key: _refreshKey);
-    final prefs = await SharedPreferences.getInstance();
-    _baseUrl = prefs.getString(_baseUrlKey) ?? defaultBaseUrl;
-    // Auto-reset stale emulator URLs left over from older builds
-    if (_baseUrl.contains('10.0.2.2') || _baseUrl.contains('localhost:') || _baseUrl.contains('127.0.0.1')) {
-      _baseUrl = defaultBaseUrl;
-      await prefs.setString(_baseUrlKey, defaultBaseUrl);
-    }
-    final userData = prefs.getString(_userKey);
-    if (userData != null) {
-      _user = jsonDecode(userData);
-    }
-
-    if (_accessToken != null) {
-      try {
-        await fetchProfile();
-      } catch (_) {
-        if (_refreshToken != null) {
-          try {
-            await refreshAccessToken();
-            await fetchProfile();
-          } catch (_) {
-            // Offline — keep cached session alive
-            if (_user != null) {
-              _isOfflineSession = true;
-            } else {
-              await _clearTokens();
-            }
-          }
-        } else {
-          if (_user == null) await _clearTokens();
-          _isOfflineSession = _user != null;
+    try {
+      _accessToken = await _secureStorage.read(key: _tokenKey);
+      _refreshToken = await _secureStorage.read(key: _refreshKey);
+      final prefs = await SharedPreferences.getInstance();
+      _baseUrl = prefs.getString(_baseUrlKey) ?? defaultBaseUrl;
+      // Auto-reset stale emulator URLs left over from older builds
+      if (_baseUrl.contains('10.0.2.2') ||
+          _baseUrl.contains('localhost:') ||
+          _baseUrl.contains('127.0.0.1')) {
+        _baseUrl = defaultBaseUrl;
+        await prefs.setString(_baseUrlKey, defaultBaseUrl);
+      }
+      final userData = prefs.getString(_userKey);
+      if (userData != null) {
+        try {
+          _user = jsonDecode(userData) as Map<String, dynamic>;
+        } catch (_) {
+          // Corrupted cached user data — clear it
+          await prefs.remove(_userKey);
         }
       }
-    }
 
-    _isLoading = false;
-    notifyListeners();
+      if (_accessToken != null) {
+        try {
+          await fetchProfile();
+        } catch (_) {
+          if (_refreshToken != null) {
+            try {
+              await refreshAccessToken();
+              await fetchProfile();
+            } catch (_) {
+              // Offline — keep cached session alive
+              if (_user != null) {
+                _isOfflineSession = true;
+              } else {
+                await _clearTokens();
+              }
+            }
+          } else {
+            if (_user == null) await _clearTokens();
+            _isOfflineSession = _user != null;
+          }
+        }
+      }
+    } catch (_) {
+      // Storage unavailable (e.g. FlutterSecureStorage keystore error).
+      // Fall through as unauthenticated — login screen will show.
+      _accessToken = null;
+      _refreshToken = null;
+      _user = null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> setBaseUrl(String url) async {
