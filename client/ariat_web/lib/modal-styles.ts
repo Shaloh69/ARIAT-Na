@@ -4,7 +4,8 @@
  * Apply via: <Modal classNames={modalClassNames} ...>
  */
 export const modalClassNames = {
-  backdrop: "backdrop-blur-md",
+  backdrop: "backdrop-blur-md z-[1999]",
+  wrapper: "z-[2000]",
   base: "!bg-slate-900/95 border border-white/15 shadow-2xl !backdrop-blur-xl rounded-2xl",
   header: "!bg-transparent border-b border-white/12 !text-white",
   body: "!bg-transparent !text-slate-200",
