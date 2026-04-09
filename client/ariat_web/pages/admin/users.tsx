@@ -460,38 +460,31 @@ export default function UsersPage() {
                       )}
 
                       {/* Delete */}
-                      <Tooltip
-                        classNames={{
-                          content:
-                            "bg-slate-800 text-white border border-white/10 shadow-lg text-xs",
+                      <button
+                        className="rounded-lg p-1 transition-all hover:bg-red-500/15"
+                        style={{ color: "var(--danger)" }}
+                        title="Delete user"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setDeleteTarget(u);
                         }}
-                        content="Delete user"
-                        delay={500}
-                        placement="left"
+                        onPointerDown={(e) => e.stopPropagation()}
                       >
-                        <button
-                          className="rounded-lg p-1 transition-all hover:bg-red-500/15"
-                          style={{ color: "var(--danger)" }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteTarget(u);
-                          }}
+                        <svg
+                          className="h-3.5 w-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
                         >
-                          <svg
-                            className="h-3.5 w-3.5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                            />
-                          </svg>
-                        </button>
-                      </Tooltip>
+                          <path
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                          />
+                        </svg>
+                      </button>
                     </div>
                   );
                 })}
@@ -534,7 +527,7 @@ export default function UsersPage() {
         classNames={modalClassNames}
         isOpen={!!deleteTarget}
         size="sm"
-        onClose={() => setDeleteTarget(null)}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
       >
         <ModalContent>
           <ModalHeader>Delete User Account</ModalHeader>
