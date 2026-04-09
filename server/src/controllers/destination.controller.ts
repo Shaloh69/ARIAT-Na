@@ -25,15 +25,29 @@ function safeJsonParse(value: any, fallback: any = null): any {
  * Format a destination row from DB, safely handling JSON columns.
  */
 function formatDestination(dest: any) {
+  // mysql2 returns DECIMAL columns as strings by default.
+  // Normalize all numeric DECIMAL fields so Flutter (and any other consumer)
+  // receives proper JSON numbers, not strings.
+  const toNum = (v: any, fallback = 0): number =>
+    v !== null && v !== undefined && v !== '' ? Number(v) : fallback;
+
   return {
     ...dest,
-    images: safeJsonParse(dest.images, []),
-    menu_images: safeJsonParse(dest.menu_images, []),
-    operating_hours: safeJsonParse(dest.operating_hours, null),
-    amenities: safeJsonParse(dest.amenities, []),
-    tags: safeJsonParse(dest.tags, []),
-    cuisine_types: safeJsonParse(dest.cuisine_types, []),
-    service_types: safeJsonParse(dest.service_types, []),
+    // Coordinate & metric DECIMAL columns
+    latitude:              toNum(dest.latitude),
+    longitude:             toNum(dest.longitude),
+    rating:                toNum(dest.rating),
+    popularity_score:      toNum(dest.popularity_score),
+    entrance_fee_local:    toNum(dest.entrance_fee_local),
+    entrance_fee_foreign:  toNum(dest.entrance_fee_foreign),
+    // JSON columns (may arrive as string or already parsed object)
+    images:                safeJsonParse(dest.images, []),
+    menu_images:           safeJsonParse(dest.menu_images, []),
+    operating_hours:       safeJsonParse(dest.operating_hours, null),
+    amenities:             safeJsonParse(dest.amenities, []),
+    tags:                  safeJsonParse(dest.tags, []),
+    cuisine_types:         safeJsonParse(dest.cuisine_types, []),
+    service_types:         safeJsonParse(dest.service_types, []),
     accommodation_pricing: safeJsonParse(dest.accommodation_pricing, null),
   };
 }

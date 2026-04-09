@@ -184,7 +184,11 @@ export const recommendNearby = async (req: AuthRequest, res: Response): Promise<
     .filter((d) => !visitedSet.has(d.id))
     .map((d) => ({
       ...d,
-      distanceKm: haversineKm(latN, lonN, d.latitude, d.longitude),
+      latitude:              Number(d.latitude)              || 0,
+      longitude:             Number(d.longitude)             || 0,
+      rating:                Number(d.rating)                || 0,
+      entrance_fee_local:    Number(d.entrance_fee_local)    || 0,
+      distanceKm: haversineKm(latN, lonN, Number(d.latitude) || 0, Number(d.longitude) || 0),
       images: typeof d.images === 'string' ? JSON.parse(d.images) : (d.images ?? []),
       tags: typeof d.tags === 'string' ? JSON.parse(d.tags) : (d.tags ?? []),
     }))

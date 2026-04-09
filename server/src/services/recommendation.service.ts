@@ -98,11 +98,17 @@ export async function rankDestinations(
 
   const [rows] = await pool.execute<DestinationRow[]>(query, params);
 
-  // Parse JSON tags if returned as string
+  // Normalize columns that mysql2 returns as strings (DECIMAL, JSON)
   for (const row of rows) {
     if (typeof row.tags === 'string') {
       try { row.tags = JSON.parse(row.tags); } catch { row.tags = null; }
     }
+    row.latitude           = Number(row.latitude)           || 0;
+    row.longitude          = Number(row.longitude)          || 0;
+    row.rating             = Number(row.rating)             || 0;
+    row.popularity_score   = Number(row.popularity_score)   || 0;
+    row.entrance_fee_local = Number(row.entrance_fee_local) || 0;
+    row.entrance_fee_foreign = Number(row.entrance_fee_foreign) || 0;
   }
 
   if (rows.length === 0) return [];
