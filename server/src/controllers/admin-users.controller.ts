@@ -15,34 +15,35 @@ import { getOnlineUsers } from '../services/websocket.service';
 // ─── GET /admin/users ─────────────────────────────────────────────────────────
 
 export const listUsers = async (req: AuthRequest, res: Response): Promise<void> => {
-  const page = Math.max(1, parseInt(req.query.page as string) || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+  // Sanitise to safe integers — embedded directly in SQL to avoid the mysql2 v3
+  // "Incorrect arguments to mysqld_stmt_execute" bug with LIMIT/OFFSET placeholders
+  const page   = Math.max(1,   parseInt(req.query.page   as string) || 1);
+  const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
   const offset = (page - 1) * limit;
   const search = (req.query.search as string | undefined)?.trim() ?? '';
 
-  const where = search
-    ? 'WHERE (u.full_name LIKE ? OR u.email LIKE ?)'
-    : '';
-  const params: (string | number)[] = search
-    ? [`%${search}%`, `%${search}%`, limit, offset]
-    : [limit, offset];
+  const whereClause  = search ? 'WHERE (u.full_name LIKE ? OR u.email LIKE ?)' : '';
+  const searchParams = search ? [`%${search}%`, `%${search}%`] : [];
 
+  // LIMIT and OFFSET are integer-literal-embedded (not ? params) to sidestep the mysql2 bug
   const [rows] = await pool.execute<RowDataPacket[]>(
-    `SELECT u.id, u.email, u.full_name, u.phone_number, u.profile_image_url,
-            u.is_verified, u.is_active, u.created_at, u.last_login_at,
-            COUNT(DISTINCT i.id) AS itinerary_count
+    `SELECT u.id, u.email, u.full_name, u.phone_number,
+            IFNULL(u.profile_image_url, NULL)  AS profile_image_url,
+            u.is_verified, u.is_active, u.created_at,
+            IFNULL(u.last_login_at, NULL)       AS last_login_at,
+            COUNT(DISTINCT i.id)                AS itinerary_count
      FROM users u
      LEFT JOIN itineraries i ON i.user_id = u.id
-     ${where}
+     ${whereClause}
      GROUP BY u.id
      ORDER BY u.created_at DESC
-     LIMIT ? OFFSET ?`,
-    params
+     LIMIT ${limit} OFFSET ${offset}`,
+    searchParams
   );
 
   const [[{ total }]]: any = await pool.execute(
-    `SELECT COUNT(*) AS total FROM users ${where}`,
-    search ? [`%${search}%`, `%${search}%`] : []
+    `SELECT COUNT(*) AS total FROM users ${whereClause}`,
+    searchParams
   );
 
   // Merge real-time online status
@@ -52,7 +53,12 @@ export const listUsers = async (req: AuthRequest, res: Response): Promise<void> 
   res.json({
     success: true,
     data,
-    pagination: { page, limit, total: Number(total), totalPages: Math.ceil(Number(total) / limit) },
+    pagination: {
+      page,
+      limit,
+      total: Number(total),
+      totalPages: Math.ceil(Number(total) / limit),
+    },
   });
 };
 
