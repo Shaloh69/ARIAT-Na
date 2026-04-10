@@ -41,6 +41,7 @@ const poolConfig: mysql.PoolOptions = {
   queueLimit: 0,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
+  decimalNumbers: true, // Return DECIMAL/NUMERIC columns as JS numbers, not strings
   // Add SSL configuration if available
   ssl: sslConfig,
 };

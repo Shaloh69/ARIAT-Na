@@ -88,6 +88,21 @@ class Destination {
     this.checkOutTime,
   });
 
+  /// Safe numeric parse: handles both num and String values from the server.
+  /// mysql2 may return DECIMAL columns as strings even with decimalNumbers config,
+  /// so we always coerce defensively.
+  static double _d(dynamic v, [double fallback = 0.0]) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? fallback;
+    return fallback;
+  }
+
+  static double? _dNull(dynamic v) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v);
+    return null;
+  }
+
   factory Destination.fromJson(Map<String, dynamic> json) {
     return Destination(
       id: json['id'] ?? '',
@@ -99,18 +114,18 @@ class Destination {
       clusterName: json['cluster_name'],
       clusterSlug: json['cluster_slug'],
       municipality: json['municipality'],
-      latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
-      longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
+      latitude: _d(json['latitude']),
+      longitude: _d(json['longitude']),
       address: json['address'],
       images: (json['images'] as List?)?.cast<String>() ?? [],
-      entranceFeeLocal: (json['entrance_fee_local'] as num?)?.toDouble() ?? 0,
-      entranceFeeForeign: (json['entrance_fee_foreign'] as num?)?.toDouble() ?? 0,
+      entranceFeeLocal: _d(json['entrance_fee_local']),
+      entranceFeeForeign: _d(json['entrance_fee_foreign']),
       averageVisitDuration: json['average_visit_duration'] ?? 0,
       budgetLevel: json['budget_level'] ?? 'mid',
       tags: (json['tags'] as List?)?.cast<String>() ?? [],
       familyFriendly: json['family_friendly'] == true || json['family_friendly'] == 1,
       bestTimeToVisit: json['best_time_to_visit'],
-      rating: (json['rating'] as num?)?.toDouble() ?? 0,
+      rating: _d(json['rating']),
       reviewCount: json['review_count'] ?? 0,
       amenities: (json['amenities'] as List?)?.cast<String>() ?? [],
       isFeatured: json['is_featured'] == true || json['is_featured'] == 1,
@@ -126,9 +141,9 @@ class Destination {
       serviceTypes: (json['service_types'] as List?)?.cast<String>() ?? [],
       seatingCapacity: json['seating_capacity'] as int?,
       starRating: json['star_rating'] as int?,
-      perNightMin: (json['accommodation_pricing']?['per_night_min'] as num?)?.toDouble(),
-      perNightMax: (json['accommodation_pricing']?['per_night_max'] as num?)?.toDouble(),
-      perHour: (json['accommodation_pricing']?['per_hour'] as num?)?.toDouble(),
+      perNightMin: _dNull(json['accommodation_pricing']?['per_night_min']),
+      perNightMax: _dNull(json['accommodation_pricing']?['per_night_max']),
+      perHour: _dNull(json['accommodation_pricing']?['per_hour']),
       checkInTime: json['check_in_time'],
       checkOutTime: json['check_out_time'],
     );
@@ -170,8 +185,8 @@ class Cluster {
       slug: json['slug'] ?? '',
       regionType: json['region_type'] ?? 'metro',
       description: json['description'],
-      centerLat: (json['center_lat'] as num?)?.toDouble(),
-      centerLng: (json['center_lng'] as num?)?.toDouble(),
+      centerLat: Destination._dNull(json['center_lat']),
+      centerLng: Destination._dNull(json['center_lng']),
       recommendedTripLength: json['recommended_trip_length'],
       destinationCount: json['destination_count'] ?? 0,
     );

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class CuratedGuide {
   final String id;
   final String title;
@@ -34,11 +36,9 @@ class CuratedGuide {
       if (v is List) return v.cast<String>();
       if (v is String && v.isNotEmpty) {
         try {
-          // Already-parsed JSON arrays arrive as List from Dart's JSON decoder
-          return <String>[];
-        } catch (_) {
-          return <String>[];
-        }
+          final decoded = jsonDecode(v);
+          if (decoded is List) return decoded.cast<String>();
+        } catch (_) {}
       }
       return <String>[];
     }

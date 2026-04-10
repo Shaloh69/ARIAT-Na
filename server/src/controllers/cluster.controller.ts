@@ -2,6 +2,9 @@ import { Request, Response } from 'express';
 import { pool } from '../config/database';
 import { RowDataPacket } from 'mysql2';
 
+const toNum = (v: any, fallback: number | null = 0): number | null =>
+  v !== null && v !== undefined && v !== '' ? Number(v) : fallback;
+
 export const getClusters = async (_req: Request, res: Response): Promise<void> => {
   const [rows] = await pool.execute<RowDataPacket[]>(
     `SELECT cl.*, COUNT(d.id) AS destination_count
@@ -11,7 +14,13 @@ export const getClusters = async (_req: Request, res: Response): Promise<void> =
      GROUP BY cl.id
      ORDER BY cl.display_order ASC`
   );
-  res.json({ success: true, data: rows });
+  const data = (rows as any[]).map((cl) => ({
+    ...cl,
+    center_lat: toNum(cl.center_lat, null),
+    center_lng: toNum(cl.center_lng, null),
+    destination_count: Number(cl.destination_count) || 0,
+  }));
+  res.json({ success: true, data });
 };
 
 export const getClusterById = async (req: Request, res: Response): Promise<void> => {
@@ -28,7 +37,13 @@ export const getClusterById = async (req: Request, res: Response): Promise<void>
     res.status(404).json({ success: false, error: 'Cluster not found' });
     return;
   }
-  const cluster = rows[0] as any;
+  const raw = rows[0] as any;
+  const cluster = {
+    ...raw,
+    center_lat: toNum(raw.center_lat, null),
+    center_lng: toNum(raw.center_lng, null),
+    destination_count: Number(raw.destination_count) || 0,
+  };
 
   // Fetch featured destinations for this cluster
   const [featuredRows] = await pool.execute<RowDataPacket[]>(
@@ -45,6 +60,10 @@ export const getClusterById = async (req: Request, res: Response): Promise<void>
 
   const featured_places = (featuredRows as any[]).map((p) => ({
     ...p,
+    latitude:           toNum(p.latitude)           ?? 0,
+    longitude:          toNum(p.longitude)          ?? 0,
+    rating:             toNum(p.rating)             ?? 0,
+    entrance_fee_local: toNum(p.entrance_fee_local) ?? 0,
     images: (() => {
       if (p.images === null || p.images === undefined) return [];
       if (typeof p.images === 'object') return p.images;
