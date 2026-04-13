@@ -2,19 +2,29 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'notification_service.dart';
 
 class LocationService extends ChangeNotifier {
   Position? _currentPosition;
   StreamSubscription<Position>? _positionStream;
+  StreamSubscription<CompassEvent>? _compassSubscription;
   bool _tracking = false;
+
+  /// Current heading in degrees (0 = north, 90 = east).
+  /// Uses GPS bearing when moving (> 0.5 m/s), device compass when stationary.
+  double _heading = 0;
+
+  /// Timestamp of the last GPS position update (not compass).
+  /// Used by map_screen to skip the expensive snapping math on compass-only updates.
+  DateTime? _lastPositionUpdate;
 
   // Destination proximity monitoring
   final List<MonitoredDestination> _monitored = [];
   final Set<String> _arrivedAt = {};
   final Set<String> _approachNotified = {};
 
-  // Broadcast stream so UI layers (e.g. DayDetailScreen) can react to arrivals
+  // Broadcast stream so UI layers can react to arrivals
   final StreamController<String> _arrivedController =
       StreamController<String>.broadcast();
 
@@ -23,6 +33,8 @@ class LocationService extends ChangeNotifier {
 
   Position? get currentPosition => _currentPosition;
   bool get isTracking => _tracking;
+  double get heading => _heading;
+  DateTime? get lastPositionUpdate => _lastPositionUpdate;
 
   Future<bool> checkPermission() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -45,13 +57,16 @@ class LocationService extends ChangeNotifier {
     _tracking = true;
     notifyListeners();
 
+    // Get an immediate position so the UI doesn't wait for the first stream event
     try {
       _currentPosition = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
+      _lastPositionUpdate = DateTime.now();
       notifyListeners();
     } catch (_) {}
 
+    // GPS position stream — fires every 10 m of movement
     _positionStream = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
@@ -59,8 +74,24 @@ class LocationService extends ChangeNotifier {
       ),
     ).listen((position) {
       _currentPosition = position;
+      _lastPositionUpdate = DateTime.now();
+      // While moving use GPS bearing (accurate direction of travel)
+      if (position.speed > 0.5) {
+        _heading = position.heading;
+      }
       _checkProximity();
       notifyListeners();
+    });
+
+    // Compass stream — fires at sensor rate (~10–50 Hz)
+    // Only used for heading when the user is stationary (speed ≤ 0.5 m/s)
+    _compassSubscription = FlutterCompass.events?.listen((event) {
+      final h = event.heading;
+      if (h == null) return;
+      if ((_currentPosition?.speed ?? 0) <= 0.5) {
+        _heading = h;
+        notifyListeners();
+      }
     });
   }
 
@@ -113,7 +144,10 @@ class LocationService extends ChangeNotifier {
   void stopTracking() {
     _positionStream?.cancel();
     _positionStream = null;
+    _compassSubscription?.cancel();
+    _compassSubscription = null;
     _tracking = false;
+    _heading = 0;
     clearMonitoring();
     notifyListeners();
   }
@@ -121,6 +155,7 @@ class LocationService extends ChangeNotifier {
   @override
   void dispose() {
     _positionStream?.cancel();
+    _compassSubscription?.cancel();
     _arrivedController.close();
     super.dispose();
   }

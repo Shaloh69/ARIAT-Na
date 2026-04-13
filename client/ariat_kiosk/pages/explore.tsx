@@ -131,13 +131,12 @@ const KioskExplore: NextPage = () => {
     try {
       const params = new URLSearchParams({
         limit: String(PAGE_SIZE),
-        offset: String((page - 1) * PAGE_SIZE),
+        page: String(page),
       });
 
-      if (debouncedSearch) params.set("search", debouncedSearch);
-      if (selectedCluster !== "all") params.set("cluster_id", selectedCluster);
-      if (selectedCategory !== "all")
-        params.set("category_id", selectedCategory);
+      if (debouncedSearch) params.set("q", debouncedSearch);
+      if (selectedCluster !== "all") params.set("cluster", selectedCluster);
+      if (selectedCategory !== "all") params.set("category", selectedCategory);
 
       const res = await fetch(
         `${API_BASE_URL}${API_ENDPOINTS.DESTINATIONS}?${params.toString()}`,

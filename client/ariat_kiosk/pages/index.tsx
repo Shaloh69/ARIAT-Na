@@ -41,6 +41,7 @@ interface Guide {
 
 interface QRTarget {
   deepLink: string;
+  mode?: "default" | "download";
   subtitle?: string;
   title: string;
 }
@@ -232,6 +233,21 @@ const KioskHome: NextPage = () => {
                 onPress={() => void router.push("/map")}
               >
                 🗺️ View on Map
+              </Button>
+              <Button
+                className="home-cta-secondary"
+                size="lg"
+                variant="flat"
+                onPress={() =>
+                  setQrTarget({
+                    deepLink: "",
+                    title: "Get the AIRAT-NA App",
+                    subtitle: "Download free for Android",
+                    mode: "download",
+                  })
+                }
+              >
+                📲 Download the App
               </Button>
             </div>
           </div>
@@ -463,6 +479,7 @@ const KioskHome: NextPage = () => {
       <QRHandoffModal
         deepLink={qrTarget?.deepLink ?? ""}
         isOpen={qrTarget !== null}
+        mode={qrTarget?.mode ?? "default"}
         subtitle={qrTarget?.subtitle}
         title={qrTarget?.title ?? ""}
         onClose={() => setQrTarget(null)}

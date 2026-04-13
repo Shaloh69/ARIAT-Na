@@ -101,8 +101,10 @@ export const getDestinations = async (
   }
 
   if (q) {
-    conditions.push('MATCH(d.name, d.description, d.address) AGAINST(?)');
-    params.push(q);
+    // Use LIKE search — works without a FULLTEXT index and is sufficient at this scale
+    conditions.push('(d.name LIKE ? OR d.description LIKE ? OR d.address LIKE ? OR d.municipality LIKE ?)');
+    const term = `%${q}%`;
+    params.push(term, term, term, term);
   }
 
   if (cluster) {

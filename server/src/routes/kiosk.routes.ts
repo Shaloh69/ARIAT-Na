@@ -4,6 +4,8 @@ import {
   generateKioskItinerary,
   previewKioskSession,
   claimKioskSession,
+  markScanSession,
+  checkScanSession,
 } from '../controllers/kiosk.controller';
 import { asyncHandler } from '../middleware/error.middleware';
 
@@ -28,5 +30,17 @@ router.get('/preview/:token', asyncHandler(previewKioskSession));
  * Body: { title?: string, description?: string }
  */
 router.post('/claim/:token', authenticate, asyncHandler(claimKioskSession));
+
+/**
+ * POST /kiosk/scan-ping/:session
+ * Called by the download page when it loads — signals the kiosk the QR was scanned.
+ */
+router.post('/scan-ping/:session', markScanSession);
+
+/**
+ * GET /kiosk/scan-ping/:session
+ * Polled by the kiosk to check whether the download QR was scanned.
+ */
+router.get('/scan-ping/:session', checkScanSession);
 
 export default router;

@@ -37,6 +37,7 @@ dependencies:
 
   # Location & Notifications
   geolocator: ^13.0.2
+  flutter_compass: ^0.8.0
   flutter_local_notifications: ^18.0.1
 
   # QR Scanner (kiosk claim flow)

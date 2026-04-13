@@ -370,3 +370,45 @@ export const claimKioskSession = async (req: AuthRequest, res: Response): Promis
     },
   });
 };
+
+// ─── Scan-ping (app download QR detection) ───────────────────────────────────
+
+/**
+ * In-memory store for download QR scan sessions.
+ * Key: session UUID  |  Value: { scanned, createdAt }
+ * Sessions auto-expire after 10 minutes via the cleanup interval.
+ */
+const scanSessions = new Map<string, { scanned: boolean; createdAt: number }>();
+
+// Prune stale sessions every 5 minutes
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  for (const [id, s] of scanSessions.entries()) {
+    if (s.createdAt < cutoff) scanSessions.delete(id);
+  }
+}, 5 * 60 * 1000);
+
+/**
+ * POST /kiosk/scan-ping/:session
+ * Called by the download page (on a user's phone) the moment it loads.
+ * Marks the session as scanned so the kiosk can react.
+ */
+export const markScanSession = (req: Request, res: Response): void => {
+  const { session } = req.params;
+  if (!session || session.length > 64) {
+    res.status(400).json({ success: false, error: 'Invalid session' });
+    return;
+  }
+  scanSessions.set(session, { scanned: true, createdAt: Date.now() });
+  res.json({ success: true });
+};
+
+/**
+ * GET /kiosk/scan-ping/:session
+ * Polled by the kiosk every ~2 seconds to detect when the QR was scanned.
+ */
+export const checkScanSession = (req: Request, res: Response): void => {
+  const { session } = req.params;
+  const entry = scanSessions.get(session ?? '');
+  res.json({ success: true, scanned: entry?.scanned ?? false });
+};

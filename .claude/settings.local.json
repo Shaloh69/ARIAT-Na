@@ -82,7 +82,14 @@
       "Bash(grep -r \"deep.?link\\\\|universal.?link\\\\|app.?link\\\\|uri\" /d/Projects-Shem/Thesis/2026/AIRAT-NA/client/ariat_app/lib --include=*.dart)",
       "Bash(grep -l \"handleSave\\\\|handleCreate\\\\|handleDelete\\\\|handleUpdate\" /d/Projects-Shem/Thesis/2026/AIRAT-NA/client/ariat_web/pages/admin/*.tsx)",
       "Bash(wc -l /d/Projects-Shem/Thesis/2026/AIRAT-NA/server/src/controllers/*.ts)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(echo \"SERVER_EXIT:$?\")",
+      "Bash(echo \"WEB_EXIT:$?\")",
+      "Bash(echo \"KIOSK_TSC:$?\")",
+      "Bash(echo \"KIOSK_BUILD:$?\")",
+      "Bash(echo \"WEB_BUILD:$?\")",
+      "Bash(echo \"SERVER:$?\")",
+      "Bash(echo \"KIOSK:$?\")"
     ],
     "additionalDirectories": [
       "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\client\\ariat_web\\pages\\admin",
