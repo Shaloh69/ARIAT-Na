@@ -254,6 +254,63 @@ function CenterMapButton() {
   );
 }
 
+// ─── Tile layer definitions ───────────────────────────────────────────────────
+type TileLayerKey = "osm" | "dark" | "satellite";
+const TILE_LAYERS: Record<
+  TileLayerKey,
+  {
+    url: string;
+    attribution: string;
+    label: string;
+    icon: string;
+    maxZoom: number;
+    subdomains?: string;
+  }
+> = {
+  osm: {
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    label: "Street Map",
+    icon: "🗺️",
+    maxZoom: 19,
+  },
+  dark: {
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+    label: "Dark Mode",
+    icon: "🌙",
+    maxZoom: 19,
+    subdomains: "abcd",
+  },
+  satellite: {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri",
+    label: "Satellite",
+    icon: "🛰️",
+    maxZoom: 18,
+  },
+};
+
+// Captures the live map instance for imperative zoom/pan outside MapContainer
+function MapRefSetter({
+  mapRef,
+}: {
+  mapRef: React.MutableRefObject<L.Map | null>;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    mapRef.current = map;
+
+    return () => {
+      mapRef.current = null;
+    };
+  }, [map, mapRef]);
+
+  return null;
+}
+
 // Road Polyline with Directional Arrows
 interface RoadPolylineProps {
   positions: [number, number][];
@@ -631,13 +688,108 @@ export default function MapManager({
   // Track whether any modal is open to disable the control panel
   const isAnyModalOpen = isModalOpen || isRoadModalOpen || isDestModalOpen;
 
-  // Ctrl+Z → undo last road point while in road-drawing mode.
-  // undoRef always points to the latest undoLastPoint so the listener never re-subscribes.
+  // ── Map-revamp state ───────────────────────────────────────────────────────
+  const [tileLayer, setTileLayer] = useState<TileLayerKey>("osm");
+  const [panelPos, setPanelPos] = useState({ x: 16, y: 16 });
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [showLayerPicker, setShowLayerPicker] = useState(false);
+
+  // ── Map-revamp refs ────────────────────────────────────────────────────────
+  const mapImperativeRef = useRef<L.Map | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const draggingPanel = useRef(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
+  // Stable ref so keyboard handler never re-subscribes
+  const switchModeRef = useRef<(m: MapMode) => void>(() => {});
+  const isAnyModalOpenRef = useRef(false);
+  isAnyModalOpenRef.current = isAnyModalOpen || showShortcutsModal;
+
+  // ── Fullscreen listener ────────────────────────────────────────────────────
+  useEffect(() => {
+    const onFsChange = () =>
+      setIsFullscreen(!!document.fullscreenElement);
+
+    document.addEventListener("fullscreenchange", onFsChange);
+
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  // ── Panel drag mouse events ────────────────────────────────────────────────
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!draggingPanel.current) return;
+      setPanelPos({
+        x: Math.max(0, e.clientX - dragOffset.current.x),
+        y: Math.max(0, e.clientY - dragOffset.current.y),
+      });
+    };
+    const onUp = () => {
+      draggingPanel.current = false;
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Always allow Ctrl+Z for undo
       if ((e.ctrlKey || e.metaKey) && e.key === "z") {
         e.preventDefault();
         undoRef.current();
+        return;
+      }
+
+      // Block shortcuts when a modal / input is focused
+      if (isAnyModalOpenRef.current) return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      switch (e.key) {
+        case "v": case "V": switchModeRef.current("view"); break;
+        case "p": case "P": switchModeRef.current("add_point"); break;
+        case "r": case "R": switchModeRef.current("add_road"); break;
+        case "d": case "D": switchModeRef.current("add_destination"); break;
+        case "t": case "T": switchModeRef.current("test_route"); break;
+        case "x": case "X": switchModeRef.current("transit_route"); break;
+        case "+": case "=":
+          e.preventDefault();
+          mapImperativeRef.current?.zoomIn();
+          break;
+        case "-":
+          e.preventDefault();
+          mapImperativeRef.current?.zoomOut();
+          break;
+        case "0":
+          e.preventDefault();
+          mapImperativeRef.current?.setView([10.3157, 123.8854], 11);
+          break;
+        case "f": case "F":
+          e.preventDefault();
+          if (!document.fullscreenElement) {
+            void (mapContainerRef.current ?? document.documentElement).requestFullscreen();
+          } else {
+            void document.exitFullscreen();
+          }
+          break;
+        case "Escape":
+          setShowShortcutsModal(false);
+          setShowLayerPicker(false);
+          break;
+        case "?":
+          e.preventDefault();
+          setShowShortcutsModal((v) => !v);
+          break;
+        default: break;
       }
     };
 
@@ -1142,6 +1294,8 @@ export default function MapManager({
     }
     setMode(newMode);
   };
+  // Keep ref in sync so keyboard handler always calls the latest version
+  switchModeRef.current = switchMode;
 
   const getCircleMarkerColor = (type: string) => {
     const colors: Record<string, string> = {
@@ -1187,24 +1341,100 @@ export default function MapManager({
   );
 
   return (
-    <div className="relative h-full w-full" style={{ isolation: "isolate" }}>
-      {/* Control Panel — disabled when any modal is open */}
-      <Card
-        className={`absolute top-4 left-4 z-[1000] w-80 map-control-panel transition-opacity duration-200 ${isAnyModalOpen ? "opacity-50" : ""}`}
-        style={{
-          maxHeight: "calc(100vh - 16rem)",
-          overflowY: "auto",
-          pointerEvents: isAnyModalOpen ? "none" : "auto",
-        }}
-      >
-        <CardBody>
-          <h3
-            style={{ fontWeight: 600, marginBottom: "1rem", color: "#111827" }}
-          >
-            Map Controls
-          </h3>
+    <div
+      ref={mapContainerRef}
+      className="relative h-full w-full"
+      style={{ isolation: "isolate" }}
+    >
+      {/* Control Panel — collapsed state: small icon button */}
+      {panelCollapsed ? (
+        <button
+          className="absolute z-[1000] flex items-center justify-center rounded-xl shadow-lg text-lg"
+          style={{
+            left: panelPos.x,
+            top: panelPos.y,
+            width: 40,
+            height: 40,
+            background: "white",
+            border: "1px solid rgba(0,0,0,0.12)",
+            cursor: "pointer",
+          }}
+          title="Expand map controls"
+          onClick={() => setPanelCollapsed(false)}
+        >
+          ⚙️
+        </button>
+      ) : (
+        /* Control Panel — expanded state */
+        <Card
+          className={`absolute z-[1000] w-80 map-control-panel transition-opacity duration-200 ${isAnyModalOpen ? "opacity-50" : ""}`}
+          style={{
+            left: panelPos.x,
+            top: panelPos.y,
+            maxHeight: "calc(100vh - 8rem)",
+            overflowY: "auto",
+            pointerEvents: isAnyModalOpen ? "none" : "auto",
+          }}
+        >
+          <CardBody>
+            {/* Drag handle + collapse */}
+            <div
+              className="flex items-center justify-between mb-3 -mx-1 px-2 py-1.5 rounded-lg select-none"
+              style={{
+                background: "rgba(0,0,0,0.04)",
+                cursor: "grab",
+              }}
+              onMouseDown={(e) => {
+                const panel = (
+                  e.currentTarget.closest(
+                    ".map-control-panel",
+                  ) as HTMLElement | null
+                )?.parentElement;
+                const rect = panel
+                  ? panel.getBoundingClientRect()
+                  : { left: 0, top: 0 };
 
-          <div className="space-y-3">
+                draggingPanel.current = true;
+                dragOffset.current = {
+                  x: e.clientX - rect.left,
+                  y: e.clientY - rect.top,
+                };
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <svg
+                  fill="none"
+                  height="12"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  viewBox="0 0 12 12"
+                  width="12"
+                  style={{ color: "#9ca3af" }}
+                >
+                  <circle cx="3" cy="3" r="1" fill="#9ca3af" />
+                  <circle cx="9" cy="3" r="1" fill="#9ca3af" />
+                  <circle cx="3" cy="6" r="1" fill="#9ca3af" />
+                  <circle cx="9" cy="6" r="1" fill="#9ca3af" />
+                  <circle cx="3" cy="9" r="1" fill="#9ca3af" />
+                  <circle cx="9" cy="9" r="1" fill="#9ca3af" />
+                </svg>
+                <h3 style={{ fontWeight: 600, fontSize: "0.875rem", color: "#111827" }}>
+                  Map Controls
+                </h3>
+              </div>
+              <button
+                className="rounded p-0.5 text-gray-400 hover:text-gray-700"
+                style={{ background: "none", border: "none", cursor: "pointer", lineHeight: 1 }}
+                title="Collapse panel (hide)"
+                onClick={() => setPanelCollapsed(true)}
+              >
+                <svg fill="currentColor" height="14" viewBox="0 0 14 14" width="14">
+                  <path d="M2 9l5-5 5 5H2z" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-3">
             {/* Mode Selection */}
             <div>
               <span
@@ -2078,8 +2308,9 @@ export default function MapManager({
               </div>
             </div>
           </div>
-        </CardBody>
-      </Card>
+          </CardBody>
+        </Card>
+      )}
 
       {/* Map */}
       <MapContainer
@@ -2094,14 +2325,19 @@ export default function MapManager({
         minZoom={9}
         style={{ height: "100%", width: "100%" }}
         zoom={11}
+        zoomControl={false}
       >
+        {/* Dynamic tile layer — key forces remount on layer switch */}
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          maxNativeZoom={19}
-          maxZoom={19}
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          key={tileLayer}
+          attribution={TILE_LAYERS[tileLayer].attribution}
+          maxNativeZoom={TILE_LAYERS[tileLayer].maxZoom}
+          maxZoom={TILE_LAYERS[tileLayer].maxZoom}
+          subdomains={TILE_LAYERS[tileLayer].subdomains ?? "abc"}
+          url={TILE_LAYERS[tileLayer].url}
         />
 
+        <MapRefSetter mapRef={mapImperativeRef} />
         <MapClickHandler mode={mode} onMapClick={handleMapClick} />
         <CenterMapButton />
 
@@ -2527,6 +2763,171 @@ export default function MapManager({
           </CircleMarker>
         )}
       </MapContainer>
+
+      {/* ── Floating right-side control cluster ───────────────────────────── */}
+      <div
+        className="absolute right-4 top-1/2 -translate-y-1/2 z-[1000] flex flex-col gap-2"
+        style={{ userSelect: "none" }}
+      >
+        {/* Zoom in */}
+        <button
+          className="map-fab"
+          title="Zoom in (+)"
+          onClick={() => mapImperativeRef.current?.zoomIn()}
+        >
+          +
+        </button>
+        {/* Zoom out */}
+        <button
+          className="map-fab"
+          title="Zoom out (−)"
+          onClick={() => mapImperativeRef.current?.zoomOut()}
+        >
+          −
+        </button>
+        {/* Reset view */}
+        <button
+          className="map-fab"
+          title="Reset view (0)"
+          onClick={() => mapImperativeRef.current?.setView([10.3157, 123.8854], 11)}
+        >
+          ⊙
+        </button>
+
+        {/* Divider */}
+        <div style={{ height: 1, background: "rgba(0,0,0,0.1)", margin: "2px 4px" }} />
+
+        {/* Layer picker toggle */}
+        <div className="relative">
+          <button
+            className={`map-fab ${showLayerPicker ? "map-fab-active" : ""}`}
+            title="Switch tile layer"
+            onClick={() => setShowLayerPicker((v) => !v)}
+          >
+            {TILE_LAYERS[tileLayer].icon}
+          </button>
+          {showLayerPicker && (
+            <div
+              className="absolute right-12 top-0 flex flex-col gap-1 rounded-xl shadow-xl p-2"
+              style={{ background: "white", border: "1px solid rgba(0,0,0,0.12)", minWidth: 130 }}
+            >
+              {(Object.keys(TILE_LAYERS) as TileLayerKey[]).map((key) => (
+                <button
+                  key={key}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm"
+                  style={{
+                    background: tileLayer === key ? "rgba(37,99,235,0.1)" : "transparent",
+                    color: tileLayer === key ? "#2563eb" : "#374151",
+                    fontWeight: tileLayer === key ? 600 : 400,
+                    cursor: "pointer",
+                    border: "none",
+                  }}
+                  onClick={() => {
+                    setTileLayer(key);
+                    setShowLayerPicker(false);
+                  }}
+                >
+                  <span>{TILE_LAYERS[key].icon}</span>
+                  <span>{TILE_LAYERS[key].label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Fullscreen */}
+        <button
+          className={`map-fab ${isFullscreen ? "map-fab-active" : ""}`}
+          title={isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"}
+          onClick={() => {
+            if (!document.fullscreenElement) {
+              void (mapContainerRef.current ?? document.documentElement).requestFullscreen();
+            } else {
+              void document.exitFullscreen();
+            }
+          }}
+        >
+          {isFullscreen ? "⛶" : "⛶"}
+        </button>
+
+        {/* Shortcuts modal */}
+        <button
+          className={`map-fab ${showShortcutsModal ? "map-fab-active" : ""}`}
+          title="Keyboard shortcuts (?)"
+          onClick={() => setShowShortcutsModal((v) => !v)}
+        >
+          ?
+        </button>
+      </div>
+
+      {/* ── Keyboard Shortcuts Modal ──────────────────────────────────────── */}
+      <Modal
+        classNames={modalClassNames}
+        isOpen={showShortcutsModal}
+        size="md"
+        onClose={() => setShowShortcutsModal(false)}
+      >
+        <ModalContent>
+          <ModalHeader>Keyboard Shortcuts</ModalHeader>
+          <ModalBody>
+            <div className="space-y-3 pb-2">
+              {[
+                { group: "Modes", rows: [
+                  { key: "V", label: "View mode" },
+                  { key: "P", label: "Add Point mode" },
+                  { key: "R", label: "Add Road mode" },
+                  { key: "D", label: "Add Destination mode" },
+                  { key: "T", label: "Route Test mode" },
+                  { key: "X", label: "Transit Route mode" },
+                ]},
+                { group: "Map", rows: [
+                  { key: "+ / =", label: "Zoom in" },
+                  { key: "−", label: "Zoom out" },
+                  { key: "0", label: "Reset view to Cebu" },
+                  { key: "F", label: "Toggle fullscreen" },
+                ]},
+                { group: "Editing", rows: [
+                  { key: "Ctrl + Z", label: "Undo last road point" },
+                  { key: "Esc", label: "Close layer picker / this modal" },
+                  { key: "?", label: "Toggle this shortcuts panel" },
+                ]},
+              ].map(({ group, rows }) => (
+                <div key={group}>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1.5">
+                    {group}
+                  </p>
+                  <div className="rounded-xl overflow-hidden border border-gray-100">
+                    {rows.map(({ key, label }, i) => (
+                      <div
+                        key={key}
+                        className="flex items-center justify-between px-3 py-2"
+                        style={{ background: i % 2 === 0 ? "rgba(0,0,0,0.02)" : "transparent" }}
+                      >
+                        <span className="text-sm text-gray-700">{label}</span>
+                        <kbd
+                          className="text-xs px-2 py-0.5 rounded font-mono"
+                          style={{
+                            background: "rgba(0,0,0,0.07)",
+                            border: "1px solid rgba(0,0,0,0.12)",
+                            color: "#374151",
+                          }}
+                        >
+                          {key}
+                        </kbd>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button color="primary" variant="flat" onClick={() => setShowShortcutsModal(false)}>
+              Close
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       {/* Add Point Modal */}
       <Modal

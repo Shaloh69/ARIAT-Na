@@ -1,6 +1,6 @@
 import "leaflet/dist/leaflet.css";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 
 interface MapDestination {
@@ -142,5 +142,56 @@ export default function MapView({
     });
   }, [selectedId, destinations]);
 
-  return <div ref={containerRef} style={{ height: "100%", width: "100%" }} />;
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+
+    document.addEventListener("fullscreenchange", onFsChange);
+
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      void (wrapperRef.current ?? document.documentElement).requestFullscreen();
+    } else {
+      void document.exitFullscreen();
+    }
+  };
+
+  return (
+    <div ref={wrapperRef} style={{ position: "relative", height: "100%", width: "100%" }}>
+      <div ref={containerRef} style={{ height: "100%", width: "100%" }} />
+
+      {/* Touch-friendly fullscreen button */}
+      <button
+        aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+        style={{
+          position: "absolute",
+          bottom: 16,
+          right: 16,
+          zIndex: 1000,
+          width: 48,
+          height: 48,
+          borderRadius: 12,
+          background: "rgba(15,23,42,0.82)",
+          border: "1px solid rgba(255,255,255,0.15)",
+          color: "white",
+          fontSize: 20,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          boxShadow: "0 4px 14px rgba(0,0,0,0.5)",
+          backdropFilter: "blur(6px)",
+          WebkitBackdropFilter: "blur(6px)",
+        }}
+        onClick={toggleFullscreen}
+      >
+        {isFullscreen ? "⛶" : "⛶"}
+      </button>
+    </div>
+  );
 }
