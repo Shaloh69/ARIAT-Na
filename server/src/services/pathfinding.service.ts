@@ -773,6 +773,32 @@ function reconstructPath(
 }
 
 /**
+ * Return the top-N graph nodes nearest to (lat, lon), sorted by straight-line distance.
+ * Only considers nodes that have at least one edge in the adjacency list so we never
+ * hand a dead-end virtual snap-point to A*.
+ */
+function findTopNNodes(
+  lat: number,
+  lon: number,
+  allNodes: Map<string, Intersection>,
+  adjacencyList: Map<string, Array<{ road: Road; neighbor: string }>>,
+  n: number,
+): Array<{ intersection: Intersection; distance: number }> {
+  const candidates: Array<{ intersection: Intersection; distance: number }> =
+    [];
+
+  for (const node of allNodes.values()) {
+    // Skip nodes that have no edges — they can never be routed through
+    if (!adjacencyList.has(node.id)) continue;
+    const dist = haversineDistance(lat, lon, node.latitude, node.longitude);
+    candidates.push({ intersection: node, distance: dist });
+  }
+
+  candidates.sort((a, b) => a.distance - b.distance);
+  return candidates.slice(0, n);
+}
+
+/**
  * Find nearest intersection to GPS coordinates
  */
 export async function findNearestIntersection(
@@ -802,11 +828,48 @@ export async function calculateRoute(
     roadPaths,
   } = await buildGraph();
 
-  // Find nearest nodes using the enriched graph (includes interpolated points)
-  const startNode = await findNearestRoadNode(startLat, startLon, allNodes);
-  const endNode = await findNearestRoadNode(endLat, endLon, allNodes);
+  // Direct proximity check — if the two GPS points are <50 m apart, skip routing
+  const directDist = haversineDistance(startLat, startLon, endLat, endLon);
+  if (directDist < 0.05) {
+    return {
+      success: true,
+      path: [],
+      roads: [],
+      totalDistance: directDist,
+      estimatedTime: Math.max(1, Math.round((directDist / 5) * 60)),
+      steps: [
+        {
+          instruction: "Walk to destination",
+          roadName: "Direct path",
+          distance: directDist,
+          time: Math.max(1, Math.round((directDist / 5) * 60)),
+          from: "Starting Point",
+          to: "Destination",
+        },
+      ],
+    };
+  }
 
-  if (!startNode.intersection || !endNode.intersection) {
+  // Gather the top-N candidate road nodes for both endpoints.
+  // Only nodes that have adjacency-list edges are included — dead-end virtual
+  // snap points are excluded so A* is never given an unreachable start/end.
+  const CANDIDATES = 6;
+  const startCandidates = findTopNNodes(
+    startLat,
+    startLon,
+    allNodes,
+    adjacencyList,
+    CANDIDATES,
+  );
+  const endCandidates = findTopNNodes(
+    endLat,
+    endLon,
+    allNodes,
+    adjacencyList,
+    CANDIDATES,
+  );
+
+  if (startCandidates.length === 0 || endCandidates.length === 0) {
     return {
       success: false,
       path: [],
@@ -817,40 +880,71 @@ export async function calculateRoute(
     };
   }
 
-  // Same node? If they're very close, it's a zero-distance route
-  if (startNode.intersection.id === endNode.intersection.id) {
-    const directDist = haversineDistance(startLat, startLon, endLat, endLon);
-    if (directDist < 0.05) {
-      // < 50m apart, basically same location
-      return {
-        success: true,
-        path: [startNode.intersection],
-        roads: [],
-        totalDistance: directDist,
-        estimatedTime: Math.max(1, Math.round((directDist / 5) * 60)),
-        steps: [
-          {
-            instruction: "Walk to destination",
-            roadName: "Direct path",
-            distance: directDist,
-            time: Math.max(1, Math.round((directDist / 5) * 60)),
-            from: "Starting Point",
-            to: "Destination",
-          },
-        ],
-      };
+  // Try all start × end candidate pairs (up to CANDIDATES² A* runs).
+  // Sort pairs by combined walk distance first so the cheapest combinations
+  // are evaluated early — we still try all of them to find the true minimum.
+  type Pair = {
+    sc: (typeof startCandidates)[0];
+    ec: (typeof endCandidates)[0];
+    walkCost: number;
+  };
+  const pairs: Pair[] = [];
+  for (const sc of startCandidates) {
+    for (const ec of endCandidates) {
+      if (sc.intersection.id === ec.intersection.id) continue;
+      pairs.push({ sc, ec, walkCost: sc.distance + ec.distance });
+    }
+  }
+  pairs.sort((a, b) => a.walkCost - b.walkCost);
+
+  let bestResult: RouteResult | null = null;
+  let bestStartNode = startCandidates[0];
+  let bestEndNode = endCandidates[0];
+  let bestTotalCost = Infinity;
+
+  const graph = { intersections: allNodes, adjacencyList, roadPaths };
+
+  for (const { sc, ec } of pairs) {
+    const candidate = await findShortestPath(
+      sc.intersection.id,
+      ec.intersection.id,
+      optimizeFor,
+      graph,
+    );
+    if (!candidate.success) continue;
+
+    const roadCost =
+      optimizeFor === "time"
+        ? candidate.estimatedTime
+        : candidate.totalDistance;
+    const walkCost =
+      optimizeFor === "time"
+        ? Math.ceil((sc.distance / 5) * 60) + Math.ceil((ec.distance / 5) * 60)
+        : sc.distance + ec.distance;
+    const totalCost = roadCost + walkCost;
+
+    if (totalCost < bestTotalCost) {
+      bestTotalCost = totalCost;
+      bestResult = candidate;
+      bestStartNode = sc;
+      bestEndNode = ec;
     }
   }
 
-  // Run A* pathfinding using the pre-built graph (avoids rebuilding it)
-  const result = await findShortestPath(
-    startNode.intersection.id,
-    endNode.intersection.id,
-    optimizeFor,
-    { intersections: allNodes, adjacencyList, roadPaths },
-  );
+  // Use the best-found nodes as the effective start/end snap points
+  const startNode = {
+    intersection: bestStartNode.intersection,
+    distance: bestStartNode.distance,
+    needsVirtualConnection: bestStartNode.distance > 0.05,
+  };
+  const endNode = {
+    intersection: bestEndNode.intersection,
+    distance: bestEndNode.distance,
+    needsVirtualConnection: bestEndNode.distance > 0.05,
+  };
+  const result = bestResult;
 
-  if (!result.success) {
+  if (!result) {
     // No road route between the snapped nodes (disconnected graph segments).
     // Build a structured walk:
     //   start → nearest road entry node → nearest road exit node → end
