@@ -222,7 +222,7 @@ export default function TransitPage() {
         setRoadsGeojson(geojson);
         setAllRoads(
           geojson.features.map((f: any) => ({
-            id: f.properties.id,
+            id: String(f.properties.id),
             name: f.properties.name,
             // GeoJSON stores [lng, lat]; Leaflet needs [lat, lng]
             positions: f.geometry.coordinates.map(

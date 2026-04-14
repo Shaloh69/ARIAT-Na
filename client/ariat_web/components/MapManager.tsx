@@ -652,6 +652,8 @@ export default function MapManager({
   const [isCancelRoadModalOpen, setIsCancelRoadModalOpen] = useState(false);
   // Ref holds the latest undoLastPoint so the keydown handler stays stable
   const undoRef = useRef<() => void>(() => {});
+  // Undo history for transit road selection (stack of previous road_id arrays)
+  const transitUndoStackRef = useRef<string[][]>([]);
   // Flags for auto-snap: set when a road-context intersection create is in flight
   const pendingRoadSnapRef = useRef(false);
   const roadSnapIndexRef = useRef(-1);
@@ -1225,7 +1227,21 @@ export default function MapManager({
     }
   };
 
+  // Wrapper that records previous selection before forwarding to parent (enables Ctrl+Z)
+  const handleTransitRoadsChange = (newIds: string[]) => {
+    transitUndoStackRef.current.push([...transitSelectedRoadIds]);
+    onTransitRoadsChange?.(newIds);
+  };
+
   const undoLastPoint = () => {
+    if (mode === "transit_route") {
+      const prev = transitUndoStackRef.current.pop();
+      if (prev !== undefined) {
+        onTransitRoadsChange?.(prev);
+        toast.info("Road selection undone");
+      }
+      return;
+    }
     if (mode !== "add_road" || roadPoints.length === 0) return;
     const lastIdx = roadPoints.length - 1;
 
@@ -1343,6 +1359,7 @@ export default function MapManager({
       bus_stop: "#22c55e",
       pier: "#a855f7",
       intersection: "#6b7280",
+      entrance: "#f59e0b", // amber — clearly visible road-access point
     };
 
     return colors[type] || "#6b7280";
@@ -1361,7 +1378,7 @@ export default function MapManager({
 
   // Parse saved roads from GeoJSON — coordinates are [lng, lat], convert to [lat, lng]
   const savedRoads = (roadsGeojsonData?.features || []).map((feature) => ({
-    id: feature.properties.id,
+    id: String(feature.properties.id),
     name: feature.properties.name,
     roadType: feature.properties.road_type,
     distance: feature.properties.distance,
@@ -1573,6 +1590,7 @@ export default function MapManager({
                     <SelectItem key="bus_stop">Bus Stop</SelectItem>
                     <SelectItem key="pier">Pier</SelectItem>
                     <SelectItem key="intersection">Intersection</SelectItem>
+                    <SelectItem key="entrance">Entrance</SelectItem>
                   </Select>
                   <p
                     style={{
@@ -2309,6 +2327,7 @@ export default function MapManager({
                     { type: "bus_stop", label: "Bus Stop" },
                     { type: "pier", label: "Pier" },
                     { type: "intersection", label: "Intersection" },
+                    { type: "entrance", label: "Entrance" },
                   ].map((item) => (
                     <div key={item.type} className="flex items-center gap-2">
                       <div
@@ -2741,7 +2760,9 @@ export default function MapManager({
         {showRoads &&
           savedRoads.map((road) => {
             const isTransitMode = mode === "transit_route";
-            const isTransitSelected = transitSelectedRoadIds.includes(road.id);
+            const isTransitSelected = transitSelectedRoadIds
+              .map(String)
+              .includes(road.id);
             const roadColor = isTransitMode
               ? isTransitSelected
                 ? transitRouteColor
@@ -2749,8 +2770,8 @@ export default function MapManager({
               : getRoadColor(road.roadType);
             const roadWeight = isTransitMode
               ? isTransitSelected
-                ? 5
-                : 2
+                ? 8
+                : 8
               : road.roadType === "ferry"
                 ? 2
                 : 3;
@@ -2767,14 +2788,14 @@ export default function MapManager({
                     isTransitMode && onTransitRoadsChange
                       ? {
                           click: () => {
-                            const cur = new Set(transitSelectedRoadIds);
+                            const cur = new Set(transitSelectedRoadIds.map(String));
 
-                            if (cur.has(road.id)) {
-                              cur.delete(road.id);
+                            if (cur.has(String(road.id))) {
+                              cur.delete(String(road.id));
                             } else {
-                              cur.add(road.id);
+                              cur.add(String(road.id));
                             }
-                            onTransitRoadsChange(Array.from(cur));
+                            handleTransitRoadsChange(Array.from(cur));
                           },
                         }
                       : {}
@@ -2859,6 +2880,29 @@ export default function MapManager({
                     </Popup>
                   )}
                 </Polyline>
+                {/* Transparent hit-area polyline for easier clicking in transit mode */}
+                {isTransitMode && onTransitRoadsChange && (
+                  <Polyline
+                    eventHandlers={{
+                      click: () => {
+                        const cur = new Set(transitSelectedRoadIds.map(String));
+
+                        if (cur.has(String(road.id))) {
+                          cur.delete(String(road.id));
+                        } else {
+                          cur.add(String(road.id));
+                        }
+                        handleTransitRoadsChange(Array.from(cur));
+                      },
+                    }}
+                    pathOptions={{
+                      color: "transparent",
+                      weight: 20,
+                      opacity: 0,
+                    }}
+                    positions={road.positions}
+                  />
+                )}
                 {/* Show direction decorators: in transit mode only for selected roads */}
                 {(!isTransitMode || isTransitSelected) && (
                   <RoadDecorator

@@ -17,6 +17,8 @@ interface GraphCache {
   intersections: Map<string, Intersection>;
   adjacencyList: Map<string, Array<{ road: Road; neighbor: string }>>;
   roadPaths: Map<string, [number, number][]>;
+  /** Maps each road ID to the ordered list of node IDs on that road (start → v1 → … → end). */
+  roadNodeMap: Map<string, string[]>;
   builtAt: number;
 }
 
@@ -322,7 +324,8 @@ async function findNearestRoadNode(
 async function buildGraph(): Promise<{
   intersections: Map<string, Intersection>;
   adjacencyList: Map<string, Array<{ road: Road; neighbor: string }>>;
-  roadPaths: Map<string, [number, number][]>; // original road ID → path geometry [lat, lng]
+  roadPaths: Map<string, [number, number][]>;
+  roadNodeMap: Map<string, string[]>;
 }> {
   if (_graphCache && Date.now() - _graphCache.builtAt < CACHE_TTL_MS) {
     return _graphCache;
@@ -343,12 +346,13 @@ async function buildGraph(): Promise<{
     "SELECT * FROM roads WHERE is_active = TRUE",
   );
 
-  // Build adjacency list and store original road paths
+  // Build adjacency list, road paths, and road→node index
   const adjacencyList = new Map<
     string,
     Array<{ road: Road; neighbor: string }>
   >();
   const roadPaths = new Map<string, [number, number][]>();
+  const roadNodeMap = new Map<string, string[]>(); // roadId → ordered chain of nodeIds
 
   for (const road of roads) {
     let roadPath: [number, number][] | null = null;
@@ -411,6 +415,8 @@ async function buildGraph(): Promise<{
         .map((id) => (id.startsWith("virtual_") ? substituteId(id) : id))
         .filter((id, i, arr) => i === 0 || arr[i - 1] !== id);
 
+      roadNodeMap.set(road.id, chainIds);
+
       // Distances for each segment: [0, d1, d2, ..., dN, totalLength]
       const chainDistances = [0, ...segmentDistances, totalRoadLength];
 
@@ -453,6 +459,11 @@ async function buildGraph(): Promise<{
       }
     } else {
       // No interpolation needed — add direct edges (original behavior)
+      roadNodeMap.set(road.id, [
+        road.start_intersection_id,
+        road.end_intersection_id,
+      ]);
+
       if (!adjacencyList.has(road.start_intersection_id)) {
         adjacencyList.set(road.start_intersection_id, []);
       }
@@ -481,6 +492,7 @@ async function buildGraph(): Promise<{
     intersections: intersectionMap,
     adjacencyList,
     roadPaths,
+    roadNodeMap,
     builtAt: Date.now(),
   };
   return _graphCache;
@@ -784,6 +796,147 @@ export async function findNearestIntersection(
 }
 
 /**
+ * Snap a GPS point to the road network using perpendicular projection.
+ *
+ * Industry-standard approach (OSRM / Valhalla):
+ *   1. Project the point perpendicularly onto every road polyline within maxRadiusKm.
+ *   2. Pick the road with the smallest perpendicular distance — this correctly
+ *      selects a nearby side street over a far-away major road even when a
+ *      node on the major road happens to be geometrically closer.
+ *   3. Among the nodes that belong to that specific road, return the nearest
+ *      one that has outgoing edges in the graph (so A* can leave it).
+ *   4. Falls back to a global nearest-node scan if no road is within radius.
+ */
+function snapToNetwork(
+  lat: number,
+  lon: number,
+  roadPaths: Map<string, [number, number][]>,
+  roadNodeMap: Map<string, string[]>,
+  allNodes: Map<string, Intersection>,
+  adjacencyList: Map<string, Array<{ road: Road; neighbor: string }>>,
+  maxRadiusKm = 1.0,
+): {
+  intersection: Intersection;
+  distance: number;
+  needsVirtualConnection: boolean;
+} | null {
+  // ── Step 0: prefer entrance nodes placed by the admin ──────────────────
+  // An admin-placed entrance node (point_type='entrance') sits at the exact
+  // road-access point for a destination — use it directly when one is close.
+  const ENTRANCE_RADIUS = 0.3; // 300 m
+  let nearestEntrance: Intersection | null = null;
+  let nearestEntranceDist = Infinity;
+
+  for (const node of allNodes.values()) {
+    if (node.point_type !== "entrance") continue;
+    const d = haversineDistance(lat, lon, node.latitude, node.longitude);
+    if (d < nearestEntranceDist && d <= ENTRANCE_RADIUS) {
+      nearestEntranceDist = d;
+      nearestEntrance = node;
+    }
+  }
+
+  if (nearestEntrance) {
+    return {
+      intersection: nearestEntrance,
+      distance: nearestEntranceDist,
+      needsVirtualConnection: nearestEntranceDist > 0.05,
+    };
+  }
+
+  // ── Step 1: find nearest road by perpendicular projection ──────────────
+  let bestRoadId: string | null = null;
+  let bestPerpDist = Infinity;
+
+  for (const [roadId, path] of roadPaths) {
+    if (path.length < 2) continue;
+
+    // Cheap bounding-box pre-filter before calling turf
+    let minLat = path[0][0],
+      maxLat = path[0][0];
+    let minLon = path[0][1],
+      maxLon = path[0][1];
+    for (const [pLat, pLon] of path) {
+      if (pLat < minLat) minLat = pLat;
+      if (pLat > maxLat) maxLat = pLat;
+      if (pLon < minLon) minLon = pLon;
+      if (pLon > maxLon) maxLon = pLon;
+    }
+    const latBuf = maxRadiusKm / 111.0;
+    const lonBuf = maxRadiusKm / (111.0 * Math.cos((lat * Math.PI) / 180));
+    if (
+      lat < minLat - latBuf ||
+      lat > maxLat + latBuf ||
+      lon < minLon - lonBuf ||
+      lon > maxLon + lonBuf
+    )
+      continue;
+
+    const { distance } = findNearestPointOnRoad(lat, lon, path);
+    if (distance < bestPerpDist) {
+      bestPerpDist = distance;
+      bestRoadId = roadId;
+    }
+  }
+
+  // If nothing within the radius, fall back to globally nearest reachable node
+  if (!bestRoadId || bestPerpDist > maxRadiusKm) {
+    let nearestNode: Intersection | null = null;
+    let nearestDist = Infinity;
+    for (const node of allNodes.values()) {
+      if (!adjacencyList.has(node.id)) continue;
+      const d = haversineDistance(lat, lon, node.latitude, node.longitude);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearestNode = node;
+      }
+    }
+    if (!nearestNode) return null;
+    return {
+      intersection: nearestNode,
+      distance: nearestDist,
+      needsVirtualConnection: nearestDist > 0.05,
+    };
+  }
+
+  // ── Step 2: nearest node on that road ──────────────────────────────────
+  const nodeIds = roadNodeMap.get(bestRoadId) ?? [];
+  let nearestNode: Intersection | null = null;
+  let nearestDist = Infinity;
+
+  for (const nodeId of nodeIds) {
+    const node = allNodes.get(nodeId);
+    if (!node || !adjacencyList.has(nodeId)) continue;
+    const d = haversineDistance(lat, lon, node.latitude, node.longitude);
+    if (d < nearestDist) {
+      nearestDist = d;
+      nearestNode = node;
+    }
+  }
+
+  // If the road's nodes had no outgoing edges (e.g. a dead-end one-way stub),
+  // fall back to globally nearest reachable node
+  if (!nearestNode) {
+    for (const node of allNodes.values()) {
+      if (!adjacencyList.has(node.id)) continue;
+      const d = haversineDistance(lat, lon, node.latitude, node.longitude);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearestNode = node;
+      }
+    }
+  }
+
+  if (!nearestNode) return null;
+
+  return {
+    intersection: nearestNode,
+    distance: nearestDist,
+    needsVirtualConnection: nearestDist > 0.05, // > 50 m → show walk line
+  };
+}
+
+/**
  * Calculate route from GPS coordinates to GPS coordinates
  * Handles POIs far from roads by creating virtual connections
  * Uses interpolated road nodes for precise snapping
@@ -800,11 +953,36 @@ export async function calculateRoute(
     intersections: allNodes,
     adjacencyList,
     roadPaths,
+    roadNodeMap,
   } = await buildGraph();
 
-  // Find nearest nodes using the enriched graph (includes interpolated points)
-  const startNode = await findNearestRoadNode(startLat, startLon, allNodes);
-  const endNode = await findNearestRoadNode(endLat, endLon, allNodes);
+  // Snap both GPS points to the road network.
+  // snapToNetwork uses perpendicular projection to pick the nearest road first,
+  // then finds the closest node on that road — avoiding the "wrong road" problem
+  // where a node on a distant major road is closer in straight-line than any
+  // node on the correct nearby street.
+  // If an entrance node (point_type='entrance') exists within 300m it wins outright.
+  const startSnap = snapToNetwork(
+    startLat,
+    startLon,
+    roadPaths,
+    roadNodeMap,
+    allNodes,
+    adjacencyList,
+  );
+  const endSnap = snapToNetwork(
+    endLat,
+    endLon,
+    roadPaths,
+    roadNodeMap,
+    allNodes,
+    adjacencyList,
+  );
+
+  const startNode =
+    startSnap ?? (await findNearestRoadNode(startLat, startLon, allNodes));
+  const endNode =
+    endSnap ?? (await findNearestRoadNode(endLat, endLon, allNodes));
 
   if (!startNode.intersection || !endNode.intersection) {
     return {
@@ -863,7 +1041,8 @@ export async function calculateRoute(
       estimatedTime: walkMins,
       steps: [
         {
-          instruction: "Walk to destination — no road route available in this area",
+          instruction:
+            "Walk to destination — no road route available in this area",
           roadName: "Walking",
           distance: walkDist,
           time: walkMins,
