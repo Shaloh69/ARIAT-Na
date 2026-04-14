@@ -851,36 +851,96 @@ export async function calculateRoute(
   );
 
   if (!result.success) {
-    // Walk fallback — no road route exists between these two points.
-    // Return a straight-line walking route so the UI can still render something useful.
-    const walkDist = haversineDistance(startLat, startLon, endLat, endLon);
-    const walkMins = Math.ceil((walkDist / 5) * 60); // 5 km/h walking speed
+    // No road route between the snapped nodes (disconnected graph segments).
+    // Build a structured walk:
+    //   start → nearest road entry node → nearest road exit node → end
+    // This is visually cleaner than one raw diagonal and shows the user
+    // that we walked them to/from the road network as best we could.
+    const sn = startNode.intersection;
+    const en = endNode.intersection;
+
+    const walkHeadDist = haversineDistance(
+      startLat,
+      startLon,
+      sn.latitude,
+      sn.longitude,
+    );
+    const walkMidDist = haversineDistance(
+      sn.latitude,
+      sn.longitude,
+      en.latitude,
+      en.longitude,
+    );
+    const walkTailDist = haversineDistance(
+      en.latitude,
+      en.longitude,
+      endLat,
+      endLon,
+    );
+    const totalWalkDist = walkHeadDist + walkMidDist + walkTailDist;
+    const walkMins = Math.ceil((totalWalkDist / 5) * 60);
+
+    // Build geometry: start → road entry → road exit → end
+    // De-duplicate points that are within 10 m of each other
+    const walkGeometry: [number, number][] = [[startLat, startLon]];
+    if (walkHeadDist > 0.01) walkGeometry.push([sn.latitude, sn.longitude]);
+    if (walkMidDist > 0.01) walkGeometry.push([en.latitude, en.longitude]);
+    walkGeometry.push([endLat, endLon]);
+
+    const steps: RouteStep[] = [];
+    if (walkHeadDist > 0.01)
+      steps.push({
+        instruction: "Walk to nearest road",
+        roadName: "Walking",
+        distance: walkHeadDist,
+        time: Math.ceil((walkHeadDist / 5) * 60),
+        from: "Starting Point",
+        to: sn.name,
+      });
+    steps.push({
+      instruction: "Walk — no connecting road route in this area",
+      roadName: "Walking",
+      distance: walkMidDist,
+      time: Math.ceil((walkMidDist / 5) * 60),
+      from: sn.name,
+      to: en.name,
+    });
+    if (walkTailDist > 0.01)
+      steps.push({
+        instruction: "Walk to destination",
+        roadName: "Walking",
+        distance: walkTailDist,
+        time: Math.ceil((walkTailDist / 5) * 60),
+        from: en.name,
+        to: "Destination",
+      });
+
     return {
       success: true,
       path: [],
       roads: [],
-      totalDistance: walkDist,
+      totalDistance: totalWalkDist,
       estimatedTime: walkMins,
-      steps: [
-        {
-          instruction: "Walk to destination — no road route available in this area",
-          roadName: "Walking",
-          distance: walkDist,
-          time: walkMins,
-          from: "Starting Point",
-          to: "Destination",
-        },
-      ],
-      routeGeometry: [
-        [startLat, startLon],
-        [endLat, endLon],
-      ],
+      steps,
+      routeGeometry: walkGeometry,
       isWalkFallback: true,
+      virtualConnections:
+        walkHeadDist > 0.01
+          ? [
+              {
+                type: "start",
+                from: { lat: startLat, lon: startLon, name: "Starting Point" },
+                to: { lat: sn.latitude, lon: sn.longitude, name: sn.name },
+                distance: walkHeadDist,
+                isVirtual: true as const,
+              },
+            ]
+          : undefined,
       walkTail: {
-        from: [startLat, startLon],
+        from: [en.latitude, en.longitude],
         to: [endLat, endLon],
-        distanceKm: walkDist,
-        walkMinutes: walkMins,
+        distanceKm: walkTailDist,
+        walkMinutes: Math.ceil((walkTailDist / 5) * 60),
       },
     };
   }

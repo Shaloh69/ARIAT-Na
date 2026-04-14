@@ -2589,10 +2589,10 @@ export default function MapManager({
             const isTransitSelected = marker.id
               ? transitSelectedStopIds.includes(marker.id)
               : false;
-            // Smaller fixed-pixel radii — clean at any zoom level
-            const transitRadius = isTransitSelected ? 7 : 4;
-            const transitFillOpacity = isTransitSelected ? 1.0 : 0.5;
-            const normalRadius = marker.type === "intersection" ? 3 : 5;
+            // Fixed-pixel radii — same size at every zoom level
+            const transitRadius = isTransitSelected ? 10 : 6;
+            const transitFillOpacity = isTransitSelected ? 1.0 : 0.65;
+            const normalRadius = marker.type === "intersection" ? 6 : 8;
 
             return (
               <CircleMarker
@@ -2894,7 +2894,7 @@ export default function MapManager({
                 fillOpacity: 0.8,
                 weight: 2,
               }}
-              radius={snappedIndices.has(idx) ? 7 : 5}
+              radius={snappedIndices.has(idx) ? 10 : 7}
             >
               <Popup>
                 <span className="text-xs">
