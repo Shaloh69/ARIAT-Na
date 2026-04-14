@@ -162,7 +162,10 @@ export default function MapView({
   };
 
   return (
-    <div ref={wrapperRef} style={{ position: "relative", height: "100%", width: "100%" }}>
+    <div
+      ref={wrapperRef}
+      style={{ position: "relative", height: "100%", width: "100%" }}
+    >
       <div ref={containerRef} style={{ height: "100%", width: "100%" }} />
 
       {/* Touch-friendly fullscreen button */}

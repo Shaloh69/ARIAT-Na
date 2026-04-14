@@ -4,18 +4,18 @@
  * legs by calling the existing calculateRoute() pathfinding function.
  */
 
-import { calculateRoute } from './pathfinding.service';
-import { ScoredDestination, DestinationRow } from './recommendation.service';
-import { calculateMultiModalRoute, TransportLeg } from './multimodal.service';
+import { calculateRoute } from "./pathfinding.service";
+import { ScoredDestination, DestinationRow } from "./recommendation.service";
+import { calculateMultiModalRoute, TransportLeg } from "./multimodal.service";
 
 export interface ItineraryStop {
   destination: DestinationRow;
   score: number;
   reason: string;
-  visit_duration: number;    // minutes
-  leg_distance: number;      // km (travel leg to reach this stop)
-  leg_travel_time: number;   // minutes (travel leg to reach this stop)
-  cumulative_time: number;   // minutes from start (includes all travel + visits up to this stop)
+  visit_duration: number; // minutes
+  leg_distance: number; // km (travel leg to reach this stop)
+  leg_travel_time: number; // minutes (travel leg to reach this stop)
+  cumulative_time: number; // minutes from start (includes all travel + visits up to this stop)
 }
 
 export interface RouteLeg {
@@ -23,20 +23,33 @@ export interface RouteLeg {
   totalDistance: number;
   estimatedTime: number;
   routeGeometry?: [number, number][];
-  steps: Array<{ instruction: string; roadName: string; distance: number; time: number; from: string; to: string }>;
-  virtualConnections?: Array<{ type: string; from: object; to: object; distance: number; isVirtual: true }>;
+  steps: Array<{
+    instruction: string;
+    roadName: string;
+    distance: number;
+    time: number;
+    from: string;
+    to: string;
+  }>;
+  virtualConnections?: Array<{
+    type: string;
+    from: object;
+    to: object;
+    distance: number;
+    isVirtual: true;
+  }>;
   multiModalLegs?: TransportLeg[];
   totalFare?: number;
 }
 
 export interface GeneratedItinerary {
   stops: ItineraryStop[];
-  legs: RouteLeg[];           // one leg per stop (from previous stop / start to this stop)
-  totalDistance: number;      // km (sum of leg distances)
+  legs: RouteLeg[]; // one leg per stop (from previous stop / start to this stop)
+  totalDistance: number; // km (sum of leg distances)
   estimatedTravelTime: number; // minutes (sum of leg travel times)
-  estimatedVisitTime: number;  // minutes (sum of visit durations)
-  estimatedTotalTime: number;  // minutes (travel + visits)
-  estimatedCost: number;       // PHP (sum of entrance fees)
+  estimatedVisitTime: number; // minutes (sum of visit durations)
+  estimatedTotalTime: number; // minutes (travel + visits)
+  estimatedCost: number; // PHP (sum of entrance fees)
 }
 
 export interface DayPlan {
@@ -67,38 +80,76 @@ export interface MultiDayItinerary {
  * 4. Advance current position; deduct leg travel time + visit duration from remaining budget.
  * 5. Repeat until maxStops reached or no candidate fits.
  */
-const MULTIMODAL_MODES = new Set(['bus_commute', 'bus', 'bus_ac', 'jeepney', 'taxi', 'ferry', 'habal_habal', 'tricycle', 'walk']);
+const MULTIMODAL_MODES = new Set([
+  "bus_commute",
+  "bus",
+  "bus_ac",
+  "jeepney",
+  "taxi",
+  "ferry",
+  "habal_habal",
+  "tricycle",
+  "walk",
+]);
 
 // ── Haversine fallback ────────────────────────────────────────────────────────
 const SPEED_KMH: Record<string, number> = {
-  private_car: 40, taxi: 35, bus: 25, bus_commute: 25,
-  ferry: 20, walk: 5, habal_habal: 30, tricycle: 20,
+  private_car: 40,
+  taxi: 35,
+  bus: 25,
+  bus_commute: 25,
+  ferry: 20,
+  walk: 5,
+  habal_habal: 30,
+  tricycle: 20,
 };
 
-function haversineDist(lat1: number, lon1: number, lat2: number, lon2: number): number {
+function haversineDist(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 /** Straight-line leg estimate used when the road graph cannot route a candidate. */
 function fallbackLeg(
-  fromLat: number, fromLon: number,
-  toLat: number, toLon: number,
+  fromLat: number,
+  fromLon: number,
+  toLat: number,
+  toLon: number,
   transportMode?: string,
 ): RouteLeg {
   const dist = haversineDist(fromLat, fromLon, toLat, toLon);
-  const speed = SPEED_KMH[transportMode ?? ''] ?? 35;
+  const speed = SPEED_KMH[transportMode ?? ""] ?? 35;
   const timeMin = Math.max(1, Math.ceil((dist / speed) * 60));
   return {
     success: true,
     totalDistance: Math.round(dist * 100) / 100,
     estimatedTime: timeMin,
-    routeGeometry: [[fromLon, fromLat], [toLon, toLat]],
-    steps: [{ instruction: 'Head to destination', roadName: '', distance: dist, time: timeMin, from: 'Start', to: 'Destination' }],
+    routeGeometry: [
+      [fromLon, fromLat],
+      [toLon, toLat],
+    ],
+    steps: [
+      {
+        instruction: "Head to destination",
+        roadName: "",
+        distance: dist,
+        time: timeMin,
+        from: "Start",
+        to: "Destination",
+      },
+    ],
   };
 }
 
@@ -108,9 +159,9 @@ export async function buildItinerary(
   startLon: number,
   availableHours: number,
   maxStops: number,
-  optimizeFor: 'distance' | 'time',
+  optimizeFor: "distance" | "time",
   maxDailyTravelMinutes = 600,
-  transportMode?: string
+  transportMode?: string,
 ): Promise<GeneratedItinerary> {
   let currentLat = startLat;
   let currentLon = startLon;
@@ -134,13 +185,17 @@ export async function buildItinerary(
 
       // Compute leg — multimodal or standard A* pathfinder
       let leg: RouteLeg;
-      const useMultiModal = transportMode && MULTIMODAL_MODES.has(transportMode);
+      const useMultiModal =
+        transportMode && MULTIMODAL_MODES.has(transportMode);
       try {
         if (useMultiModal) {
           const mm = await calculateMultiModalRoute(
-            currentLat, currentLon,
-            candidate.destination.latitude, candidate.destination.longitude,
-            transportMode! as import('./multimodal.service').TransportMode, optimizeFor
+            currentLat,
+            currentLon,
+            candidate.destination.latitude,
+            candidate.destination.longitude,
+            transportMode! as import("./multimodal.service").TransportMode,
+            optimizeFor,
           );
           leg = {
             success: true,
@@ -159,22 +214,34 @@ export async function buildItinerary(
             totalFare: mm.totalFare,
           };
         } else {
-          leg = await calculateRoute(
+          leg = (await calculateRoute(
             currentLat,
             currentLon,
             candidate.destination.latitude,
             candidate.destination.longitude,
-            optimizeFor
-          ) as RouteLeg;
+            optimizeFor,
+          )) as RouteLeg;
         }
       } catch {
         // Pathfinding threw — use straight-line estimate so the stop isn't lost
-        leg = fallbackLeg(currentLat, currentLon, candidate.destination.latitude, candidate.destination.longitude, transportMode);
+        leg = fallbackLeg(
+          currentLat,
+          currentLon,
+          candidate.destination.latitude,
+          candidate.destination.longitude,
+          transportMode,
+        );
       }
 
       // If the router returned a failure result, use the fallback estimate
       if (!leg.success) {
-        leg = fallbackLeg(currentLat, currentLon, candidate.destination.latitude, candidate.destination.longitude, transportMode);
+        leg = fallbackLeg(
+          currentLat,
+          currentLon,
+          candidate.destination.latitude,
+          candidate.destination.longitude,
+          transportMode,
+        );
       }
 
       const legMinutes = leg.estimatedTime; // already in minutes from pathfinding service
@@ -182,7 +249,10 @@ export async function buildItinerary(
       const totalNeeded = legMinutes + visitMinutes;
       const newTravelTotal = cumulativeTravelMinutes + legMinutes;
 
-      if (totalNeeded <= remainingMinutes && newTravelTotal <= maxDailyTravelMinutes) {
+      if (
+        totalNeeded <= remainingMinutes &&
+        newTravelTotal <= maxDailyTravelMinutes
+      ) {
         bestIdx = i;
         bestLeg = leg;
         break; // highest-scored candidate that fits — take it
@@ -218,9 +288,13 @@ export async function buildItinerary(
 
   const totalDistance = legs.reduce((sum, l) => sum + l.totalDistance, 0);
   const estimatedTravelTime = legs.reduce((sum, l) => sum + l.estimatedTime, 0);
-  const estimatedVisitTime = stops.reduce((sum, s) => sum + s.visit_duration, 0);
-  const estimatedCost = stops.reduce((sum, s) => sum + (s.destination.entrance_fee_local || 0), 0)
-    + legs.reduce((sum, l) => sum + (l.totalFare ?? 0), 0);
+  const estimatedVisitTime = stops.reduce(
+    (sum, s) => sum + s.visit_duration,
+    0,
+  );
+  const estimatedCost =
+    stops.reduce((sum, s) => sum + (s.destination.entrance_fee_local || 0), 0) +
+    legs.reduce((sum, l) => sum + (l.totalFare ?? 0), 0);
 
   return {
     stops,
@@ -245,8 +319,8 @@ export async function buildMultiDayItinerary(
   days: number,
   hoursPerDay: number,
   maxStopsPerDay: number,
-  optimizeFor: 'distance' | 'time',
-  transportMode?: string
+  optimizeFor: "distance" | "time",
+  transportMode?: string,
 ): Promise<MultiDayItinerary> {
   const remaining = [...ranked];
   const dayPlans: DayPlan[] = [];
@@ -260,7 +334,11 @@ export async function buildMultiDayItinerary(
     // and restrict that day's pool to that cluster (plus cluster-less destinations)
     const dominantClusterId = remaining[0]?.destination.cluster_id ?? null;
     const dayPool = dominantClusterId
-      ? remaining.filter((c) => !c.destination.cluster_id || c.destination.cluster_id === dominantClusterId)
+      ? remaining.filter(
+          (c) =>
+            !c.destination.cluster_id ||
+            c.destination.cluster_id === dominantClusterId,
+        )
       : remaining;
 
     const dayItinerary = await buildItinerary(
@@ -270,8 +348,8 @@ export async function buildMultiDayItinerary(
       hoursPerDay,
       maxStopsPerDay,
       optimizeFor,
-      600,  // max 600 min/day travel
-      transportMode
+      600, // max 600 min/day travel
+      transportMode,
     );
 
     if (dayItinerary.stops.length === 0) break;
@@ -291,7 +369,10 @@ export async function buildMultiDayItinerary(
     let clusterName: string | undefined;
     let maxCount = 0;
     for (const [name, count] of clusterCounts) {
-      if (count > maxCount) { clusterName = name; maxCount = count; }
+      if (count > maxCount) {
+        clusterName = name;
+        maxCount = count;
+      }
     }
 
     dayPlans.push({ dayNumber: day, itinerary: dayItinerary, clusterName });
@@ -302,10 +383,22 @@ export async function buildMultiDayItinerary(
     currentLon = lastStop.destination.longitude;
   }
 
-  const totalDistance = dayPlans.reduce((s, d) => s + d.itinerary.totalDistance, 0);
-  const estimatedTravelTime = dayPlans.reduce((s, d) => s + d.itinerary.estimatedTravelTime, 0);
-  const estimatedVisitTime = dayPlans.reduce((s, d) => s + d.itinerary.estimatedVisitTime, 0);
-  const estimatedCost = dayPlans.reduce((s, d) => s + d.itinerary.estimatedCost, 0);
+  const totalDistance = dayPlans.reduce(
+    (s, d) => s + d.itinerary.totalDistance,
+    0,
+  );
+  const estimatedTravelTime = dayPlans.reduce(
+    (s, d) => s + d.itinerary.estimatedTravelTime,
+    0,
+  );
+  const estimatedVisitTime = dayPlans.reduce(
+    (s, d) => s + d.itinerary.estimatedVisitTime,
+    0,
+  );
+  const estimatedCost = dayPlans.reduce(
+    (s, d) => s + d.itinerary.estimatedCost,
+    0,
+  );
   const totalStops = dayPlans.reduce((s, d) => s + d.itinerary.stops.length, 0);
 
   return {

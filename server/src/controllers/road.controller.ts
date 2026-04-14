@@ -1,10 +1,10 @@
-import { Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import * as turf from '@turf/turf';
-import { RowDataPacket } from 'mysql2';
-import { AuthRequest, AppError } from '../types';
-import { pool } from '../config/database';
-import { invalidateGraphCache } from '../services/pathfinding.service';
+import { Response } from "express";
+import { v4 as uuidv4 } from "uuid";
+import * as turf from "@turf/turf";
+import { RowDataPacket } from "mysql2";
+import { AuthRequest, AppError } from "../types";
+import { pool } from "../config/database";
+import { invalidateGraphCache } from "../services/pathfinding.service";
 
 /**
  * Safely parse a MySQL JSON column value.
@@ -13,8 +13,8 @@ import { invalidateGraphCache } from '../services/pathfinding.service';
  */
 function safeJsonParse(value: any, fallback: any = null): any {
   if (value === null || value === undefined) return fallback;
-  if (typeof value === 'object') return value; // Already parsed by mysql2
-  if (typeof value === 'string') {
+  if (typeof value === "object") return value; // Already parsed by mysql2
+  if (typeof value === "string") {
     try {
       return JSON.parse(value);
     } catch {
@@ -38,10 +38,14 @@ function ensurePathArray(value: any): [number, number][] {
  * Find an existing intersection within 15 m of (lat, lng), or create one.
  * Used by createRoad to auto-resolve start/end nodes from path coordinates.
  */
-async function resolveOrCreateIntersection(lat: number, lng: number, labelHint: string): Promise<string> {
+async function resolveOrCreateIntersection(
+  lat: number,
+  lng: number,
+  labelHint: string,
+): Promise<string> {
   const SNAP_KM = 0.015; // 15 m
   const [rows] = await pool.execute<RowDataPacket[]>(
-    'SELECT id, latitude, longitude FROM intersections'
+    "SELECT id, latitude, longitude FROM intersections",
   );
   for (const row of rows as any[]) {
     const dlat = (row.latitude as number) - lat;
@@ -54,7 +58,7 @@ async function resolveOrCreateIntersection(lat: number, lng: number, labelHint: 
   await pool.execute(
     `INSERT INTO intersections (id, name, latitude, longitude, point_type)
      VALUES (?, ?, ?, ?, 'intersection')`,
-    [newId, labelHint, lat, lng]
+    [newId, labelHint, lat, lng],
   );
   return newId;
 }
@@ -65,24 +69,25 @@ async function resolveOrCreateIntersection(lat: number, lng: number, labelHint: 
  */
 export const getRoads = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
-  const { active = 'true', type } = req.query;
+  const { active = "true", type } = req.query;
 
   const conditions: string[] = [];
   const params: any[] = [];
 
-  if (active === 'true') {
-    conditions.push('is_active = ?');
+  if (active === "true") {
+    conditions.push("is_active = ?");
     params.push(true);
   }
 
   if (type) {
-    conditions.push('road_type = ?');
+    conditions.push("road_type = ?");
     params.push(type);
   }
 
-  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const whereClause =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const sql = `
     SELECT
@@ -115,7 +120,7 @@ export const getRoads = async (
  */
 export const getRoadById = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
 
@@ -137,7 +142,7 @@ export const getRoadById = async (
   const [roads]: any = await pool.execute(sql, [id]);
 
   if (roads.length === 0) {
-    throw new AppError('Road not found', 404);
+    throw new AppError("Road not found", 404);
   }
 
   const road = roads[0];
@@ -157,59 +162,69 @@ export const getRoadById = async (
  */
 export const createRoad = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const {
     name,
     description,
-    road_type = 'local_road',
+    road_type = "local_road",
     is_bidirectional = true,
   } = req.body;
 
   // Validate required fields
   if (!name || !name.trim()) {
-    throw new AppError('Road name is required', 400);
+    throw new AppError("Road name is required", 400);
   }
 
   // Handle path - could arrive as string or array
   let path = req.body.path;
-  if (typeof path === 'string') {
+  if (typeof path === "string") {
     try {
       path = JSON.parse(path);
     } catch {
-      throw new AppError('Invalid path format — must be a JSON array of [lat, lng] pairs', 400);
+      throw new AppError(
+        "Invalid path format — must be a JSON array of [lat, lng] pairs",
+        400,
+      );
     }
   }
 
   if (!Array.isArray(path) || path.length < 2) {
-    throw new AppError('Road path must have at least 2 points', 400);
+    throw new AppError("Road path must have at least 2 points", 400);
   }
 
   // Validate road_type
-  const validRoadTypes = ['highway', 'main_road', 'local_road', 'ferry'];
+  const validRoadTypes = ["highway", "main_road", "local_road", "ferry"];
   if (!validRoadTypes.includes(road_type)) {
-    throw new AppError(`Invalid road type. Must be one of: ${validRoadTypes.join(', ')}`, 400);
+    throw new AppError(
+      `Invalid road type. Must be one of: ${validRoadTypes.join(", ")}`,
+      400,
+    );
   }
 
   // Auto-resolve start/end intersections from path endpoints
   const trimmedName = name.trim();
   const startId = await resolveOrCreateIntersection(
-    path[0][0], path[0][1], `${trimmedName} - Start`
+    path[0][0],
+    path[0][1],
+    `${trimmedName} - Start`,
   );
   const endId = await resolveOrCreateIntersection(
-    path[path.length - 1][0], path[path.length - 1][1], `${trimmedName} - End`
+    path[path.length - 1][0],
+    path[path.length - 1][1],
+    `${trimmedName} - End`,
   );
 
   // Calculate distance using turf.js
   const line = turf.lineString(path.map((p: [number, number]) => [p[1], p[0]])); // [lng, lat]
-  const distance = turf.length(line, { units: 'kilometers' });
+  const distance = turf.length(line, { units: "kilometers" });
 
   // Estimate time based on road type (rough estimates)
   const speedMap: Record<string, number> = {
     highway: 80, // km/h
     main_road: 50,
     local_road: 30,
-    ferry: 25,   // boat speed ~25 km/h
+    ferry: 25, // boat speed ~25 km/h
   };
   const speed = speedMap[road_type] || 30;
   const estimated_time = Math.round((distance / speed) * 60); // minutes
@@ -238,12 +253,14 @@ export const createRoad = async (
     is_bidirectional,
   ]);
 
-  const [roads]: any = await pool.execute('SELECT * FROM roads WHERE id = ?', [roadId]);
+  const [roads]: any = await pool.execute("SELECT * FROM roads WHERE id = ?", [
+    roadId,
+  ]);
   invalidateGraphCache();
 
   res.status(201).json({
     success: true,
-    message: 'Road created successfully',
+    message: "Road created successfully",
     data: {
       ...roads[0],
       path: ensurePathArray(roads[0].path),
@@ -257,25 +274,28 @@ export const createRoad = async (
  */
 export const updateRoad = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
   const updates = req.body;
 
   // Check if road exists
-  const [existing]: any = await pool.execute('SELECT id FROM roads WHERE id = ?', [id]);
+  const [existing]: any = await pool.execute(
+    "SELECT id FROM roads WHERE id = ?",
+    [id],
+  );
 
   if (existing.length === 0) {
-    throw new AppError('Road not found', 404);
+    throw new AppError("Road not found", 404);
   }
 
   // Build dynamic update query
   const allowedFields = [
-    'name',
-    'description',
-    'road_type',
-    'is_active',
-    'is_bidirectional',
+    "name",
+    "description",
+    "road_type",
+    "is_active",
+    "is_bidirectional",
   ];
 
   const updateFields: string[] = [];
@@ -285,22 +305,28 @@ export const updateRoad = async (
     if (allowedFields.includes(key)) {
       updateFields.push(`${key} = ?`);
       updateValues.push(updates[key]);
-    } else if (key === 'path') {
+    } else if (key === "path") {
       // Handle path — could arrive as string or array
       let pathData = updates.path;
-      if (typeof pathData === 'string') {
-        try { pathData = JSON.parse(pathData); } catch { return; }
+      if (typeof pathData === "string") {
+        try {
+          pathData = JSON.parse(pathData);
+        } catch {
+          return;
+        }
       }
       if (!Array.isArray(pathData) || pathData.length < 2) return;
 
-      updateFields.push('path = ?');
+      updateFields.push("path = ?");
       updateValues.push(JSON.stringify(pathData));
 
       // Recalculate distance and time if path changes
-      const line = turf.lineString(pathData.map((p: [number, number]) => [p[1], p[0]]));
-      const distance = turf.length(line, { units: 'kilometers' });
+      const line = turf.lineString(
+        pathData.map((p: [number, number]) => [p[1], p[0]]),
+      );
+      const distance = turf.length(line, { units: "kilometers" });
 
-      const roadType = updates.road_type || 'local_road';
+      const roadType = updates.road_type || "local_road";
       const speedMap: Record<string, number> = {
         highway: 80,
         main_road: 50,
@@ -310,29 +336,31 @@ export const updateRoad = async (
       const speed = speedMap[roadType] || 30;
       const estimatedTime = Math.round((distance / speed) * 60);
 
-      updateFields.push('distance = ?', 'estimated_time = ?');
+      updateFields.push("distance = ?", "estimated_time = ?");
       updateValues.push(distance.toFixed(2), estimatedTime);
     }
   });
 
   if (updateFields.length === 0) {
-    throw new AppError('No valid fields to update', 400);
+    throw new AppError("No valid fields to update", 400);
   }
 
   const sql = `
     UPDATE roads
-    SET ${updateFields.join(', ')}, updated_at = NOW()
+    SET ${updateFields.join(", ")}, updated_at = NOW()
     WHERE id = ?
   `;
 
   await pool.execute(sql, [...updateValues, id]);
 
-  const [roads]: any = await pool.execute('SELECT * FROM roads WHERE id = ?', [id]);
+  const [roads]: any = await pool.execute("SELECT * FROM roads WHERE id = ?", [
+    id,
+  ]);
   invalidateGraphCache();
 
   res.json({
     success: true,
-    message: 'Road updated successfully',
+    message: "Road updated successfully",
     data: {
       ...roads[0],
       path: ensurePathArray(roads[0].path),
@@ -346,20 +374,22 @@ export const updateRoad = async (
  */
 export const deleteRoad = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
 
-  const [result]: any = await pool.execute('DELETE FROM roads WHERE id = ?', [id]);
+  const [result]: any = await pool.execute("DELETE FROM roads WHERE id = ?", [
+    id,
+  ]);
 
   if (result.affectedRows === 0) {
-    throw new AppError('Road not found', 404);
+    throw new AppError("Road not found", 404);
   }
   invalidateGraphCache();
 
   res.json({
     success: true,
-    message: 'Road deleted successfully',
+    message: "Road deleted successfully",
   });
 };
 
@@ -369,13 +399,14 @@ export const deleteRoad = async (
  */
 export const getRoadsGeoJSON = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
-  const sql = 'SELECT * FROM roads WHERE is_active = ? ORDER BY created_at DESC';
+  const sql =
+    "SELECT * FROM roads WHERE is_active = ? ORDER BY created_at DESC";
   const [roads]: any = await pool.execute(sql, [true]);
 
   const features = roads.map((road: any, index: number) => ({
-    type: 'Feature',
+    type: "Feature",
     properties: {
       id: road.id,
       name: road.name,
@@ -385,14 +416,17 @@ export const getRoadsGeoJSON = async (
       is_bidirectional: Boolean(road.is_bidirectional),
     },
     geometry: {
-      type: 'LineString',
-      coordinates: ensurePathArray(road.path).map((p: [number, number]) => [p[1], p[0]]), // [lng, lat]
+      type: "LineString",
+      coordinates: ensurePathArray(road.path).map((p: [number, number]) => [
+        p[1],
+        p[0],
+      ]), // [lng, lat]
     },
     id: index + 1,
   }));
 
   const geojson = {
-    type: 'FeatureCollection',
+    type: "FeatureCollection",
     features,
   };
 

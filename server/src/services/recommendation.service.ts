@@ -4,8 +4,8 @@
  * No ML model — fully deterministic.
  */
 
-import { pool } from '../config/database';
-import { RowDataPacket } from 'mysql2';
+import { pool } from "../config/database";
+import { RowDataPacket } from "mysql2";
 
 export interface DestinationRow extends RowDataPacket {
   id: string;
@@ -23,7 +23,7 @@ export interface DestinationRow extends RowDataPacket {
   entrance_fee_local: number;
   entrance_fee_foreign: number;
   average_visit_duration: number; // minutes
-  budget_level: 'budget' | 'mid' | 'premium';
+  budget_level: "budget" | "mid" | "premium";
   tags: string[] | null;
   family_friendly: boolean;
   rating: number;
@@ -41,7 +41,12 @@ export interface ScoredDestination {
 /**
  * Haversine distance (km) between two GPS points — local to avoid cross-module dep.
  */
-function distKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+function distKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
@@ -71,7 +76,7 @@ export async function rankDestinations(
   budget: number,
   maxStops: number,
   clusterIds?: string[],
-  groupType?: string
+  groupType?: string,
 ): Promise<ScoredDestination[]> {
   let query = `
     SELECT
@@ -92,7 +97,7 @@ export async function rankDestinations(
   const params: string[] = [];
 
   if (clusterIds && clusterIds.length > 0) {
-    query += ` AND d.cluster_id IN (${clusterIds.map(() => '?').join(',')})`;
+    query += ` AND d.cluster_id IN (${clusterIds.map(() => "?").join(",")})`;
     params.push(...clusterIds);
   }
 
@@ -100,13 +105,17 @@ export async function rankDestinations(
 
   // Normalize columns that mysql2 returns as strings (DECIMAL, JSON)
   for (const row of rows) {
-    if (typeof row.tags === 'string') {
-      try { row.tags = JSON.parse(row.tags); } catch { row.tags = null; }
+    if (typeof row.tags === "string") {
+      try {
+        row.tags = JSON.parse(row.tags);
+      } catch {
+        row.tags = null;
+      }
     }
-    row.latitude           = Number(row.latitude)           || 0;
-    row.longitude          = Number(row.longitude)          || 0;
-    row.rating             = Number(row.rating)             || 0;
-    row.popularity_score   = Number(row.popularity_score)   || 0;
+    row.latitude = Number(row.latitude) || 0;
+    row.longitude = Number(row.longitude) || 0;
+    row.rating = Number(row.rating) || 0;
+    row.popularity_score = Number(row.popularity_score) || 0;
     row.entrance_fee_local = Number(row.entrance_fee_local) || 0;
     row.entrance_fee_foreign = Number(row.entrance_fee_foreign) || 0;
   }
@@ -129,11 +138,17 @@ export async function rankDestinations(
       const catName = dest.category_name.toLowerCase();
       const catSlug = dest.category_slug.toLowerCase();
       const destName = dest.name.toLowerCase();
-      const destTags = Array.isArray(dest.tags) ? dest.tags.map((t) => t.toLowerCase()) : [];
+      const destTags = Array.isArray(dest.tags)
+        ? dest.tags.map((t) => t.toLowerCase())
+        : [];
       let interestMatch = 0;
       const matchedInterest: string[] = [];
       for (const interest of normalizedInterests) {
-        if (catName.includes(interest) || catSlug.includes(interest) || destTags.some((t) => t.includes(interest))) {
+        if (
+          catName.includes(interest) ||
+          catSlug.includes(interest) ||
+          destTags.some((t) => t.includes(interest))
+        ) {
           interestMatch = 1.0;
           matchedInterest.push(interest);
           break;
@@ -145,7 +160,8 @@ export async function rankDestinations(
       }
 
       // Family filter bonus
-      const familyBonus = groupType === 'family' && dest.family_friendly ? 0.1 : 0;
+      const familyBonus =
+        groupType === "family" && dest.family_friendly ? 0.1 : 0;
 
       // --- rating_norm ---
       const ratingNorm = (dest.rating || 0) / 5.0;
@@ -154,11 +170,17 @@ export async function rankDestinations(
       const popularityNorm = (dest.popularity_score || 0) / maxPop;
 
       // --- distance_score ---
-      const distanceKm = distKm(startLat, startLon, dest.latitude, dest.longitude);
+      const distanceKm = distKm(
+        startLat,
+        startLon,
+        dest.latitude,
+        dest.longitude,
+      );
       const distanceScore = 1 / (1 + distanceKm);
 
       // --- budget_fit ---
-      const budgetFit = budget === 0 || dest.entrance_fee_local <= budget ? 1.0 : 0;
+      const budgetFit =
+        budget === 0 || dest.entrance_fee_local <= budget ? 1.0 : 0;
 
       // Featured bonus (+0.05, uncapped)
       const featuredBonus = dest.is_featured ? 0.05 : 0;
@@ -168,17 +190,20 @@ export async function rankDestinations(
         ratingNorm * 0.25 +
         popularityNorm * 0.15 +
         distanceScore * 0.15 +
-        budgetFit * 0.10 +
+        budgetFit * 0.1 +
         featuredBonus +
         familyBonus;
 
       // Build human-readable reason
       const reasons: string[] = [];
-      if (matchedInterest.length > 0) reasons.push(`Matches ${matchedInterest.join(', ')} interest`);
-      if (dest.rating >= 4.0) reasons.push(`high rating (${dest.rating.toFixed(1)}\u2605)`);
-      if (dest.is_featured) reasons.push('featured destination');
-      if (distanceKm < 2) reasons.push('nearby');
-      const reason = reasons.length > 0 ? reasons.join(', ') : 'Recommended for you';
+      if (matchedInterest.length > 0)
+        reasons.push(`Matches ${matchedInterest.join(", ")} interest`);
+      if (dest.rating >= 4.0)
+        reasons.push(`high rating (${dest.rating.toFixed(1)}\u2605)`);
+      if (dest.is_featured) reasons.push("featured destination");
+      if (distanceKm < 2) reasons.push("nearby");
+      const reason =
+        reasons.length > 0 ? reasons.join(", ") : "Recommended for you";
 
       return { destination: dest, score, reason };
     });

@@ -182,7 +182,10 @@ const KioskHome: NextPage = () => {
       {/* ═══════════════════════════════════════════════════════════════
           HERO SECTION
       ═══════════════════════════════════════════════════════════════ */}
-      <section className="home-hero" style={{ height: `calc(100vh - 68px - ${FOOTER_H}px)` }}>
+      <section
+        className="home-hero"
+        style={{ height: `calc(100vh - 68px - ${FOOTER_H}px)` }}
+      >
         {/* Background image */}
         {heroImages[heroImageIdx] && (
           <img

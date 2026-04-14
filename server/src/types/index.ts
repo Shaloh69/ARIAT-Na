@@ -1,4 +1,4 @@
-import { Request } from 'express';
+import { Request } from "express";
 
 // =====================================================
 // USER TYPES
@@ -37,7 +37,7 @@ export interface Admin {
   is_default_password: boolean;
   full_name: string;
   profile_image_url?: string;
-  role: 'super_admin' | 'admin' | 'moderator';
+  role: "super_admin" | "admin" | "moderator";
   is_active: boolean;
   created_at: Date;
   updated_at: Date;
@@ -65,7 +65,7 @@ export interface AuthTokens {
 export interface TokenPayload {
   id: string;
   email: string;
-  type: 'user' | 'admin';
+  type: "user" | "admin";
   role?: string;
 }
 
@@ -74,7 +74,7 @@ export interface RefreshToken {
   user_id?: string;
   admin_id?: string;
   token: string;
-  user_type: 'user' | 'admin';
+  user_type: "user" | "admin";
   expires_at: Date;
   created_at: Date;
 }
@@ -192,7 +192,7 @@ export interface Itinerary {
   start_latitude?: number;
   start_longitude?: number;
   start_address?: string;
-  optimize_for: 'distance' | 'time' | 'cost';
+  optimize_for: "distance" | "time" | "cost";
   transport_type?: string;
   optimized_route?: any;
   total_distance?: number;
@@ -239,7 +239,7 @@ export interface RouteOptimizationRequest {
     longitude: number;
     address?: string;
   };
-  optimizeFor: 'distance' | 'time' | 'cost';
+  optimizeFor: "distance" | "time" | "cost";
   transportType: string;
 }
 
@@ -262,7 +262,7 @@ export interface OptimizedDestination {
 export interface RoutePoint {
   latitude: number;
   longitude: number;
-  type: 'start' | 'destination' | 'waypoint';
+  type: "start" | "destination" | "waypoint";
   destinationId?: string;
 }
 

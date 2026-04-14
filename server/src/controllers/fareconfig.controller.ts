@@ -1,7 +1,7 @@
-import { Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import { AuthRequest, AppError } from '../types';
-import { pool } from '../config/database';
+import { Response } from "express";
+import { v4 as uuidv4 } from "uuid";
+import { AuthRequest, AppError } from "../types";
+import { pool } from "../config/database";
 
 /**
  * Get all fare configs
@@ -9,17 +9,17 @@ import { pool } from '../config/database';
  */
 export const getFareConfigs = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { active } = req.query;
 
-  let sql = 'SELECT * FROM fare_configs';
+  let sql = "SELECT * FROM fare_configs";
 
-  if (active === 'true') {
-    sql += ' WHERE is_active = TRUE';
+  if (active === "true") {
+    sql += " WHERE is_active = TRUE";
   }
 
-  sql += ' ORDER BY display_order ASC, transport_type ASC';
+  sql += " ORDER BY display_order ASC, transport_type ASC";
 
   const [rows]: any = await pool.execute(sql);
 
@@ -35,17 +35,17 @@ export const getFareConfigs = async (
  */
 export const getFareConfigById = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
 
   const [rows]: any = await pool.execute(
-    'SELECT * FROM fare_configs WHERE id = ?',
-    [id]
+    "SELECT * FROM fare_configs WHERE id = ?",
+    [id],
   );
 
   if (rows.length === 0) {
-    throw new AppError('Fare config not found', 404);
+    throw new AppError("Fare config not found", 404);
   }
 
   res.json({
@@ -60,7 +60,7 @@ export const getFareConfigById = async (
  */
 export const createFareConfig = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const {
     transport_type,
@@ -70,18 +70,28 @@ export const createFareConfig = async (
     per_km_rate = 0,
     minimum_fare = 0,
     peak_hour_multiplier = 1.0,
-    routing_behavior = 'direct_fare',
+    routing_behavior = "direct_fare",
     is_active = true,
     display_order = 0,
   } = req.body;
 
   if (!transport_type || !display_name) {
-    throw new AppError('transport_type and display_name are required', 400);
+    throw new AppError("transport_type and display_name are required", 400);
   }
 
-  const validBehaviors = ['walk', 'private', 'direct_fare', 'corridor_stops', 'corridor_anywhere', 'ferry'];
+  const validBehaviors = [
+    "walk",
+    "private",
+    "direct_fare",
+    "corridor_stops",
+    "corridor_anywhere",
+    "ferry",
+  ];
   if (!validBehaviors.includes(routing_behavior)) {
-    throw new AppError(`routing_behavior must be one of: ${validBehaviors.join(', ')}`, 400);
+    throw new AppError(
+      `routing_behavior must be one of: ${validBehaviors.join(", ")}`,
+      400,
+    );
   }
 
   const id = uuidv4();
@@ -102,17 +112,17 @@ export const createFareConfig = async (
       routing_behavior,
       is_active,
       display_order,
-    ]
+    ],
   );
 
   const [rows]: any = await pool.execute(
-    'SELECT * FROM fare_configs WHERE id = ?',
-    [id]
+    "SELECT * FROM fare_configs WHERE id = ?",
+    [id],
   );
 
   res.status(201).json({
     success: true,
-    message: 'Fare config created successfully',
+    message: "Fare config created successfully",
     data: rows[0],
   });
 };
@@ -123,22 +133,22 @@ export const createFareConfig = async (
  */
 export const updateFareConfig = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
   const updates = req.body;
 
   const allowedFields = [
-    'transport_type',
-    'display_name',
-    'description',
-    'base_fare',
-    'per_km_rate',
-    'minimum_fare',
-    'peak_hour_multiplier',
-    'routing_behavior',
-    'is_active',
-    'display_order',
+    "transport_type",
+    "display_name",
+    "description",
+    "base_fare",
+    "per_km_rate",
+    "minimum_fare",
+    "peak_hour_multiplier",
+    "routing_behavior",
+    "is_active",
+    "display_order",
   ];
 
   const updateFields: string[] = [];
@@ -152,29 +162,29 @@ export const updateFareConfig = async (
   });
 
   if (updateFields.length === 0) {
-    throw new AppError('No valid fields to update', 400);
+    throw new AppError("No valid fields to update", 400);
   }
 
   const sql = `
     UPDATE fare_configs
-    SET ${updateFields.join(', ')}, updated_at = NOW()
+    SET ${updateFields.join(", ")}, updated_at = NOW()
     WHERE id = ?
   `;
 
   const [result]: any = await pool.execute(sql, [...updateValues, id]);
 
   if (result.affectedRows === 0) {
-    throw new AppError('Fare config not found', 404);
+    throw new AppError("Fare config not found", 404);
   }
 
   const [rows]: any = await pool.execute(
-    'SELECT * FROM fare_configs WHERE id = ?',
-    [id]
+    "SELECT * FROM fare_configs WHERE id = ?",
+    [id],
   );
 
   res.json({
     success: true,
-    message: 'Fare config updated successfully',
+    message: "Fare config updated successfully",
     data: rows[0],
   });
 };
@@ -185,21 +195,21 @@ export const updateFareConfig = async (
  */
 export const deleteFareConfig = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
 
   const [result]: any = await pool.execute(
-    'DELETE FROM fare_configs WHERE id = ?',
-    [id]
+    "DELETE FROM fare_configs WHERE id = ?",
+    [id],
   );
 
   if (result.affectedRows === 0) {
-    throw new AppError('Fare config not found', 404);
+    throw new AppError("Fare config not found", 404);
   }
 
   res.json({
     success: true,
-    message: 'Fare config deleted successfully',
+    message: "Fare config deleted successfully",
   });
 };

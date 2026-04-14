@@ -10,7 +10,11 @@ import {
 } from "@heroui/modal";
 import { QRCodeSVG } from "qrcode.react";
 
-import { API_BASE_URL, API_ENDPOINTS, DOWNLOAD_PAGE_URL } from "@/lib/constants";
+import {
+  API_BASE_URL,
+  API_ENDPOINTS,
+  DOWNLOAD_PAGE_URL,
+} from "@/lib/constants";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,7 +65,7 @@ export default function QRHandoffModal({
   const qrValue =
     mode === "download"
       ? `${DOWNLOAD_PAGE_URL}?kiosk_session=${sessionId.current}`
-      : (deepLink || "airatna://start");
+      : deepLink || "airatna://start";
 
   // ── Reset on open/close ────────────────────────────────────────────────────
   useEffect(() => {
@@ -85,8 +89,10 @@ export default function QRHandoffModal({
         if (c <= 1) {
           clearInterval(interval);
           onClose();
+
           return 0;
         }
+
         return c - 1;
       });
     }, 1000);
@@ -102,6 +108,7 @@ export default function QRHandoffModal({
         `${API_BASE_URL}${API_ENDPOINTS.KIOSK_SCAN_PING}/${sessionId.current}`,
       );
       const json = (await res.json()) as { scanned: boolean; success: boolean };
+
       if (json.scanned) {
         setScanDetected(true);
       }
@@ -116,6 +123,7 @@ export default function QRHandoffModal({
     // Poll immediately, then every 2 seconds
     void pollScan();
     const interval = setInterval(() => void pollScan(), 2000);
+
     return () => clearInterval(interval);
   }, [isOpen, mode, step, pollScan]);
 
@@ -150,7 +158,10 @@ export default function QRHandoffModal({
         {/* Dev notice card */}
         <div
           className="rounded-2xl p-5 space-y-3"
-          style={{ background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.25)" }}
+          style={{
+            background: "rgba(234,179,8,0.08)",
+            border: "1px solid rgba(234,179,8,0.25)",
+          }}
         >
           <div className="flex items-center gap-2">
             <span className="text-2xl">🏫</span>
@@ -158,30 +169,49 @@ export default function QRHandoffModal({
               University of Cebu — Lapu-Lapu &amp; Mandaue
             </p>
           </div>
-          <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.75)" }}>
-            AIRAT-NA is a <strong style={{ color: "white" }}>thesis project</strong> developed by
-            students of UCLM. This application is currently{" "}
-            <strong style={{ color: "white" }}>under development</strong> and has{" "}
-            <strong style={{ color: "white" }}>not been officially published</strong> to the Google
-            Play Store or Apple App Store.
+          <p
+            className="text-sm leading-relaxed"
+            style={{ color: "rgba(255,255,255,0.75)" }}
+          >
+            AIRAT-NA is a{" "}
+            <strong style={{ color: "white" }}>thesis project</strong> developed
+            by students of UCLM. This application is currently{" "}
+            <strong style={{ color: "white" }}>under development</strong> and
+            has{" "}
+            <strong style={{ color: "white" }}>
+              not been officially published
+            </strong>{" "}
+            to the Google Play Store or Apple App Store.
           </p>
-          <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.75)" }}>
+          <p
+            className="text-sm leading-relaxed"
+            style={{ color: "rgba(255,255,255,0.75)" }}
+          >
             The APK is distributed directly for{" "}
-            <strong style={{ color: "white" }}>testing and academic evaluation</strong> only.
-            Your device and data are safe — the app only accesses your location (for navigation)
-            and does not collect personal information beyond what you choose to provide.
+            <strong style={{ color: "white" }}>
+              testing and academic evaluation
+            </strong>{" "}
+            only. Your device and data are safe — the app only accesses your
+            location (for navigation) and does not collect personal information
+            beyond what you choose to provide.
           </p>
         </div>
 
         {/* What to expect */}
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.4)" }}>
+          <p
+            className="text-xs font-semibold uppercase tracking-widest"
+            style={{ color: "rgba(255,255,255,0.4)" }}
+          >
             What happens next
           </p>
           {[
             { icon: "📲", text: "Scan the QR code with your phone camera" },
             { icon: "📥", text: "Download the APK from Google Drive" },
-            { icon: "⚙️", text: "Allow installation from unknown sources when prompted" },
+            {
+              icon: "⚙️",
+              text: "Allow installation from unknown sources when prompted",
+            },
             { icon: "🗺️", text: "Open AIRAT-NA and explore Cebu!" },
           ].map((item, i) => (
             <div key={i} className="flex items-center gap-3 qr-step">
@@ -252,7 +282,9 @@ export default function QRHandoffModal({
             {scanDetected ? (
               <div className="flex flex-col items-center gap-1">
                 <span className="text-2xl">✅</span>
-                <span className="text-xs font-semibold text-green-400">Scanned!</span>
+                <span className="text-xs font-semibold text-green-400">
+                  Scanned!
+                </span>
               </div>
             ) : (
               <>
@@ -293,11 +325,14 @@ export default function QRHandoffModal({
             <>
               <div>
                 <p className="qr-scan-headline">
-                  {scanDetected ? "QR Scanned — Returning home…" : "Scan to download the app"}
+                  {scanDetected
+                    ? "QR Scanned — Returning home…"
+                    : "Scan to download the app"}
                 </p>
                 <p className="qr-scan-sub">
-                  Point your phone camera at the QR code. You&apos;ll be taken to a
-                  download page where you can get the APK directly from Google Drive.
+                  Point your phone camera at the QR code. You&apos;ll be taken
+                  to a download page where you can get the APK directly from
+                  Google Drive.
                 </p>
               </div>
               <div className="space-y-4">
@@ -316,7 +351,10 @@ export default function QRHandoffModal({
               {/* Dev badge */}
               <div
                 className="rounded-xl px-4 py-3 text-xs"
-                style={{ background: "rgba(234,179,8,0.1)", color: "rgba(253,224,71,0.8)" }}
+                style={{
+                  background: "rgba(234,179,8,0.1)",
+                  color: "rgba(253,224,71,0.8)",
+                }}
               >
                 🏫 UCLM Thesis Project · Under Development
               </div>
@@ -326,8 +364,8 @@ export default function QRHandoffModal({
               <div>
                 <p className="qr-scan-headline">Scan with your phone camera</p>
                 <p className="qr-scan-sub">
-                  No app yet? You&apos;ll be taken to the App Store or Google Play
-                  to install AIRAT-NA first.
+                  No app yet? You&apos;ll be taken to the App Store or Google
+                  Play to install AIRAT-NA first.
                 </p>
               </div>
               <div className="space-y-4">
@@ -344,15 +382,23 @@ export default function QRHandoffModal({
                 <div className="qr-store-badge">
                   <span className="text-xl">🍎</span>
                   <div>
-                    <p className="text-[10px] opacity-60 leading-none">Coming soon</p>
-                    <p className="text-sm font-semibold leading-tight">App Store</p>
+                    <p className="text-[10px] opacity-60 leading-none">
+                      Coming soon
+                    </p>
+                    <p className="text-sm font-semibold leading-tight">
+                      App Store
+                    </p>
                   </div>
                 </div>
                 <div className="qr-store-badge">
                   <span className="text-xl">▶</span>
                   <div>
-                    <p className="text-[10px] opacity-60 leading-none">Coming soon</p>
-                    <p className="text-sm font-semibold leading-tight">Google Play</p>
+                    <p className="text-[10px] opacity-60 leading-none">
+                      Coming soon
+                    </p>
+                    <p className="text-sm font-semibold leading-tight">
+                      Google Play
+                    </p>
                   </div>
                 </div>
               </div>

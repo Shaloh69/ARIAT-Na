@@ -1,10 +1,10 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response } from "express";
 import {
   uploadSingleImage,
   uploadMultipleImages,
   uploadSingleVideo,
   handleMulterError,
-} from '../middleware/multer.middleware';
+} from "../middleware/multer.middleware";
 import {
   uploadFile,
   uploadMultipleFiles,
@@ -12,8 +12,8 @@ import {
   UPLOAD_CONFIGS,
   validateFileType,
   validateFileSize,
-} from '../services/upload.service';
-import { authenticateAdmin } from '../middleware/auth.middleware';
+} from "../services/upload.service";
+import { authenticateAdmin } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -23,7 +23,7 @@ const router = Router();
  * @access  Private (Admin only)
  */
 router.post(
-  '/image',
+  "/image",
   authenticateAdmin,
   uploadSingleImage,
   handleMulterError,
@@ -32,7 +32,7 @@ router.post(
       if (!req.file) {
         return res.status(400).json({
           success: false,
-          message: 'No file uploaded',
+          message: "No file uploaded",
         });
       }
 
@@ -42,14 +42,12 @@ router.post(
       ) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid file type. Only images are allowed.',
+          message: "Invalid file type. Only images are allowed.",
         });
       }
 
       // Validate file size
-      if (
-        !validateFileSize(req.file.size, UPLOAD_CONFIGS.IMAGE.maxSizeInMB)
-      ) {
+      if (!validateFileSize(req.file.size, UPLOAD_CONFIGS.IMAGE.maxSizeInMB)) {
         return res.status(400).json({
           success: false,
           message: `File too large. Maximum size is ${UPLOAD_CONFIGS.IMAGE.maxSizeInMB}MB`,
@@ -67,17 +65,17 @@ router.post(
 
       return res.status(200).json({
         success: true,
-        message: 'Image uploaded successfully',
+        message: "Image uploaded successfully",
         data: result,
       });
     } catch (error: any) {
-      console.error('Image upload error:', error);
+      console.error("Image upload error:", error);
       return res.status(500).json({
         success: false,
-        message: error.message || 'Failed to upload image',
+        message: error.message || "Failed to upload image",
       });
     }
-  }
+  },
 );
 
 /**
@@ -86,7 +84,7 @@ router.post(
  * @access  Private (Admin only)
  */
 router.post(
-  '/images',
+  "/images",
   authenticateAdmin,
   uploadMultipleImages,
   handleMulterError,
@@ -95,7 +93,7 @@ router.post(
       if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'No files uploaded',
+          message: "No files uploaded",
         });
       }
 
@@ -130,13 +128,13 @@ router.post(
         data: results,
       });
     } catch (error: any) {
-      console.error('Multiple images upload error:', error);
+      console.error("Multiple images upload error:", error);
       return res.status(500).json({
         success: false,
-        message: error.message || 'Failed to upload images',
+        message: error.message || "Failed to upload images",
       });
     }
-  }
+  },
 );
 
 /**
@@ -145,7 +143,7 @@ router.post(
  * @access  Private (Admin only)
  */
 router.post(
-  '/video',
+  "/video",
   authenticateAdmin,
   uploadSingleVideo,
   handleMulterError,
@@ -154,7 +152,7 @@ router.post(
       if (!req.file) {
         return res.status(400).json({
           success: false,
-          message: 'No file uploaded',
+          message: "No file uploaded",
         });
       }
 
@@ -164,14 +162,12 @@ router.post(
       ) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid file type. Only videos are allowed.',
+          message: "Invalid file type. Only videos are allowed.",
         });
       }
 
       // Validate file size
-      if (
-        !validateFileSize(req.file.size, UPLOAD_CONFIGS.VIDEO.maxSizeInMB)
-      ) {
+      if (!validateFileSize(req.file.size, UPLOAD_CONFIGS.VIDEO.maxSizeInMB)) {
         return res.status(400).json({
           success: false,
           message: `File too large. Maximum size is ${UPLOAD_CONFIGS.VIDEO.maxSizeInMB}MB`,
@@ -189,17 +185,17 @@ router.post(
 
       return res.status(200).json({
         success: true,
-        message: 'Video uploaded successfully',
+        message: "Video uploaded successfully",
         data: result,
       });
     } catch (error: any) {
-      console.error('Video upload error:', error);
+      console.error("Video upload error:", error);
       return res.status(500).json({
         success: false,
-        message: error.message || 'Failed to upload video',
+        message: error.message || "Failed to upload video",
       });
     }
-  }
+  },
 );
 
 /**
@@ -207,34 +203,30 @@ router.post(
  * @desc    Delete a file by URL
  * @access  Private (Admin only)
  */
-router.delete(
-  '/',
-  authenticateAdmin,
-  async (req: Request, res: Response) => {
-    try {
-      const { url } = req.body;
+router.delete("/", authenticateAdmin, async (req: Request, res: Response) => {
+  try {
+    const { url } = req.body;
 
-      if (!url) {
-        return res.status(400).json({
-          success: false,
-          message: 'File URL is required',
-        });
-      }
-
-      await deleteFileByUrl(url);
-
-      return res.status(200).json({
-        success: true,
-        message: 'File deleted successfully',
-      });
-    } catch (error: any) {
-      console.error('File deletion error:', error);
-      return res.status(500).json({
+    if (!url) {
+      return res.status(400).json({
         success: false,
-        message: error.message || 'Failed to delete file',
+        message: "File URL is required",
       });
     }
+
+    await deleteFileByUrl(url);
+
+    return res.status(200).json({
+      success: true,
+      message: "File deleted successfully",
+    });
+  } catch (error: any) {
+    console.error("File deletion error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to delete file",
+    });
   }
-);
+});
 
 export default router;

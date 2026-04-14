@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
-import { validationResult, ValidationError } from 'express-validator';
-import { AppError } from '../types';
+import { Request, Response, NextFunction } from "express";
+import { validationResult, ValidationError } from "express-validator";
+import { AppError } from "../types";
 
 /**
  * Middleware to handle validation errors
@@ -8,7 +8,7 @@ import { AppError } from '../types';
 export const validate = (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void => {
   const errors = validationResult(req);
 
@@ -16,12 +16,12 @@ export const validate = (
     const errorMessages = errors
       .array()
       .map((error: ValidationError) => {
-        if (error.type === 'field') {
+        if (error.type === "field") {
           return `${error.path}: ${error.msg}`;
         }
         return error.msg;
       })
-      .join(', ');
+      .join(", ");
 
     throw new AppError(errorMessages, 400);
   }

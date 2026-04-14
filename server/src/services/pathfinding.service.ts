@@ -5,9 +5,9 @@
  * Supports POIs far from roads, path recalculation, and real-time updates
  */
 
-import { pool } from '../config/database';
-import { RowDataPacket } from 'mysql2';
-import * as turf from '@turf/turf';
+import { pool } from "../config/database";
+import { RowDataPacket } from "mysql2";
+import * as turf from "@turf/turf";
 
 // ---------------------------------------------------------------------------
 // In-memory graph cache — avoids re-querying the DB on every route request.
@@ -77,7 +77,7 @@ interface RouteStep {
 }
 
 interface VirtualConnection {
-  type: 'start' | 'end';
+  type: "start" | "end";
   from: { lat: number; lon: number; name?: string };
   to: { lat: number; lon: number; name: string };
   distance: number;
@@ -90,10 +90,15 @@ const INTERPOLATION_INTERVAL = 0.1; // ~100 meters between virtual nodes
 /**
  * Calculate Haversine distance between two GPS coordinates (in kilometers)
  */
-function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+function haversineDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
   const from = turf.point([lon1, lat1]);
   const to = turf.point([lon2, lat2]);
-  return turf.distance(from, to, { units: 'kilometers' });
+  return turf.distance(from, to, { units: "kilometers" });
 }
 
 /**
@@ -102,12 +107,14 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 function findNearestPointOnRoad(
   lat: number,
   lon: number,
-  roadPath: [number, number][]
+  roadPath: [number, number][],
 ): { point: [number, number]; distance: number; index: number } {
   const targetPoint = turf.point([lon, lat]);
   const line = turf.lineString(roadPath.map((p) => [p[1], p[0]])); // Convert to [lon, lat]
 
-  const snapped = turf.nearestPointOnLine(line, targetPoint, { units: 'kilometers' });
+  const snapped = turf.nearestPointOnLine(line, targetPoint, {
+    units: "kilometers",
+  });
 
   return {
     point: [snapped.geometry.coordinates[1], snapped.geometry.coordinates[0]], // Convert back to [lat, lon]
@@ -123,9 +130,10 @@ function findNearestPointOnRoad(
 function interpolateRoadPoints(
   roadPath: [number, number][],
   roadId: string,
-  roadName: string
+  roadName: string,
 ): { nodes: Intersection[]; segmentDistances: number[] } {
-  if (!roadPath || roadPath.length < 2) return { nodes: [], segmentDistances: [] };
+  if (!roadPath || roadPath.length < 2)
+    return { nodes: [], segmentDistances: [] };
 
   const nodes: Intersection[] = [];
   const segmentDistances: number[] = [];
@@ -133,7 +141,7 @@ function interpolateRoadPoints(
   // Convert road path to turf line [lon, lat]
   const lineCoords = roadPath.map((p) => [p[1], p[0]]);
   const line = turf.lineString(lineCoords);
-  const totalLength = turf.length(line, { units: 'kilometers' });
+  const totalLength = turf.length(line, { units: "kilometers" });
 
   if (totalLength < INTERPOLATION_INTERVAL) {
     // Road is shorter than the interval — no intermediate nodes needed
@@ -143,7 +151,9 @@ function interpolateRoadPoints(
   // Generate points at regular intervals along the road
   let distAlong = INTERPOLATION_INTERVAL;
   while (distAlong < totalLength) {
-    const interpolatedPoint = turf.along(line, distAlong, { units: 'kilometers' });
+    const interpolatedPoint = turf.along(line, distAlong, {
+      units: "kilometers",
+    });
     const [lon, lat] = interpolatedPoint.geometry.coordinates;
 
     const virtualNode = {
@@ -151,7 +161,7 @@ function interpolateRoadPoints(
       name: `${roadName} (${distAlong.toFixed(1)}km)`,
       latitude: lat,
       longitude: lon,
-      point_type: 'virtual',
+      point_type: "virtual",
     } as Intersection;
 
     nodes.push(virtualNode);
@@ -169,7 +179,7 @@ function interpolateRoadPoints(
 async function findNearestRoadNode(
   latitude: number,
   longitude: number,
-  allNodes?: Map<string, Intersection>
+  allNodes?: Map<string, Intersection>,
 ): Promise<{
   intersection: Intersection;
   distance: number;
@@ -182,7 +192,12 @@ async function findNearestRoadNode(
     let minDistance = Infinity;
 
     for (const node of allNodes.values()) {
-      const distance = haversineDistance(latitude, longitude, node.latitude, node.longitude);
+      const distance = haversineDistance(
+        latitude,
+        longitude,
+        node.latitude,
+        node.longitude,
+      );
       if (distance < minDistance) {
         minDistance = distance;
         nearestNode = node;
@@ -200,18 +215,28 @@ async function findNearestRoadNode(
 
   // Fallback: query database directly
   const [intersections] = await pool.execute<Intersection[]>(
-    'SELECT id, name, latitude, longitude, point_type FROM intersections'
+    "SELECT id, name, latitude, longitude, point_type FROM intersections",
   );
 
   if (intersections.length === 0) {
-    throw new Error('No intersections found in database');
+    throw new Error("No intersections found in database");
   }
 
   let nearestIntersection = intersections[0];
-  let minDistance = haversineDistance(latitude, longitude, nearestIntersection.latitude, nearestIntersection.longitude);
+  let minDistance = haversineDistance(
+    latitude,
+    longitude,
+    nearestIntersection.latitude,
+    nearestIntersection.longitude,
+  );
 
   for (const intersection of intersections) {
-    const distance = haversineDistance(latitude, longitude, intersection.latitude, intersection.longitude);
+    const distance = haversineDistance(
+      latitude,
+      longitude,
+      intersection.latitude,
+      intersection.longitude,
+    );
     if (distance < minDistance) {
       minDistance = distance;
       nearestIntersection = intersection;
@@ -228,14 +253,24 @@ async function findNearestRoadNode(
   }
 
   // Otherwise, find nearest point on any road
-  const [roads] = await pool.execute<Road[]>('SELECT * FROM roads WHERE is_active = TRUE');
+  const [roads] = await pool.execute<Road[]>(
+    "SELECT * FROM roads WHERE is_active = TRUE",
+  );
 
-  let bestRoadNode: { intersection: Intersection; distance: number; point: [number, number] } | null = null;
+  let bestRoadNode: {
+    intersection: Intersection;
+    distance: number;
+    point: [number, number];
+  } | null = null;
 
   for (const road of roads) {
     if (!road.path || !Array.isArray(road.path)) continue;
 
-    const { point, distance } = findNearestPointOnRoad(latitude, longitude, road.path);
+    const { point, distance } = findNearestPointOnRoad(
+      latitude,
+      longitude,
+      road.path,
+    );
 
     if (!bestRoadNode || distance < bestRoadNode.distance) {
       // Use a synthetic intersection at the actual snapped point for precision
@@ -243,10 +278,10 @@ async function findNearestRoadNode(
       bestRoadNode = {
         intersection: {
           id: syntheticId,
-          name: 'Snapped point',
+          name: "Snapped point",
           latitude: point[0],
           longitude: point[1],
-          point_type: 'virtual',
+          point_type: "virtual",
         } as Intersection,
         distance,
         point,
@@ -286,7 +321,7 @@ async function buildGraph(): Promise<{
 
   // Get all intersections
   const [intersections] = await pool.execute<Intersection[]>(
-    'SELECT id, name, latitude, longitude, point_type FROM intersections'
+    "SELECT id, name, latitude, longitude, point_type FROM intersections",
   );
 
   const intersectionMap = new Map<string, Intersection>();
@@ -295,10 +330,15 @@ async function buildGraph(): Promise<{
   }
 
   // Get all active roads
-  const [roads] = await pool.execute<Road[]>('SELECT * FROM roads WHERE is_active = TRUE');
+  const [roads] = await pool.execute<Road[]>(
+    "SELECT * FROM roads WHERE is_active = TRUE",
+  );
 
   // Build adjacency list and store original road paths
-  const adjacencyList = new Map<string, Array<{ road: Road; neighbor: string }>>();
+  const adjacencyList = new Map<
+    string,
+    Array<{ road: Road; neighbor: string }>
+  >();
   const roadPaths = new Map<string, [number, number][]>();
 
   for (const road of roads) {
@@ -328,14 +368,23 @@ async function buildGraph(): Promise<{
       // Snap virtual nodes to real DB intersections within 50 m
       // (excludes start/end of this road which are already in the chain)
       const realMidIntersections = intersections.filter(
-        (i) => i.id !== road.start_intersection_id && i.id !== road.end_intersection_id
+        (i) =>
+          i.id !== road.start_intersection_id &&
+          i.id !== road.end_intersection_id,
       );
 
       const substituteId = (vNodeId: string): string => {
         const vNode = intersectionMap.get(vNodeId);
         if (!vNode) return vNodeId;
         for (const real of realMidIntersections) {
-          if (haversineDistance(vNode.latitude, vNode.longitude, real.latitude, real.longitude) <= 0.05) {
+          if (
+            haversineDistance(
+              vNode.latitude,
+              vNode.longitude,
+              real.latitude,
+              real.longitude,
+            ) <= 0.05
+          ) {
             return real.id;
           }
         }
@@ -350,7 +399,7 @@ async function buildGraph(): Promise<{
         road.end_intersection_id,
       ];
       const chainIds = rawChain
-        .map((id) => (id.startsWith('virtual_') ? substituteId(id) : id))
+        .map((id) => (id.startsWith("virtual_") ? substituteId(id) : id))
         .filter((id, i, arr) => i === 0 || arr[i - 1] !== id);
 
       // Distances for each segment: [0, d1, d2, ..., dN, totalLength]
@@ -359,7 +408,10 @@ async function buildGraph(): Promise<{
       for (let i = 0; i < chainIds.length - 1; i++) {
         const fromId = chainIds[i];
         const toId = chainIds[i + 1];
-        const segDist = Math.max(0.001, chainDistances[i + 1] - chainDistances[i]);
+        const segDist = Math.max(
+          0.001,
+          chainDistances[i + 1] - chainDistances[i],
+        );
         const segTime = segDist * timePerKm;
 
         // Create a virtual road segment for this edge
@@ -385,7 +437,9 @@ async function buildGraph(): Promise<{
             end_intersection_id: fromId,
           } as Road;
           if (!adjacencyList.has(toId)) adjacencyList.set(toId, []);
-          adjacencyList.get(toId)!.push({ road: reverseRoad, neighbor: fromId });
+          adjacencyList
+            .get(toId)!
+            .push({ road: reverseRoad, neighbor: fromId });
         }
       }
     } else {
@@ -414,7 +468,12 @@ async function buildGraph(): Promise<{
     }
   }
 
-  _graphCache = { intersections: intersectionMap, adjacencyList, roadPaths, builtAt: Date.now() };
+  _graphCache = {
+    intersections: intersectionMap,
+    adjacencyList,
+    roadPaths,
+    builtAt: Date.now(),
+  };
   return _graphCache;
 }
 
@@ -424,14 +483,15 @@ async function buildGraph(): Promise<{
 export async function findShortestPath(
   startIntersectionId: string,
   endIntersectionId: string,
-  optimizeFor: 'distance' | 'time' = 'distance',
+  optimizeFor: "distance" | "time" = "distance",
   prebuiltGraph?: {
     intersections: Map<string, Intersection>;
     adjacencyList: Map<string, Array<{ road: Road; neighbor: string }>>;
     roadPaths: Map<string, [number, number][]>;
-  }
+  },
 ): Promise<RouteResult> {
-  const { intersections, adjacencyList, roadPaths } = prebuiltGraph || await buildGraph();
+  const { intersections, adjacencyList, roadPaths } =
+    prebuiltGraph || (await buildGraph());
 
   const startIntersection = intersections.get(startIntersectionId);
   const endIntersection = intersections.get(endIntersectionId);
@@ -471,7 +531,7 @@ export async function findShortestPath(
       startIntersection.latitude,
       startIntersection.longitude,
       endIntersection.latitude,
-      endIntersection.longitude
+      endIntersection.longitude,
     ),
     parent: null,
     road: null,
@@ -506,7 +566,7 @@ export async function findShortestPath(
 
       // Calculate cost based on optimization preference
       const edgeCost =
-        optimizeFor === 'time'
+        optimizeFor === "time"
           ? road.estimated_time / 60 // Convert minutes to hours for consistency
           : road.distance;
 
@@ -523,7 +583,7 @@ export async function findShortestPath(
         neighborIntersection.latitude,
         neighborIntersection.longitude,
         endIntersection.latitude,
-        endIntersection.longitude
+        endIntersection.longitude,
       );
 
       // Create/update neighbor node
@@ -538,7 +598,9 @@ export async function findShortestPath(
       gScores.set(neighborId, tentativeGScore);
 
       // Add to open set if not already there
-      const existingIndex = openSet.findIndex((n) => n.intersection.id === neighborId);
+      const existingIndex = openSet.findIndex(
+        (n) => n.intersection.id === neighborId,
+      );
       if (existingIndex >= 0) {
         openSet[existingIndex] = neighborNode;
       } else {
@@ -564,8 +626,8 @@ export async function findShortestPath(
  */
 function reconstructPath(
   goalNode: PathNode,
-  optimizeFor: 'distance' | 'time',
-  roadPaths: Map<string, [number, number][]>
+  optimizeFor: "distance" | "time",
+  roadPaths: Map<string, [number, number][]>,
 ): RouteResult {
   const path: Intersection[] = [];
   const roads: Road[] = [];
@@ -611,7 +673,7 @@ function reconstructPath(
 
     // Only add step for real, named road transitions (skip internal virtual segments)
     steps.push({
-      instruction: `Take ${baseName} ${road.is_bidirectional ? '(two-way)' : '(one-way)'}`,
+      instruction: `Take ${baseName} ${road.is_bidirectional ? "(two-way)" : "(one-way)"}`,
       roadName: baseName,
       distance: segmentDistance,
       time: segmentTime,
@@ -631,7 +693,7 @@ function reconstructPath(
     const toNode = path[k + 1];
 
     // Get original road ID (strip _seg_N suffix from virtual segments)
-    const originalRoadId = road.id.replace(/_seg_\d+$/, '');
+    const originalRoadId = road.id.replace(/_seg_\d+$/, "");
     const fullPath = roadPaths.get(originalRoadId);
 
     if (fullPath && fullPath.length >= 2) {
@@ -644,7 +706,7 @@ function reconstructPath(
 
         // Convert back to [lat, lon]
         const slicedCoords = sliced.geometry.coordinates.map(
-          (c) => [c[1], c[0]] as [number, number]
+          (c) => [c[1], c[0]] as [number, number],
         );
 
         // Check if we need to reverse (route goes backward along this road)
@@ -652,10 +714,16 @@ function reconstructPath(
           const firstCoord = slicedCoords[0];
           const lastCoord = slicedCoords[slicedCoords.length - 1];
           const distFirstToFrom = haversineDistance(
-            firstCoord[0], firstCoord[1], fromNode.latitude, fromNode.longitude
+            firstCoord[0],
+            firstCoord[1],
+            fromNode.latitude,
+            fromNode.longitude,
           );
           const distLastToFrom = haversineDistance(
-            lastCoord[0], lastCoord[1], fromNode.latitude, fromNode.longitude
+            lastCoord[0],
+            lastCoord[1],
+            fromNode.latitude,
+            fromNode.longitude,
           );
           if (distLastToFrom < distFirstToFrom) {
             slicedCoords.reverse();
@@ -700,7 +768,7 @@ function reconstructPath(
  */
 export async function findNearestIntersection(
   latitude: number,
-  longitude: number
+  longitude: number,
 ): Promise<Intersection | null> {
   const result = await findNearestRoadNode(latitude, longitude);
   return result.intersection;
@@ -716,10 +784,14 @@ export async function calculateRoute(
   startLon: number,
   endLat: number,
   endLon: number,
-  optimizeFor: 'distance' | 'time' = 'distance'
+  optimizeFor: "distance" | "time" = "distance",
 ): Promise<RouteResult> {
   // Build the enriched graph with virtual nodes
-  const { intersections: allNodes, adjacencyList, roadPaths } = await buildGraph();
+  const {
+    intersections: allNodes,
+    adjacencyList,
+    roadPaths,
+  } = await buildGraph();
 
   // Find nearest nodes using the enriched graph (includes interpolated points)
   const startNode = await findNearestRoadNode(startLat, startLon, allNodes);
@@ -747,14 +819,16 @@ export async function calculateRoute(
         roads: [],
         totalDistance: directDist,
         estimatedTime: Math.max(1, Math.round((directDist / 5) * 60)),
-        steps: [{
-          instruction: 'Walk to destination',
-          roadName: 'Direct path',
-          distance: directDist,
-          time: Math.max(1, Math.round((directDist / 5) * 60)),
-          from: 'Starting Point',
-          to: 'Destination',
-        }],
+        steps: [
+          {
+            instruction: "Walk to destination",
+            roadName: "Direct path",
+            distance: directDist,
+            time: Math.max(1, Math.round((directDist / 5) * 60)),
+            from: "Starting Point",
+            to: "Destination",
+          },
+        ],
       };
     }
   }
@@ -764,7 +838,7 @@ export async function calculateRoute(
     startNode.intersection.id,
     endNode.intersection.id,
     optimizeFor,
-    { intersections: allNodes, adjacencyList, roadPaths }
+    { intersections: allNodes, adjacencyList, roadPaths },
   );
 
   if (!result.success) {
@@ -777,8 +851,8 @@ export async function calculateRoute(
   if (startNode.needsVirtualConnection) {
     const walkDistance = startNode.distance;
     virtualConnections.push({
-      type: 'start',
-      from: { lat: startLat, lon: startLon, name: 'Starting Point' },
+      type: "start",
+      from: { lat: startLat, lon: startLon, name: "Starting Point" },
       to: {
         lat: startNode.intersection.latitude,
         lon: startNode.intersection.longitude,
@@ -794,13 +868,13 @@ export async function calculateRoute(
   if (endNode.needsVirtualConnection) {
     const walkDistance = endNode.distance;
     virtualConnections.push({
-      type: 'end',
+      type: "end",
       from: {
         lat: endNode.intersection.latitude,
         lon: endNode.intersection.longitude,
         name: endNode.intersection.name,
       },
-      to: { lat: endLat, lon: endLon, name: 'Destination' },
+      to: { lat: endLat, lon: endLon, name: "Destination" },
       distance: walkDistance,
       isVirtual: true,
     });
@@ -824,11 +898,21 @@ export async function recalculateRoute(
   currentLon: number,
   destinationLat: number,
   destinationLon: number,
-  optimizeFor: 'distance' | 'time' = 'distance',
-  threshold: number = 0.1 // 100 meters off-course threshold
-): Promise<{ needsRecalculation: boolean; route?: RouteResult; offCourseDistance?: number }> {
+  optimizeFor: "distance" | "time" = "distance",
+  threshold: number = 0.1, // 100 meters off-course threshold
+): Promise<{
+  needsRecalculation: boolean;
+  route?: RouteResult;
+  offCourseDistance?: number;
+}> {
   // Calculate new route from current position
-  const newRoute = await calculateRoute(currentLat, currentLon, destinationLat, destinationLon, optimizeFor);
+  const newRoute = await calculateRoute(
+    currentLat,
+    currentLon,
+    destinationLat,
+    destinationLon,
+    optimizeFor,
+  );
 
   return {
     needsRecalculation: true,
@@ -845,8 +929,12 @@ export async function checkIfOffCourse(
   currentLon: number,
   plannedPath: Intersection[],
   plannedRoads: Road[],
-  threshold: number = 0.15 // 150 meters threshold
-): Promise<{ isOffCourse: boolean; distance: number; nearestRoadIndex: number }> {
+  threshold: number = 0.15, // 150 meters threshold
+): Promise<{
+  isOffCourse: boolean;
+  distance: number;
+  nearestRoadIndex: number;
+}> {
   let minDistance = Infinity;
   let nearestRoadIndex = -1;
 
@@ -855,7 +943,11 @@ export async function checkIfOffCourse(
     const road = plannedRoads[i];
     if (!road.path || !Array.isArray(road.path)) continue;
 
-    const { distance } = findNearestPointOnRoad(currentLat, currentLon, road.path);
+    const { distance } = findNearestPointOnRoad(
+      currentLat,
+      currentLon,
+      road.path,
+    );
 
     if (distance < minDistance) {
       minDistance = distance;

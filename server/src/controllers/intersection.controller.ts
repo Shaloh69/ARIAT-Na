@@ -1,8 +1,8 @@
-import { Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import { AuthRequest, AppError } from '../types';
-import { pool } from '../config/database';
-import { invalidateGraphCache } from '../services/pathfinding.service';
+import { Response } from "express";
+import { v4 as uuidv4 } from "uuid";
+import { AuthRequest, AppError } from "../types";
+import { pool } from "../config/database";
+import { invalidateGraphCache } from "../services/pathfinding.service";
 
 /**
  * Get all intersections
@@ -10,23 +10,24 @@ import { invalidateGraphCache } from '../services/pathfinding.service';
  */
 export const getIntersections = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
-  const { active = 'true', type } = req.query;
+  const { active = "true", type } = req.query;
 
   const conditions: string[] = [];
   const params: any[] = [];
 
-  if (active !== 'all') {
+  if (active !== "all") {
     // For intersections, we don't have is_active, so we just return all
   }
 
   if (type) {
-    conditions.push('point_type = ?');
+    conditions.push("point_type = ?");
     params.push(type);
   }
 
-  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const whereClause =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const sql = `
     SELECT * FROM intersections
@@ -48,17 +49,17 @@ export const getIntersections = async (
  */
 export const getIntersectionById = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
 
   const [intersections]: any = await pool.execute(
-    'SELECT * FROM intersections WHERE id = ?',
-    [id]
+    "SELECT * FROM intersections WHERE id = ?",
+    [id],
   );
 
   if (intersections.length === 0) {
-    throw new AppError('Intersection not found', 404);
+    throw new AppError("Intersection not found", 404);
   }
 
   res.json({
@@ -73,19 +74,19 @@ export const getIntersectionById = async (
  */
 export const createIntersection = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const {
     name,
     latitude,
     longitude,
-    point_type = 'intersection',
+    point_type = "intersection",
     address,
     destination_id,
   } = req.body;
 
   const intersectionId = uuidv4();
-  const isDestination = point_type === 'tourist_spot';
+  const isDestination = point_type === "tourist_spot";
 
   const sql = `
     INSERT INTO intersections (
@@ -107,14 +108,14 @@ export const createIntersection = async (
   ]);
 
   const [intersections]: any = await pool.execute(
-    'SELECT * FROM intersections WHERE id = ?',
-    [intersectionId]
+    "SELECT * FROM intersections WHERE id = ?",
+    [intersectionId],
   );
   invalidateGraphCache();
 
   res.status(201).json({
     success: true,
-    message: 'Intersection created successfully',
+    message: "Intersection created successfully",
     data: intersections[0],
   });
 };
@@ -125,30 +126,30 @@ export const createIntersection = async (
  */
 export const updateIntersection = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
   const updates = req.body;
 
   // Check if intersection exists
   const [existing]: any = await pool.execute(
-    'SELECT id FROM intersections WHERE id = ?',
-    [id]
+    "SELECT id FROM intersections WHERE id = ?",
+    [id],
   );
 
   if (existing.length === 0) {
-    throw new AppError('Intersection not found', 404);
+    throw new AppError("Intersection not found", 404);
   }
 
   // Build dynamic update query
   const allowedFields = [
-    'name',
-    'latitude',
-    'longitude',
-    'is_destination',
-    'destination_id',
-    'address',
-    'point_type',
+    "name",
+    "latitude",
+    "longitude",
+    "is_destination",
+    "destination_id",
+    "address",
+    "point_type",
   ];
 
   const updateFields: string[] = [];
@@ -162,26 +163,26 @@ export const updateIntersection = async (
   });
 
   if (updateFields.length === 0) {
-    throw new AppError('No valid fields to update', 400);
+    throw new AppError("No valid fields to update", 400);
   }
 
   const sql = `
     UPDATE intersections
-    SET ${updateFields.join(', ')}, updated_at = NOW()
+    SET ${updateFields.join(", ")}, updated_at = NOW()
     WHERE id = ?
   `;
 
   await pool.execute(sql, [...updateValues, id]);
 
   const [intersections]: any = await pool.execute(
-    'SELECT * FROM intersections WHERE id = ?',
-    [id]
+    "SELECT * FROM intersections WHERE id = ?",
+    [id],
   );
   invalidateGraphCache();
 
   res.json({
     success: true,
-    message: 'Intersection updated successfully',
+    message: "Intersection updated successfully",
     data: intersections[0],
   });
 };
@@ -192,23 +193,23 @@ export const updateIntersection = async (
  */
 export const deleteIntersection = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
 
   const [result]: any = await pool.execute(
-    'DELETE FROM intersections WHERE id = ?',
-    [id]
+    "DELETE FROM intersections WHERE id = ?",
+    [id],
   );
 
   if (result.affectedRows === 0) {
-    throw new AppError('Intersection not found', 404);
+    throw new AppError("Intersection not found", 404);
   }
   invalidateGraphCache();
 
   res.json({
     success: true,
-    message: 'Intersection deleted successfully',
+    message: "Intersection deleted successfully",
   });
 };
 
@@ -218,29 +219,29 @@ export const deleteIntersection = async (
  */
 export const getIntersectionsGeoJSON = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
-  const sql = 'SELECT * FROM intersections ORDER BY created_at DESC';
+  const sql = "SELECT * FROM intersections ORDER BY created_at DESC";
   const [intersections]: any = await pool.execute(sql);
 
   const features = intersections.map((intersection: any, index: number) => ({
-    type: 'Feature',
+    type: "Feature",
     properties: {
       name: intersection.name,
       id: intersection.id,
       isDestination: intersection.is_destination,
-      point_type: intersection.point_type || 'intersection',
+      point_type: intersection.point_type || "intersection",
       address: intersection.address,
     },
     geometry: {
-      type: 'Point',
+      type: "Point",
       coordinates: [intersection.longitude, intersection.latitude],
     },
     id: index + 1,
   }));
 
   const geojson = {
-    type: 'FeatureCollection',
+    type: "FeatureCollection",
     features,
   };
 

@@ -1,7 +1,7 @@
-import { Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import { AuthRequest, AppError, UserResponse, AdminResponse } from '../types';
-import { pool } from '../config/database';
+import { Response } from "express";
+import { v4 as uuidv4 } from "uuid";
+import { AuthRequest, AppError, UserResponse, AdminResponse } from "../types";
+import { pool } from "../config/database";
 import {
   hashPassword,
   comparePassword,
@@ -9,8 +9,8 @@ import {
   verifyRefreshToken,
   revokeRefreshToken,
   revokeAllUserTokens,
-} from '../utils/auth';
-import { logger } from '../utils/logger';
+} from "../utils/auth";
+import { logger } from "../utils/logger";
 
 // =====================================================
 // USER AUTHENTICATION (Flutter App)
@@ -22,18 +22,18 @@ import { logger } from '../utils/logger';
  */
 export const registerUser = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { email, password, full_name, phone_number } = req.body;
 
   // Check if user already exists
   const [existingUsers]: any = await pool.execute(
-    'SELECT id FROM users WHERE email = ?',
-    [email]
+    "SELECT id FROM users WHERE email = ?",
+    [email],
   );
 
   if (existingUsers.length > 0) {
-    throw new AppError('Email already registered', 409);
+    throw new AppError("Email already registered", 409);
   }
 
   // Hash password
@@ -60,20 +60,20 @@ export const registerUser = async (
   const tokens = await generateTokens({
     id: userId,
     email,
-    type: 'user',
+    type: "user",
   });
 
   // Fetch created user
   const [users]: any = await pool.execute(
-    'SELECT id, email, full_name, phone_number, is_verified, created_at FROM users WHERE id = ?',
-    [userId]
+    "SELECT id, email, full_name, phone_number, is_verified, created_at FROM users WHERE id = ?",
+    [userId],
   );
 
   const user: UserResponse = users[0];
 
   res.status(201).json({
     success: true,
-    message: 'User registered successfully',
+    message: "User registered successfully",
     data: {
       user,
       ...tokens,
@@ -87,45 +87,44 @@ export const registerUser = async (
  */
 export const loginUser = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { email, password } = req.body;
 
   // Find user
   const [users]: any = await pool.execute(
-    'SELECT * FROM users WHERE email = ?',
-    [email]
+    "SELECT * FROM users WHERE email = ?",
+    [email],
   );
 
   if (users.length === 0) {
-    throw new AppError('Invalid email or password', 401);
+    throw new AppError("Invalid email or password", 401);
   }
 
   const user = users[0];
 
   // Check if user is active
   if (!user.is_active) {
-    throw new AppError('Account has been deactivated', 403);
+    throw new AppError("Account has been deactivated", 403);
   }
 
   // Verify password
   const isPasswordValid = await comparePassword(password, user.password_hash);
 
   if (!isPasswordValid) {
-    throw new AppError('Invalid email or password', 401);
+    throw new AppError("Invalid email or password", 401);
   }
 
   // Update last login
-  await pool.execute(
-    'UPDATE users SET last_login_at = NOW() WHERE id = ?',
-    [user.id]
-  );
+  await pool.execute("UPDATE users SET last_login_at = NOW() WHERE id = ?", [
+    user.id,
+  ]);
 
   // Generate tokens
   const tokens = await generateTokens({
     id: user.id,
     email: user.email,
-    type: 'user',
+    type: "user",
   });
 
   const userResponse: UserResponse = {
@@ -140,7 +139,7 @@ export const loginUser = async (
 
   res.json({
     success: true,
-    message: 'Login successful',
+    message: "Login successful",
     data: {
       user: userResponse,
       ...tokens,
@@ -154,19 +153,19 @@ export const loginUser = async (
  */
 export const getCurrentUser = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   if (!req.user) {
-    throw new AppError('User not authenticated', 401);
+    throw new AppError("User not authenticated", 401);
   }
 
   const [users]: any = await pool.execute(
-    'SELECT id, email, full_name, phone_number, profile_image_url, is_verified, created_at FROM users WHERE id = ?',
-    [req.user.id]
+    "SELECT id, email, full_name, phone_number, profile_image_url, is_verified, created_at FROM users WHERE id = ?",
+    [req.user.id],
   );
 
   if (users.length === 0) {
-    throw new AppError('User not found', 404);
+    throw new AppError("User not found", 404);
   }
 
   res.json({
@@ -181,49 +180,52 @@ export const getCurrentUser = async (
  */
 export const updateCurrentUser = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   if (!req.user) {
-    throw new AppError('User not authenticated', 401);
+    throw new AppError("User not authenticated", 401);
   }
 
   const { full_name, phone_number } = req.body;
 
   if (!full_name && phone_number === undefined) {
-    throw new AppError('At least one field (full_name or phone_number) is required', 400);
+    throw new AppError(
+      "At least one field (full_name or phone_number) is required",
+      400,
+    );
   }
 
   const fields: string[] = [];
   const values: any[] = [];
 
   if (full_name !== undefined) {
-    fields.push('full_name = ?');
+    fields.push("full_name = ?");
     values.push(full_name);
   }
   if (phone_number !== undefined) {
-    fields.push('phone_number = ?');
+    fields.push("phone_number = ?");
     values.push(phone_number);
   }
 
   values.push(req.user.id);
 
   await pool.execute(
-    `UPDATE users SET ${fields.join(', ')}, updated_at = NOW() WHERE id = ?`,
-    values
+    `UPDATE users SET ${fields.join(", ")}, updated_at = NOW() WHERE id = ?`,
+    values,
   );
 
   const [users]: any = await pool.execute(
-    'SELECT id, email, full_name, phone_number, profile_image_url, is_verified, created_at FROM users WHERE id = ?',
-    [req.user.id]
+    "SELECT id, email, full_name, phone_number, profile_image_url, is_verified, created_at FROM users WHERE id = ?",
+    [req.user.id],
   );
 
   if (users.length === 0) {
-    throw new AppError('User not found', 404);
+    throw new AppError("User not found", 404);
   }
 
   res.json({
     success: true,
-    message: 'Profile updated successfully',
+    message: "Profile updated successfully",
     data: users[0],
   });
 };
@@ -238,47 +240,46 @@ export const updateCurrentUser = async (
  */
 export const loginAdmin = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { email, password } = req.body;
 
   // Find admin
   const [admins]: any = await pool.execute(
-    'SELECT * FROM admins WHERE email = ?',
-    [email]
+    "SELECT * FROM admins WHERE email = ?",
+    [email],
   );
 
   if (admins.length === 0) {
-    logger.warn('Admin login failed: email not found', { email });
-    throw new AppError('Invalid email or password', 401);
+    logger.warn("Admin login failed: email not found", { email });
+    throw new AppError("Invalid email or password", 401);
   }
 
   const admin = admins[0];
 
   // Check if admin is active
   if (!admin.is_active) {
-    throw new AppError('Account has been deactivated', 403);
+    throw new AppError("Account has been deactivated", 403);
   }
 
   // Verify password
   const isPasswordValid = await comparePassword(password, admin.password_hash);
 
   if (!isPasswordValid) {
-    logger.warn('Admin login failed: wrong password', { email });
-    throw new AppError('Invalid email or password', 401);
+    logger.warn("Admin login failed: wrong password", { email });
+    throw new AppError("Invalid email or password", 401);
   }
 
   // Update last login
-  await pool.execute(
-    'UPDATE admins SET last_login_at = NOW() WHERE id = ?',
-    [admin.id]
-  );
+  await pool.execute("UPDATE admins SET last_login_at = NOW() WHERE id = ?", [
+    admin.id,
+  ]);
 
   // Generate tokens
   const tokens = await generateTokens({
     id: admin.id,
     email: admin.email,
-    type: 'admin',
+    type: "admin",
     role: admin.role,
   });
 
@@ -294,7 +295,7 @@ export const loginAdmin = async (
 
   res.json({
     success: true,
-    message: 'Login successful',
+    message: "Login successful",
     data: {
       admin: adminResponse,
       ...tokens,
@@ -308,19 +309,19 @@ export const loginAdmin = async (
  */
 export const getCurrentAdmin = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   if (!req.user) {
-    throw new AppError('Admin not authenticated', 401);
+    throw new AppError("Admin not authenticated", 401);
   }
 
   const [admins]: any = await pool.execute(
-    'SELECT id, email, full_name, profile_image_url, role, is_default_password, created_at FROM admins WHERE id = ?',
-    [req.user.id]
+    "SELECT id, email, full_name, profile_image_url, role, is_default_password, created_at FROM admins WHERE id = ?",
+    [req.user.id],
   );
 
   if (admins.length === 0) {
-    throw new AppError('Admin not found', 404);
+    throw new AppError("Admin not found", 404);
   }
 
   res.json({
@@ -339,7 +340,7 @@ export const getCurrentAdmin = async (
  */
 export const refreshAccessToken = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { refreshToken } = req.body;
 
@@ -347,7 +348,7 @@ export const refreshAccessToken = async (
   const payload = await verifyRefreshToken(refreshToken);
 
   if (!payload) {
-    throw new AppError('Invalid or expired refresh token', 401);
+    throw new AppError("Invalid or expired refresh token", 401);
   }
 
   // Revoke old refresh token
@@ -358,7 +359,7 @@ export const refreshAccessToken = async (
 
   res.json({
     success: true,
-    message: 'Token refreshed successfully',
+    message: "Token refreshed successfully",
     data: tokens,
   });
 };
@@ -369,7 +370,7 @@ export const refreshAccessToken = async (
  */
 export const logout = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { refreshToken } = req.body;
 
@@ -379,7 +380,7 @@ export const logout = async (
 
   res.json({
     success: true,
-    message: 'Logged out successfully',
+    message: "Logged out successfully",
   });
 };
 
@@ -389,16 +390,16 @@ export const logout = async (
  */
 export const logoutAll = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   if (!req.user) {
-    throw new AppError('User not authenticated', 401);
+    throw new AppError("User not authenticated", 401);
   }
 
   await revokeAllUserTokens(req.user.id, req.user.type);
 
   res.json({
     success: true,
-    message: 'Logged out from all devices',
+    message: "Logged out from all devices",
   });
 };

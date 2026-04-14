@@ -4,14 +4,14 @@
  * - /admin     → admin presence & group chat
  */
 
-import { Server as HttpServer } from 'http';
-import { Server, Socket, Namespace } from 'socket.io';
-import { verifyAccessToken } from '../utils/auth';
-import { recalculateRoute, checkIfOffCourse } from './pathfinding.service';
-import { pool } from '../config/database';
-import { logger } from '../utils/logger';
-import { config } from '../config/env';
-import { v4 as uuidv4 } from 'uuid';
+import { Server as HttpServer } from "http";
+import { Server, Socket, Namespace } from "socket.io";
+import { verifyAccessToken } from "../utils/auth";
+import { recalculateRoute, checkIfOffCourse } from "./pathfinding.service";
+import { pool } from "../config/database";
+import { logger } from "../utils/logger";
+import { config } from "../config/env";
+import { v4 as uuidv4 } from "uuid";
 
 interface NavigationSession {
   userId: string;
@@ -19,7 +19,7 @@ interface NavigationSession {
   route: any;
   currentPosition: { lat: number; lon: number };
   destination: { lat: number; lon: number };
-  optimizeFor: 'distance' | 'time';
+  optimizeFor: "distance" | "time";
   lastUpdate: Date;
 }
 
@@ -53,7 +53,7 @@ let adminNs: Namespace;
 let usersWatchNs: Namespace | undefined;
 
 function broadcastToWatchers(event: string, data: unknown): void {
-  usersWatchNs?.to('watch:room').emit(event, data);
+  usersWatchNs?.to("watch:room").emit(event, data);
 }
 
 // Online admins map: adminId → { socketId, full_name, profile_image_url, role }
@@ -73,7 +73,7 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
   io = new Server(httpServer, {
     cors: {
       origin: config.cors.origin,
-      methods: ['GET', 'POST'],
+      methods: ["GET", "POST"],
       credentials: true,
     },
     pingTimeout: 60000,
@@ -83,22 +83,24 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
   // Authentication middleware
   io.use((socket, next) => {
     try {
-      const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace('Bearer ', '');
+      const token =
+        socket.handshake.auth.token ||
+        socket.handshake.headers.authorization?.replace("Bearer ", "");
 
       if (!token) {
-        return next(new Error('Authentication token required'));
+        return next(new Error("Authentication token required"));
       }
 
       const payload = verifyAccessToken(token);
       socket.data.user = payload;
       next();
     } catch (error) {
-      next(new Error('Invalid authentication token'));
+      next(new Error("Invalid authentication token"));
     }
   });
 
   // Connection handler
-  io.on('connection', async (socket: Socket) => {
+  io.on("connection", async (socket: Socket) => {
     logger.info(`WebSocket client connected: ${socket.id}`, {
       userId: socket.data.user?.id,
       userType: socket.data.user?.type,
@@ -110,12 +112,12 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
     }
 
     // ── Track mobile app users ───────────────────────────────────────────────
-    if (socket.data.user?.type === 'user') {
+    if (socket.data.user?.type === "user") {
       const userId: string = socket.data.user.id;
       try {
         const [rows]: any = await pool.execute(
-          'SELECT full_name, email, profile_image_url FROM users WHERE id = ? AND is_active = TRUE',
-          [userId]
+          "SELECT full_name, email, profile_image_url FROM users WHERE id = ? AND is_active = TRUE",
+          [userId],
         );
         if (rows.length > 0) {
           const { full_name, email, profile_image_url } = rows[0];
@@ -134,20 +136,27 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
             connected_at: new Date().toISOString(),
           };
           onlineUsers.set(userId, userEntry);
-          broadcastToWatchers('user:joined', userEntry);
+          broadcastToWatchers("user:joined", userEntry);
         }
       } catch (err) {
-        logger.error('[WS] Failed to register online user:', err);
+        logger.error("[WS] Failed to register online user:", err);
       }
     }
 
     // Handle navigation session start
-    socket.on('navigation:start', async (data) => {
+    socket.on("navigation:start", async (data) => {
       try {
-        const { sessionId, route, destination, optimizeFor = 'distance' } = data;
+        const {
+          sessionId,
+          route,
+          destination,
+          optimizeFor = "distance",
+        } = data;
 
         if (!sessionId || !route || !destination) {
-          socket.emit('navigation:error', { message: 'Missing required navigation data' });
+          socket.emit("navigation:error", {
+            message: "Missing required navigation data",
+          });
           return;
         }
 
@@ -165,52 +174,63 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
         activeSessions.set(sessionId, session);
         socket.join(`navigation:${sessionId}`);
 
-        logger.info(`Navigation session started: ${sessionId}`, { userId: socket.data.user.id });
+        logger.info(`Navigation session started: ${sessionId}`, {
+          userId: socket.data.user.id,
+        });
 
-        socket.emit('navigation:started', {
+        socket.emit("navigation:started", {
           sessionId,
-          message: 'Navigation session started successfully',
+          message: "Navigation session started successfully",
         });
       } catch (error) {
-        logger.error('Error starting navigation session:', error);
-        socket.emit('navigation:error', { message: 'Failed to start navigation session' });
+        logger.error("Error starting navigation session:", error);
+        socket.emit("navigation:error", {
+          message: "Failed to start navigation session",
+        });
       }
     });
 
     // ── Mobile: announce active itinerary ────────────────────────────────────
-    socket.on('user:set-itinerary', (data: { title: string; stopCount: number }) => {
-      const userId = socket.data.user?.id;
-      const entry = userId ? onlineUsers.get(userId) : undefined;
-      if (entry) {
-        entry.itinerary_title = data?.title ?? null;
-        entry.itinerary_stop_count = data?.stopCount ?? null;
-        broadcastToWatchers('user:itinerary', {
-          userId,
-          itinerary_title: entry.itinerary_title,
-          itinerary_stop_count: entry.itinerary_stop_count,
-        });
-      }
-    });
+    socket.on(
+      "user:set-itinerary",
+      (data: { title: string; stopCount: number }) => {
+        const userId = socket.data.user?.id;
+        const entry = userId ? onlineUsers.get(userId) : undefined;
+        if (entry) {
+          entry.itinerary_title = data?.title ?? null;
+          entry.itinerary_stop_count = data?.stopCount ?? null;
+          broadcastToWatchers("user:itinerary", {
+            userId,
+            itinerary_title: entry.itinerary_title,
+            itinerary_stop_count: entry.itinerary_stop_count,
+          });
+        }
+      },
+    );
 
     // Handle location updates
-    socket.on('navigation:location-update', async (data) => {
+    socket.on("navigation:location-update", async (data) => {
       try {
         const { sessionId, latitude, longitude, heading, speed } = data;
 
         if (!sessionId || latitude === undefined || longitude === undefined) {
-          socket.emit('navigation:error', { message: 'Invalid location data' });
+          socket.emit("navigation:error", { message: "Invalid location data" });
           return;
         }
 
         const session = activeSessions.get(sessionId);
 
         if (!session) {
-          socket.emit('navigation:error', { message: 'Navigation session not found' });
+          socket.emit("navigation:error", {
+            message: "Navigation session not found",
+          });
           return;
         }
 
         if (session.userId !== socket.data.user?.id) {
-          socket.emit('navigation:error', { message: 'Unauthorized session access' });
+          socket.emit("navigation:error", {
+            message: "Unauthorized session access",
+          });
           return;
         }
 
@@ -225,7 +245,7 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
           liveUser.lon = longitude;
           liveUser.heading = heading ?? null;
           liveUser.sessionId = sessionId;
-          broadcastToWatchers('user:location', {
+          broadcastToWatchers("user:location", {
             userId: socket.data.user.id,
             lat: latitude,
             lon: longitude,
@@ -241,11 +261,13 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
             longitude,
             session.route.path,
             session.route.roads,
-            0.15 // 150m threshold
+            0.15, // 150m threshold
           );
 
           if (offCourseCheck.isOffCourse) {
-            logger.info(`User off course in session ${sessionId}, recalculating...`);
+            logger.info(
+              `User off course in session ${sessionId}, recalculating...`,
+            );
 
             // Recalculate route
             const recalculation = await recalculateRoute(
@@ -253,29 +275,32 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
               longitude,
               session.destination.lat,
               session.destination.lon,
-              session.optimizeFor
+              session.optimizeFor,
             );
 
             if (recalculation.route && recalculation.route.success) {
               session.route = recalculation.route;
 
               // Notify user of route recalculation
-              io.to(`navigation:${sessionId}`).emit('navigation:route-recalculated', {
-                reason: 'off_course',
-                offCourseDistance: offCourseCheck.distance,
-                newRoute: {
-                  path: recalculation.route.path,
-                  roads: recalculation.route.roads,
-                  totalDistance: recalculation.route.totalDistance,
-                  estimatedTime: recalculation.route.estimatedTime,
-                  steps: recalculation.route.steps,
-                  virtualConnections: recalculation.route.virtualConnections,
+              io.to(`navigation:${sessionId}`).emit(
+                "navigation:route-recalculated",
+                {
+                  reason: "off_course",
+                  offCourseDistance: offCourseCheck.distance,
+                  newRoute: {
+                    path: recalculation.route.path,
+                    roads: recalculation.route.roads,
+                    totalDistance: recalculation.route.totalDistance,
+                    estimatedTime: recalculation.route.estimatedTime,
+                    steps: recalculation.route.steps,
+                    virtualConnections: recalculation.route.virtualConnections,
+                  },
                 },
-              });
+              );
             }
           } else {
             // User is on course, send progress update
-            io.to(`navigation:${sessionId}`).emit('navigation:progress', {
+            io.to(`navigation:${sessionId}`).emit("navigation:progress", {
               currentPosition: { latitude, longitude, heading, speed },
               distanceToNext: offCourseCheck.distance,
               nearestRoadIndex: offCourseCheck.nearestRoadIndex,
@@ -284,31 +309,37 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
           }
         }
       } catch (error) {
-        logger.error('Error processing location update:', error);
-        socket.emit('navigation:error', { message: 'Failed to process location update' });
+        logger.error("Error processing location update:", error);
+        socket.emit("navigation:error", {
+          message: "Failed to process location update",
+        });
       }
     });
 
     // Handle navigation instructions request
-    socket.on('navigation:get-next-instruction', (data) => {
+    socket.on("navigation:get-next-instruction", (data) => {
       try {
         const { sessionId } = data;
         const session = activeSessions.get(sessionId);
 
         if (!session || !session.route) {
-          socket.emit('navigation:error', { message: 'No active navigation session' });
+          socket.emit("navigation:error", {
+            message: "No active navigation session",
+          });
           return;
         }
 
         if (session.userId !== socket.data.user?.id) {
-          socket.emit('navigation:error', { message: 'Unauthorized session access' });
+          socket.emit("navigation:error", {
+            message: "Unauthorized session access",
+          });
           return;
         }
 
         // Send next instruction
         const steps = session.route.steps;
         if (steps && steps.length > 0) {
-          socket.emit('navigation:instruction', {
+          socket.emit("navigation:instruction", {
             currentStep: steps[0],
             remainingSteps: steps.length,
             totalDistance: session.route.totalDistance,
@@ -316,13 +347,15 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
           });
         }
       } catch (error) {
-        logger.error('Error getting next instruction:', error);
-        socket.emit('navigation:error', { message: 'Failed to get navigation instruction' });
+        logger.error("Error getting next instruction:", error);
+        socket.emit("navigation:error", {
+          message: "Failed to get navigation instruction",
+        });
       }
     });
 
     // Handle navigation session end
-    socket.on('navigation:end', (data) => {
+    socket.on("navigation:end", (data) => {
       try {
         const { sessionId } = data;
 
@@ -332,123 +365,147 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
           logger.info(`Navigation session ended: ${sessionId}`);
         }
 
-        socket.emit('navigation:ended', { sessionId });
+        socket.emit("navigation:ended", { sessionId });
       } catch (error) {
-        logger.error('Error ending navigation session:', error);
+        logger.error("Error ending navigation session:", error);
       }
     });
 
     // Handle disconnection
-    socket.on('disconnect', (reason) => {
+    socket.on("disconnect", (reason) => {
       logger.info(`WebSocket client disconnected: ${socket.id}`, { reason });
 
       // Remove from online users map and notify watchers
-      if (socket.data.user?.type === 'user') {
+      if (socket.data.user?.type === "user") {
         const userId: string = socket.data.user.id;
         onlineUsers.delete(userId);
-        broadcastToWatchers('user:left', { userId });
+        broadcastToWatchers("user:left", { userId });
       }
 
       // Clean up sessions for this user
       activeSessions.forEach((session, sessionId) => {
         if (session.userId === socket.data.user?.id) {
           // Don't immediately delete - keep for a few minutes in case of reconnection
-          setTimeout(() => {
-            if (activeSessions.has(sessionId)) {
-              activeSessions.delete(sessionId);
-              logger.info(`Cleaned up abandoned session: ${sessionId}`);
-            }
-          }, 5 * 60 * 1000); // 5 minutes
+          setTimeout(
+            () => {
+              if (activeSessions.has(sessionId)) {
+                activeSessions.delete(sessionId);
+                logger.info(`Cleaned up abandoned session: ${sessionId}`);
+              }
+            },
+            5 * 60 * 1000,
+          ); // 5 minutes
         }
       });
     });
   });
 
   // Clean up stale sessions periodically
-  setInterval(() => {
-    const now = new Date();
-    activeSessions.forEach((session, sessionId) => {
-      const timeSinceUpdate = now.getTime() - session.lastUpdate.getTime();
-      if (timeSinceUpdate > 30 * 60 * 1000) {
-        // 30 minutes
-        activeSessions.delete(sessionId);
-        logger.info(`Removed stale navigation session: ${sessionId}`);
-      }
-    });
-  }, 10 * 60 * 1000); // Every 10 minutes
+  setInterval(
+    () => {
+      const now = new Date();
+      activeSessions.forEach((session, sessionId) => {
+        const timeSinceUpdate = now.getTime() - session.lastUpdate.getTime();
+        if (timeSinceUpdate > 30 * 60 * 1000) {
+          // 30 minutes
+          activeSessions.delete(sessionId);
+          logger.info(`Removed stale navigation session: ${sessionId}`);
+        }
+      });
+    },
+    10 * 60 * 1000,
+  ); // Every 10 minutes
 
   // ─── Admin namespace: /admin ─────────────────────────────────────────────────
-  adminNs = io.of('/admin');
+  adminNs = io.of("/admin");
 
   // Auth middleware — admin only
   adminNs.use((socket, next) => {
     try {
       const token =
         socket.handshake.auth.token ||
-        socket.handshake.headers.authorization?.replace('Bearer ', '');
-      if (!token) return next(new Error('Authentication required'));
+        socket.handshake.headers.authorization?.replace("Bearer ", "");
+      if (!token) return next(new Error("Authentication required"));
       const payload = verifyAccessToken(token);
-      if (payload.type !== 'admin') return next(new Error('Admin access required'));
+      if (payload.type !== "admin")
+        return next(new Error("Admin access required"));
       socket.data.user = payload;
       next();
     } catch {
-      next(new Error('Invalid authentication token'));
+      next(new Error("Invalid authentication token"));
     }
   });
 
-  adminNs.on('connection', async (socket: Socket) => {
+  adminNs.on("connection", async (socket: Socket) => {
     const { id: adminId } = socket.data.user;
 
     // Fetch full admin profile for broadcast
     try {
       const [rows]: any = await pool.execute(
-        'SELECT full_name, profile_image_url, role FROM admins WHERE id = ? AND is_active = TRUE',
-        [adminId]
+        "SELECT full_name, profile_image_url, role FROM admins WHERE id = ? AND is_active = TRUE",
+        [adminId],
       );
-      if (rows.length === 0) { socket.disconnect(); return; }
+      if (rows.length === 0) {
+        socket.disconnect();
+        return;
+      }
 
       const { full_name, profile_image_url, role } = rows[0];
 
       // Register as online
-      onlineAdmins.set(adminId, { socketId: socket.id, adminId, full_name, profile_image_url, role });
+      onlineAdmins.set(adminId, {
+        socketId: socket.id,
+        adminId,
+        full_name,
+        profile_image_url,
+        role,
+      });
 
       await pool.execute(
-        'UPDATE admins SET is_online = TRUE, last_seen_at = NOW() WHERE id = ?',
-        [adminId]
+        "UPDATE admins SET is_online = TRUE, last_seen_at = NOW() WHERE id = ?",
+        [adminId],
       );
 
-      socket.join('admin:room');
+      socket.join("admin:room");
       logger.info(`[ADMIN WS] ${full_name} connected`);
 
       // Send current online list to the newly connected admin
-      socket.emit('admin:online-list', { admins: Array.from(onlineAdmins.values()) });
-
-      // Broadcast join to everyone else
-      socket.to('admin:room').emit('admin:joined', {
-        adminId, full_name, profile_image_url, role,
+      socket.emit("admin:online-list", {
+        admins: Array.from(onlineAdmins.values()),
       });
 
+      // Broadcast join to everyone else
+      socket.to("admin:room").emit("admin:joined", {
+        adminId,
+        full_name,
+        profile_image_url,
+        role,
+      });
     } catch (err) {
-      logger.error('[ADMIN WS] Error on connect:', err);
+      logger.error("[ADMIN WS] Error on connect:", err);
       socket.disconnect();
       return;
     }
 
     // ── Heartbeat — keep last_seen_at fresh ──────────────────────────────────
-    socket.on('admin:heartbeat', async () => {
+    socket.on("admin:heartbeat", async () => {
       try {
         await pool.execute(
-          'UPDATE admins SET last_seen_at = NOW() WHERE id = ?',
-          [adminId]
+          "UPDATE admins SET last_seen_at = NOW() WHERE id = ?",
+          [adminId],
         );
-      } catch { /* non-fatal */ }
+      } catch {
+        /* non-fatal */
+      }
     });
 
     // ── Group chat message ────────────────────────────────────────────────────
-    socket.on('admin:chat', async (data: { message: string }) => {
-      const text = (data?.message ?? '').trim();
+    socket.on("admin:chat", async (data: { message: string }) => {
+      const text = (data?.message ?? "").trim();
       if (!text || text.length > 2000) {
-        socket.emit('admin:error', { message: 'Message must be 1–2000 characters' });
+        socket.emit("admin:error", {
+          message: "Message must be 1–2000 characters",
+        });
         return;
       }
 
@@ -457,72 +514,76 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
         const admin = onlineAdmins.get(adminId);
 
         await pool.execute(
-          'INSERT INTO admin_chat_messages (id, admin_id, message) VALUES (?, ?, ?)',
-          [msgId, adminId, text]
+          "INSERT INTO admin_chat_messages (id, admin_id, message) VALUES (?, ?, ?)",
+          [msgId, adminId, text],
         );
 
         const payload = {
           id: msgId,
           admin_id: adminId,
-          admin_name: admin?.full_name ?? 'Unknown',
+          admin_name: admin?.full_name ?? "Unknown",
           profile_image_url: admin?.profile_image_url ?? null,
           message: text,
           created_at: new Date().toISOString(),
         };
 
         // Broadcast to all admins in the room (including sender)
-        adminNs.to('admin:room').emit('admin:chat', payload);
-
+        adminNs.to("admin:room").emit("admin:chat", payload);
       } catch (err) {
-        logger.error('[ADMIN WS] Chat save error:', err);
-        socket.emit('admin:error', { message: 'Failed to send message' });
+        logger.error("[ADMIN WS] Chat save error:", err);
+        socket.emit("admin:error", { message: "Failed to send message" });
       }
     });
 
     // ── Disconnect ────────────────────────────────────────────────────────────
-    socket.on('disconnect', async (reason) => {
+    socket.on("disconnect", async (reason) => {
       onlineAdmins.delete(adminId);
       try {
         await pool.execute(
-          'UPDATE admins SET is_online = FALSE, last_seen_at = NOW() WHERE id = ?',
-          [adminId]
+          "UPDATE admins SET is_online = FALSE, last_seen_at = NOW() WHERE id = ?",
+          [adminId],
         );
-      } catch { /* non-fatal */ }
+      } catch {
+        /* non-fatal */
+      }
 
-      socket.to('admin:room').emit('admin:left', { adminId });
+      socket.to("admin:room").emit("admin:left", { adminId });
       logger.info(`[ADMIN WS] ${adminId} disconnected (${reason})`);
     });
   });
 
   // ─── /users-watch namespace — admin clients watch live user positions ────────
-  usersWatchNs = io.of('/users-watch');
+  usersWatchNs = io.of("/users-watch");
 
   usersWatchNs.use((socket, next) => {
     try {
       const token =
         socket.handshake.auth.token ||
-        socket.handshake.headers.authorization?.replace('Bearer ', '');
-      if (!token) return next(new Error('Authentication required'));
+        socket.handshake.headers.authorization?.replace("Bearer ", "");
+      if (!token) return next(new Error("Authentication required"));
       const payload = verifyAccessToken(token);
-      if (payload.type !== 'admin') return next(new Error('Admin access required'));
+      if (payload.type !== "admin")
+        return next(new Error("Admin access required"));
       socket.data.user = payload;
       next();
     } catch {
-      next(new Error('Invalid authentication token'));
+      next(new Error("Invalid authentication token"));
     }
   });
 
-  usersWatchNs.on('connection', (socket: Socket) => {
-    socket.join('watch:room');
-    socket.emit('user:active-list', { users: Array.from(onlineUsers.values()) });
+  usersWatchNs.on("connection", (socket: Socket) => {
+    socket.join("watch:room");
+    socket.emit("user:active-list", {
+      users: Array.from(onlineUsers.values()),
+    });
     logger.info(`[USERS-WATCH] Admin ${socket.data.user?.id} connected`);
 
-    socket.on('disconnect', () => {
+    socket.on("disconnect", () => {
       logger.info(`[USERS-WATCH] Admin ${socket.data.user?.id} disconnected`);
     });
   });
 
-  logger.info('WebSocket server initialized');
+  logger.info("WebSocket server initialized");
   return io;
 }
 
@@ -531,7 +592,7 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
  */
 export function getIO(): Server {
   if (!io) {
-    throw new Error('WebSocket server not initialized');
+    throw new Error("WebSocket server not initialized");
   }
   return io;
 }
@@ -548,7 +609,11 @@ export function sendToUser(userId: string, event: string, data: any): void {
 /**
  * Send real-time update to navigation session
  */
-export function sendToSession(sessionId: string, event: string, data: any): void {
+export function sendToSession(
+  sessionId: string,
+  event: string,
+  data: any,
+): void {
   if (io) {
     io.to(`navigation:${sessionId}`).emit(event, data);
   }

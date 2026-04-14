@@ -1,35 +1,46 @@
-import { Request, Response } from 'express';
+import { Request, Response } from "express";
 import {
   findShortestPath,
   calculateRoute,
   findNearestIntersection,
   recalculateRoute,
   checkIfOffCourse,
-} from '../services/pathfinding.service';
-import { calculateMultiModalRoute } from '../services/multimodal.service';
-import { AuthRequest } from '../types';
+} from "../services/pathfinding.service";
+import { calculateMultiModalRoute } from "../services/multimodal.service";
+import { AuthRequest } from "../types";
 
 /**
  * Calculate route between two intersections
  */
-export const calculateRouteByIntersections = async (req: AuthRequest, res: Response): Promise<void> => {
+export const calculateRouteByIntersections = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
   try {
-    const { start_intersection_id, end_intersection_id, optimize_for = 'distance' } = req.body;
+    const {
+      start_intersection_id,
+      end_intersection_id,
+      optimize_for = "distance",
+    } = req.body;
 
     if (!start_intersection_id || !end_intersection_id) {
       res.status(400).json({
         success: false,
-        message: 'start_intersection_id and end_intersection_id are required',
+        message: "start_intersection_id and end_intersection_id are required",
       });
       return;
     }
 
-    const result = await findShortestPath(start_intersection_id, end_intersection_id, optimize_for);
+    const result = await findShortestPath(
+      start_intersection_id,
+      end_intersection_id,
+      optimize_for,
+    );
 
     if (!result.success) {
       res.status(404).json({
         success: false,
-        message: 'No route found between the specified intersections',
+        message: "No route found between the specified intersections",
       });
       return;
     }
@@ -48,10 +59,10 @@ export const calculateRouteByIntersections = async (req: AuthRequest, res: Respo
       },
     });
   } catch (error) {
-    console.error('Error calculating route:', error);
+    console.error("Error calculating route:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to calculate route',
+      message: "Failed to calculate route",
     });
   }
 };
@@ -59,17 +70,32 @@ export const calculateRouteByIntersections = async (req: AuthRequest, res: Respo
 /**
  * Calculate route between two GPS coordinates
  */
-export const calculateRouteByCoordinates = async (req: AuthRequest, res: Response): Promise<void> => {
+export const calculateRouteByCoordinates = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
   try {
-    const { start_lat, start_lon, end_lat, end_lon, optimize_for = 'distance' } = req.body;
+    const {
+      start_lat,
+      start_lon,
+      end_lat,
+      end_lon,
+      optimize_for = "distance",
+    } = req.body;
 
-    if (start_lat === undefined || start_lat === null ||
-        start_lon === undefined || start_lon === null ||
-        end_lat === undefined || end_lat === null ||
-        end_lon === undefined || end_lon === null) {
+    if (
+      start_lat === undefined ||
+      start_lat === null ||
+      start_lon === undefined ||
+      start_lon === null ||
+      end_lat === undefined ||
+      end_lat === null ||
+      end_lon === undefined ||
+      end_lon === null
+    ) {
       res.status(400).json({
         success: false,
-        message: 'start_lat, start_lon, end_lat, and end_lon are required',
+        message: "start_lat, start_lon, end_lat, and end_lon are required",
       });
       return;
     }
@@ -79,13 +105,14 @@ export const calculateRouteByCoordinates = async (req: AuthRequest, res: Respons
       parseFloat(start_lon),
       parseFloat(end_lat),
       parseFloat(end_lon),
-      optimize_for
+      optimize_for,
     );
 
     if (!result.success) {
       res.status(404).json({
         success: false,
-        message: 'No route found between the specified coordinates. Make sure there are roads connecting the start and destination areas.',
+        message:
+          "No route found between the specified coordinates. Make sure there are roads connecting the start and destination areas.",
       });
       return;
     }
@@ -104,10 +131,11 @@ export const calculateRouteByCoordinates = async (req: AuthRequest, res: Respons
       },
     });
   } catch (error) {
-    console.error('Error calculating route:', error);
+    console.error("Error calculating route:", error);
     res.status(500).json({
       success: false,
-      message: 'Route calculation failed. Please check that intersections and roads exist in the database.',
+      message:
+        "Route calculation failed. Please check that intersections and roads exist in the database.",
     });
   }
 };
@@ -115,24 +143,30 @@ export const calculateRouteByCoordinates = async (req: AuthRequest, res: Respons
 /**
  * Find nearest intersection to GPS coordinates
  */
-export const getNearestIntersection = async (req: Request, res: Response): Promise<void> => {
+export const getNearestIntersection = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const { latitude, longitude } = req.query;
 
     if (!latitude || !longitude) {
       res.status(400).json({
         success: false,
-        message: 'latitude and longitude are required',
+        message: "latitude and longitude are required",
       });
       return;
     }
 
-    const intersection = await findNearestIntersection(parseFloat(latitude as string), parseFloat(longitude as string));
+    const intersection = await findNearestIntersection(
+      parseFloat(latitude as string),
+      parseFloat(longitude as string),
+    );
 
     if (!intersection) {
       res.status(404).json({
         success: false,
-        message: 'No intersections found in the database',
+        message: "No intersections found in the database",
       });
       return;
     }
@@ -142,10 +176,10 @@ export const getNearestIntersection = async (req: Request, res: Response): Promi
       data: intersection,
     });
   } catch (error) {
-    console.error('Error finding nearest intersection:', error);
+    console.error("Error finding nearest intersection:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to find nearest intersection',
+      message: "Failed to find nearest intersection",
     });
   }
 };
@@ -153,14 +187,25 @@ export const getNearestIntersection = async (req: Request, res: Response): Promi
 /**
  * Recalculate route from current position (for off-course scenarios)
  */
-export const recalculateRouteFromCurrent = async (req: AuthRequest, res: Response): Promise<void> => {
+export const recalculateRouteFromCurrent = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
   try {
-    const { current_lat, current_lon, destination_lat, destination_lon, optimize_for = 'distance', threshold = 0.1 } = req.body;
+    const {
+      current_lat,
+      current_lon,
+      destination_lat,
+      destination_lon,
+      optimize_for = "distance",
+      threshold = 0.1,
+    } = req.body;
 
     if (!current_lat || !current_lon || !destination_lat || !destination_lon) {
       res.status(400).json({
         success: false,
-        message: 'current_lat, current_lon, destination_lat, and destination_lon are required',
+        message:
+          "current_lat, current_lon, destination_lat, and destination_lon are required",
       });
       return;
     }
@@ -171,13 +216,13 @@ export const recalculateRouteFromCurrent = async (req: AuthRequest, res: Respons
       parseFloat(destination_lat),
       parseFloat(destination_lon),
       optimize_for,
-      parseFloat(threshold)
+      parseFloat(threshold),
     );
 
     if (!result.route || !result.route.success) {
       res.status(404).json({
         success: false,
-        message: 'Could not recalculate route from current position',
+        message: "Could not recalculate route from current position",
       });
       return;
     }
@@ -200,10 +245,10 @@ export const recalculateRouteFromCurrent = async (req: AuthRequest, res: Respons
       },
     });
   } catch (error) {
-    console.error('Error recalculating route:', error);
+    console.error("Error recalculating route:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to recalculate route',
+      message: "Failed to recalculate route",
     });
   }
 };
@@ -212,26 +257,55 @@ export const recalculateRouteFromCurrent = async (req: AuthRequest, res: Respons
  * Calculate multi-modal route (bus, taxi, ferry, walk, etc.)
  * POST /routes/calculate-multimodal
  */
-export const calculateMultiModalRouteHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+export const calculateMultiModalRouteHandler = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
   try {
-    const { start_lat, start_lon, end_lat, end_lon, transport_mode, optimize_for = 'distance' } = req.body;
+    const {
+      start_lat,
+      start_lon,
+      end_lat,
+      end_lon,
+      transport_mode,
+      optimize_for = "distance",
+    } = req.body;
 
-    if (start_lat === undefined || start_lat === null ||
-        start_lon === undefined || start_lon === null ||
-        end_lat === undefined || end_lat === null ||
-        end_lon === undefined || end_lon === null) {
+    if (
+      start_lat === undefined ||
+      start_lat === null ||
+      start_lon === undefined ||
+      start_lon === null ||
+      end_lat === undefined ||
+      end_lat === null ||
+      end_lon === undefined ||
+      end_lon === null
+    ) {
       res.status(400).json({
         success: false,
-        message: 'start_lat, start_lon, end_lat, and end_lon are required',
+        message: "start_lat, start_lon, end_lat, and end_lon are required",
       });
       return;
     }
 
-    const validModes = ['walk', 'tricycle', 'jeepney', 'bus', 'bus_ac', 'taxi', 'private_car', 'hired_van', 'motorbike', 'habal_habal', 'ferry', 'bus_commute'];
+    const validModes = [
+      "walk",
+      "tricycle",
+      "jeepney",
+      "bus",
+      "bus_ac",
+      "taxi",
+      "private_car",
+      "hired_van",
+      "motorbike",
+      "habal_habal",
+      "ferry",
+      "bus_commute",
+    ];
     if (!transport_mode || !validModes.includes(transport_mode)) {
       res.status(400).json({
         success: false,
-        message: `transport_mode is required and must be one of: ${validModes.join(', ')}`,
+        message: `transport_mode is required and must be one of: ${validModes.join(", ")}`,
       });
       return;
     }
@@ -242,7 +316,7 @@ export const calculateMultiModalRouteHandler = async (req: AuthRequest, res: Res
       parseFloat(end_lat),
       parseFloat(end_lon),
       transport_mode,
-      optimize_for
+      optimize_for,
     );
 
     res.json({
@@ -250,10 +324,10 @@ export const calculateMultiModalRouteHandler = async (req: AuthRequest, res: Res
       data: result,
     });
   } catch (error) {
-    console.error('Error calculating multi-modal route:', error);
+    console.error("Error calculating multi-modal route:", error);
     res.status(500).json({
       success: false,
-      message: 'Multi-modal route calculation failed.',
+      message: "Multi-modal route calculation failed.",
     });
   }
 };
@@ -261,14 +335,24 @@ export const calculateMultiModalRouteHandler = async (req: AuthRequest, res: Res
 /**
  * Check if user is off course
  */
-export const checkOffCourse = async (req: AuthRequest, res: Response): Promise<void> => {
+export const checkOffCourse = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
   try {
-    const { current_lat, current_lon, planned_path, planned_roads, threshold = 0.15 } = req.body;
+    const {
+      current_lat,
+      current_lon,
+      planned_path,
+      planned_roads,
+      threshold = 0.15,
+    } = req.body;
 
     if (!current_lat || !current_lon || !planned_path || !planned_roads) {
       res.status(400).json({
         success: false,
-        message: 'current_lat, current_lon, planned_path, and planned_roads are required',
+        message:
+          "current_lat, current_lon, planned_path, and planned_roads are required",
       });
       return;
     }
@@ -278,7 +362,7 @@ export const checkOffCourse = async (req: AuthRequest, res: Response): Promise<v
       parseFloat(current_lon),
       planned_path,
       planned_roads,
-      parseFloat(threshold)
+      parseFloat(threshold),
     );
 
     res.json({
@@ -291,10 +375,10 @@ export const checkOffCourse = async (req: AuthRequest, res: Response): Promise<v
       },
     });
   } catch (error) {
-    console.error('Error checking off course:', error);
+    console.error("Error checking off course:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to check off course status',
+      message: "Failed to check off course status",
     });
   }
 };

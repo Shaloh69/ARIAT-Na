@@ -1,7 +1,7 @@
-import { Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import { AuthRequest, AppError, Destination } from '../types';
-import { pool } from '../config/database';
+import { Response } from "express";
+import { v4 as uuidv4 } from "uuid";
+import { AuthRequest, AppError, Destination } from "../types";
+import { pool } from "../config/database";
 
 /**
  * Safely parse a MySQL JSON column value.
@@ -10,8 +10,8 @@ import { pool } from '../config/database';
  */
 function safeJsonParse(value: any, fallback: any = null): any {
   if (value === null || value === undefined) return fallback;
-  if (typeof value === 'object') return value; // Already parsed by mysql2
-  if (typeof value === 'string') {
+  if (typeof value === "object") return value; // Already parsed by mysql2
+  if (typeof value === "string") {
     try {
       return JSON.parse(value);
     } catch {
@@ -29,25 +29,25 @@ function formatDestination(dest: any) {
   // Normalize all numeric DECIMAL fields so Flutter (and any other consumer)
   // receives proper JSON numbers, not strings.
   const toNum = (v: any, fallback = 0): number =>
-    v !== null && v !== undefined && v !== '' ? Number(v) : fallback;
+    v !== null && v !== undefined && v !== "" ? Number(v) : fallback;
 
   return {
     ...dest,
     // Coordinate & metric DECIMAL columns
-    latitude:              toNum(dest.latitude),
-    longitude:             toNum(dest.longitude),
-    rating:                toNum(dest.rating),
-    popularity_score:      toNum(dest.popularity_score),
-    entrance_fee_local:    toNum(dest.entrance_fee_local),
-    entrance_fee_foreign:  toNum(dest.entrance_fee_foreign),
+    latitude: toNum(dest.latitude),
+    longitude: toNum(dest.longitude),
+    rating: toNum(dest.rating),
+    popularity_score: toNum(dest.popularity_score),
+    entrance_fee_local: toNum(dest.entrance_fee_local),
+    entrance_fee_foreign: toNum(dest.entrance_fee_foreign),
     // JSON columns (may arrive as string or already parsed object)
-    images:                safeJsonParse(dest.images, []),
-    menu_images:           safeJsonParse(dest.menu_images, []),
-    operating_hours:       safeJsonParse(dest.operating_hours, null),
-    amenities:             safeJsonParse(dest.amenities, []),
-    tags:                  safeJsonParse(dest.tags, []),
-    cuisine_types:         safeJsonParse(dest.cuisine_types, []),
-    service_types:         safeJsonParse(dest.service_types, []),
+    images: safeJsonParse(dest.images, []),
+    menu_images: safeJsonParse(dest.menu_images, []),
+    operating_hours: safeJsonParse(dest.operating_hours, null),
+    amenities: safeJsonParse(dest.amenities, []),
+    tags: safeJsonParse(dest.tags, []),
+    cuisine_types: safeJsonParse(dest.cuisine_types, []),
+    service_types: safeJsonParse(dest.service_types, []),
     accommodation_pricing: safeJsonParse(dest.accommodation_pricing, null),
   };
 }
@@ -58,7 +58,7 @@ function formatDestination(dest: any) {
  */
 export const getDestinations = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const {
     page = 1,
@@ -67,7 +67,7 @@ export const getDestinations = async (
     featured,
     minRating,
     q,
-    active = 'true',
+    active = "true",
     cluster,
     municipality,
     tags,
@@ -80,62 +80,68 @@ export const getDestinations = async (
   const params: any[] = [];
 
   // Build WHERE clause
-  if (active === 'true') {
-    conditions.push('d.is_active = ?');
+  if (active === "true") {
+    conditions.push("d.is_active = ?");
     params.push(true);
   }
 
   if (category) {
-    conditions.push('d.category_id = ?');
+    conditions.push("d.category_id = ?");
     params.push(category);
   }
 
-  if (featured === 'true') {
-    conditions.push('d.is_featured = ?');
+  if (featured === "true") {
+    conditions.push("d.is_featured = ?");
     params.push(true);
   }
 
   if (minRating) {
-    conditions.push('d.rating >= ?');
+    conditions.push("d.rating >= ?");
     params.push(Number(minRating));
   }
 
   if (q) {
     // Use LIKE search — works without a FULLTEXT index and is sufficient at this scale
-    conditions.push('(d.name LIKE ? OR d.description LIKE ? OR d.address LIKE ? OR d.municipality LIKE ?)');
+    conditions.push(
+      "(d.name LIKE ? OR d.description LIKE ? OR d.address LIKE ? OR d.municipality LIKE ?)",
+    );
     const term = `%${q}%`;
     params.push(term, term, term, term);
   }
 
   if (cluster) {
-    conditions.push('d.cluster_id = ?');
+    conditions.push("d.cluster_id = ?");
     params.push(cluster);
   }
 
   if (municipality) {
-    conditions.push('d.municipality = ?');
+    conditions.push("d.municipality = ?");
     params.push(municipality);
   }
 
   if (tags) {
-    const tagList = String(tags).split(',').map((t) => t.trim()).filter(Boolean);
+    const tagList = String(tags)
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
     tagList.forEach((tag) => {
-      conditions.push('JSON_CONTAINS(d.tags, JSON_QUOTE(?))');
+      conditions.push("JSON_CONTAINS(d.tags, JSON_QUOTE(?))");
       params.push(tag);
     });
   }
 
   if (budget_level) {
-    conditions.push('d.budget_level = ?');
+    conditions.push("d.budget_level = ?");
     params.push(budget_level);
   }
 
-  if (family_friendly === 'true') {
-    conditions.push('d.family_friendly = ?');
+  if (family_friendly === "true") {
+    conditions.push("d.family_friendly = ?");
     params.push(true);
   }
 
-  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const whereClause =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   // Get total count
   const countSql = `
@@ -159,7 +165,11 @@ export const getDestinations = async (
     LIMIT ? OFFSET ?
   `;
 
-  const [destinations]: any = await pool.execute(sql, [...params, String(Number(limit)), String(offset)]);
+  const [destinations]: any = await pool.execute(sql, [
+    ...params,
+    String(Number(limit)),
+    String(offset),
+  ]);
 
   const formattedDestinations = destinations.map(formatDestination);
 
@@ -181,7 +191,7 @@ export const getDestinations = async (
  */
 export const getDestinationById = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
 
@@ -198,7 +208,7 @@ export const getDestinationById = async (
   const [destinations]: any = await pool.execute(sql, [id]);
 
   if (destinations.length === 0) {
-    throw new AppError('Destination not found', 404);
+    throw new AppError("Destination not found", 404);
   }
 
   const destination = destinations[0];
@@ -221,7 +231,13 @@ export const getDestinationById = async (
      HAVING distance_km < ?
      ORDER BY distance_km ASC
      LIMIT 6`,
-    [destination.latitude, destination.longitude, destination.latitude, id, NEARBY_RADIUS_KM]
+    [
+      destination.latitude,
+      destination.longitude,
+      destination.latitude,
+      id,
+      NEARBY_RADIUS_KM,
+    ],
   );
 
   const nearby_places = (nearbyRows as any[]).map((n: any) => ({
@@ -241,7 +257,7 @@ export const getDestinationById = async (
  */
 export const createDestination = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const {
     name,
@@ -260,7 +276,7 @@ export const createDestination = async (
     family_friendly = false,
     cluster_id,
     municipality,
-    budget_level = 'mid',
+    budget_level = "mid",
     contact_phone,
     contact_email,
     website_url,
@@ -274,49 +290,77 @@ export const createDestination = async (
 
   // Validate required fields
   if (!name || !String(name).trim()) {
-    throw new AppError('Destination name is required', 400);
+    throw new AppError("Destination name is required", 400);
   }
   if (!category_id) {
-    throw new AppError('Category ID is required', 400);
+    throw new AppError("Category ID is required", 400);
   }
   if (latitude === undefined || longitude === undefined) {
-    throw new AppError('Latitude and longitude are required', 400);
+    throw new AppError("Latitude and longitude are required", 400);
   }
 
   // Handle images/amenities — could arrive as string or array
   let images = req.body.images;
-  if (typeof images === 'string') {
-    try { images = JSON.parse(images); } catch { images = null; }
+  if (typeof images === "string") {
+    try {
+      images = JSON.parse(images);
+    } catch {
+      images = null;
+    }
   }
 
   let amenities = req.body.amenities;
-  if (typeof amenities === 'string') {
-    try { amenities = JSON.parse(amenities); } catch { amenities = null; }
+  if (typeof amenities === "string") {
+    try {
+      amenities = JSON.parse(amenities);
+    } catch {
+      amenities = null;
+    }
   }
 
   let menu_images = req.body.menu_images;
-  if (typeof menu_images === 'string') {
-    try { menu_images = JSON.parse(menu_images); } catch { menu_images = null; }
+  if (typeof menu_images === "string") {
+    try {
+      menu_images = JSON.parse(menu_images);
+    } catch {
+      menu_images = null;
+    }
   }
 
   let cuisine_types = req.body.cuisine_types;
-  if (typeof cuisine_types === 'string') {
-    try { cuisine_types = JSON.parse(cuisine_types); } catch { cuisine_types = null; }
+  if (typeof cuisine_types === "string") {
+    try {
+      cuisine_types = JSON.parse(cuisine_types);
+    } catch {
+      cuisine_types = null;
+    }
   }
 
   let service_types = req.body.service_types;
-  if (typeof service_types === 'string') {
-    try { service_types = JSON.parse(service_types); } catch { service_types = null; }
+  if (typeof service_types === "string") {
+    try {
+      service_types = JSON.parse(service_types);
+    } catch {
+      service_types = null;
+    }
   }
 
   let tags = req.body.tags;
-  if (typeof tags === 'string') {
-    try { tags = JSON.parse(tags); } catch { tags = null; }
+  if (typeof tags === "string") {
+    try {
+      tags = JSON.parse(tags);
+    } catch {
+      tags = null;
+    }
   }
 
   let accommodation_pricing = req.body.accommodation_pricing;
-  if (typeof accommodation_pricing === 'string') {
-    try { accommodation_pricing = JSON.parse(accommodation_pricing); } catch { accommodation_pricing = null; }
+  if (typeof accommodation_pricing === "string") {
+    try {
+      accommodation_pricing = JSON.parse(accommodation_pricing);
+    } catch {
+      accommodation_pricing = null;
+    }
   }
 
   const destinationId = uuidv4();
@@ -367,28 +411,31 @@ export const createDestination = async (
       tags ? JSON.stringify(tags) : null,
       cluster_id || null,
       municipality || null,
-      budget_level || 'mid',
+      budget_level || "mid",
       family_friendly ? 1 : 0,
       is_island ? 1 : 0,
       true,
       is_featured ? 1 : 0,
     ]);
   } catch (dbError: any) {
-    if (dbError.code === 'ER_NO_REFERENCED_ROW_2') {
-      throw new AppError('Invalid category — the selected category does not exist', 400);
+    if (dbError.code === "ER_NO_REFERENCED_ROW_2") {
+      throw new AppError(
+        "Invalid category — the selected category does not exist",
+        400,
+      );
     }
     throw dbError;
   }
 
   // Fetch created destination
   const [destinations]: any = await pool.execute(
-    'SELECT * FROM destinations WHERE id = ?',
-    [destinationId]
+    "SELECT * FROM destinations WHERE id = ?",
+    [destinationId],
   );
 
   res.status(201).json({
     success: true,
-    message: 'Destination created successfully',
+    message: "Destination created successfully",
     data: formatDestination(destinations[0]),
   });
 };
@@ -399,34 +446,60 @@ export const createDestination = async (
  */
 export const updateDestination = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
   const updates = req.body;
 
   // Check if destination exists
   const [existing]: any = await pool.execute(
-    'SELECT id FROM destinations WHERE id = ?',
-    [id]
+    "SELECT id FROM destinations WHERE id = ?",
+    [id],
   );
 
   if (existing.length === 0) {
-    throw new AppError('Destination not found', 404);
+    throw new AppError("Destination not found", 404);
   }
 
   // Build dynamic update query
   const allowedFields = [
-    'name', 'description', 'category_id', 'latitude', 'longitude', 'address',
-    'contact_phone', 'contact_email', 'website_url', 'facebook_url', 'instagram_url',
-    'entrance_fee_local', 'entrance_fee_foreign', 'average_visit_duration', 'best_time_to_visit',
-    'is_active', 'is_featured', 'is_island', 'family_friendly',
-    'cluster_id', 'municipality', 'budget_level',
-    'seating_capacity', 'star_rating', 'check_in_time', 'check_out_time',
+    "name",
+    "description",
+    "category_id",
+    "latitude",
+    "longitude",
+    "address",
+    "contact_phone",
+    "contact_email",
+    "website_url",
+    "facebook_url",
+    "instagram_url",
+    "entrance_fee_local",
+    "entrance_fee_foreign",
+    "average_visit_duration",
+    "best_time_to_visit",
+    "is_active",
+    "is_featured",
+    "is_island",
+    "family_friendly",
+    "cluster_id",
+    "municipality",
+    "budget_level",
+    "seating_capacity",
+    "star_rating",
+    "check_in_time",
+    "check_out_time",
   ];
 
   const jsonFields = [
-    'images', 'menu_images', 'operating_hours', 'amenities',
-    'cuisine_types', 'service_types', 'tags', 'accommodation_pricing',
+    "images",
+    "menu_images",
+    "operating_hours",
+    "amenities",
+    "cuisine_types",
+    "service_types",
+    "tags",
+    "accommodation_pricing",
   ];
 
   const updateFields: string[] = [];
@@ -439,8 +512,12 @@ export const updateDestination = async (
     } else if (jsonFields.includes(key)) {
       // Handle values that may already be strings or arrays
       let val = updates[key];
-      if (typeof val === 'string') {
-        try { val = JSON.parse(val); } catch { /* keep as-is */ }
+      if (typeof val === "string") {
+        try {
+          val = JSON.parse(val);
+        } catch {
+          /* keep as-is */
+        }
       }
       updateFields.push(`${key} = ?`);
       updateValues.push(val ? JSON.stringify(val) : null);
@@ -448,12 +525,12 @@ export const updateDestination = async (
   });
 
   if (updateFields.length === 0) {
-    throw new AppError('No valid fields to update', 400);
+    throw new AppError("No valid fields to update", 400);
   }
 
   const sql = `
     UPDATE destinations
-    SET ${updateFields.join(', ')}, updated_at = NOW()
+    SET ${updateFields.join(", ")}, updated_at = NOW()
     WHERE id = ?
   `;
 
@@ -461,15 +538,15 @@ export const updateDestination = async (
 
   // Fetch updated destination
   const [destinations]: any = await pool.execute(
-    'SELECT * FROM destinations WHERE id = ?',
-    [id]
+    "SELECT * FROM destinations WHERE id = ?",
+    [id],
   );
 
   const destination = destinations[0];
 
   res.json({
     success: true,
-    message: 'Destination updated successfully',
+    message: "Destination updated successfully",
     data: formatDestination(destination),
   });
 };
@@ -480,22 +557,22 @@ export const updateDestination = async (
  */
 export const deleteDestination = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
 
   const [result]: any = await pool.execute(
-    'DELETE FROM destinations WHERE id = ?',
-    [id]
+    "DELETE FROM destinations WHERE id = ?",
+    [id],
   );
 
   if (result.affectedRows === 0) {
-    throw new AppError('Destination not found', 404);
+    throw new AppError("Destination not found", 404);
   }
 
   res.json({
     success: true,
-    message: 'Destination deleted successfully',
+    message: "Destination deleted successfully",
   });
 };
 
@@ -505,7 +582,7 @@ export const deleteDestination = async (
  */
 export const getFeaturedDestinations = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const sql = `
     SELECT
@@ -546,7 +623,7 @@ export const getFeaturedDestinations = async (
  */
 export const getDestinationsGeoJSON = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const sql = `
     SELECT
@@ -564,7 +641,7 @@ export const getDestinationsGeoJSON = async (
   const features = destinations.map((dest: any, index: number) => {
     const images = safeJsonParse(dest.images, []);
     return {
-      type: 'Feature',
+      type: "Feature",
       properties: {
         id: dest.id,
         name: dest.name,
@@ -575,7 +652,7 @@ export const getDestinationsGeoJSON = async (
         category_slug: dest.category_slug,
       },
       geometry: {
-        type: 'Point',
+        type: "Point",
         coordinates: [Number(dest.longitude), Number(dest.latitude)],
       },
       id: index + 1,
@@ -583,7 +660,7 @@ export const getDestinationsGeoJSON = async (
   });
 
   const geojson = {
-    type: 'FeatureCollection',
+    type: "FeatureCollection",
     features,
   };
 
@@ -596,7 +673,7 @@ export const getDestinationsGeoJSON = async (
  */
 export const getPopularDestinations = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { limit = 10 } = req.query;
 

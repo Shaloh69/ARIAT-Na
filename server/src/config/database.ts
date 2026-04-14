@@ -1,7 +1,7 @@
-import mysql from 'mysql2/promise';
-import dotenv from 'dotenv';
-import fs from 'fs';
-import path from 'path';
+import mysql from "mysql2/promise";
+import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
 
 dotenv.config();
 
@@ -14,28 +14,28 @@ const hasCustomCa = !!sslCaPath && fs.existsSync(sslCaPath);
 
 if (sslCaPath && !hasCustomCa) {
   console.warn(
-    `[DB] DB_SSL_CA file not found at ${sslCaPath}. Falling back to default SSL settings.`
+    `[DB] DB_SSL_CA file not found at ${sslCaPath}. Falling back to default SSL settings.`,
   );
 }
 
 const sslConfig = hasCustomCa
   ? {
       ca: fs.readFileSync(sslCaPath!),
-      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false",
     }
-  : process.env.DB_HOST?.includes('aivencloud.com')
-  ? {
-      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
-    }
-  : undefined;
+  : process.env.DB_HOST?.includes("aivencloud.com")
+    ? {
+        rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false",
+      }
+    : undefined;
 
 // Database connection pool configuration
 const poolConfig: mysql.PoolOptions = {
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '3306'),
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'ariat_na',
+  host: process.env.DB_HOST || "localhost",
+  port: parseInt(process.env.DB_PORT || "3306"),
+  user: process.env.DB_USER || "root",
+  password: process.env.DB_PASSWORD || "",
+  database: process.env.DB_NAME || "ariat_na",
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -53,13 +53,13 @@ export const pool = mysql.createPool(poolConfig);
 export const testConnection = async (): Promise<void> => {
   try {
     const connection = await pool.getConnection();
-    console.log('✅ Database connected successfully');
+    console.log("✅ Database connected successfully");
     console.log(`   Host: ${poolConfig.host}`);
     console.log(`   Database: ${poolConfig.database}`);
-    console.log(`   SSL: ${sslConfig ? '✅ Enabled' : '❌ Disabled'}`);
+    console.log(`   SSL: ${sslConfig ? "✅ Enabled" : "❌ Disabled"}`);
     connection.release();
   } catch (error) {
-    console.error('❌ Database connection failed:', error);
+    console.error("❌ Database connection failed:", error);
     throw error;
   }
 };
@@ -67,7 +67,7 @@ export const testConnection = async (): Promise<void> => {
 // Execute query helper
 export const query = async <T = any>(
   sql: string,
-  params: any[] = []
+  params: any[] = [],
 ): Promise<T> => {
   try {
     const [rows] = params.length
@@ -75,14 +75,14 @@ export const query = async <T = any>(
       : await pool.execute(sql);
     return rows as T;
   } catch (error) {
-    console.error('Database query error:', error);
+    console.error("Database query error:", error);
     throw error;
   }
 };
 
 // Transaction helper
 export const transaction = async <T>(
-  callback: (connection: mysql.PoolConnection) => Promise<T>
+  callback: (connection: mysql.PoolConnection) => Promise<T>,
 ): Promise<T> => {
   const connection = await pool.getConnection();
   await connection.beginTransaction();

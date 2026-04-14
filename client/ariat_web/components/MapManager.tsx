@@ -704,12 +704,12 @@ export default function MapManager({
   // Stable ref so keyboard handler never re-subscribes
   const switchModeRef = useRef<(m: MapMode) => void>(() => {});
   const isAnyModalOpenRef = useRef(false);
+
   isAnyModalOpenRef.current = isAnyModalOpen || showShortcutsModal;
 
   // ── Fullscreen listener ────────────────────────────────────────────────────
   useEffect(() => {
-    const onFsChange = () =>
-      setIsFullscreen(!!document.fullscreenElement);
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
 
     document.addEventListener("fullscreenchange", onFsChange);
 
@@ -745,23 +745,44 @@ export default function MapManager({
       if ((e.ctrlKey || e.metaKey) && e.key === "z") {
         e.preventDefault();
         undoRef.current();
+
         return;
       }
 
       // Block shortcuts when a modal / input is focused
       if (isAnyModalOpenRef.current) return;
       const tag = (e.target as HTMLElement).tagName;
+
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       switch (e.key) {
-        case "v": case "V": switchModeRef.current("view"); break;
-        case "p": case "P": switchModeRef.current("add_point"); break;
-        case "r": case "R": switchModeRef.current("add_road"); break;
-        case "d": case "D": switchModeRef.current("add_destination"); break;
-        case "t": case "T": switchModeRef.current("test_route"); break;
-        case "x": case "X": switchModeRef.current("transit_route"); break;
-        case "+": case "=":
+        case "v":
+        case "V":
+          switchModeRef.current("view");
+          break;
+        case "p":
+        case "P":
+          switchModeRef.current("add_point");
+          break;
+        case "r":
+        case "R":
+          switchModeRef.current("add_road");
+          break;
+        case "d":
+        case "D":
+          switchModeRef.current("add_destination");
+          break;
+        case "t":
+        case "T":
+          switchModeRef.current("test_route");
+          break;
+        case "x":
+        case "X":
+          switchModeRef.current("transit_route");
+          break;
+        case "+":
+        case "=":
           e.preventDefault();
           mapImperativeRef.current?.zoomIn();
           break;
@@ -773,10 +794,13 @@ export default function MapManager({
           e.preventDefault();
           mapImperativeRef.current?.setView([10.3157, 123.8854], 11);
           break;
-        case "f": case "F":
+        case "f":
+        case "F":
           e.preventDefault();
           if (!document.fullscreenElement) {
-            void (mapContainerRef.current ?? document.documentElement).requestFullscreen();
+            void (
+              mapContainerRef.current ?? document.documentElement
+            ).requestFullscreen();
           } else {
             void document.exitFullscreen();
           }
@@ -789,7 +813,8 @@ export default function MapManager({
           e.preventDefault();
           setShowShortcutsModal((v) => !v);
           break;
-        default: break;
+        default:
+          break;
       }
     };
 
@@ -1294,6 +1319,7 @@ export default function MapManager({
     }
     setMode(newMode);
   };
+
   // Keep ref in sync so keyboard handler always calls the latest version
   switchModeRef.current = switchMode;
 
@@ -1380,6 +1406,7 @@ export default function MapManager({
             {/* Drag handle + collapse */}
             <div
               className="flex items-center justify-between mb-3 -mx-1 px-2 py-1.5 rounded-lg select-none"
+              role="none"
               style={{
                 background: "rgba(0,0,0,0.04)",
                 cursor: "grab",
@@ -1407,907 +1434,934 @@ export default function MapManager({
                   height="12"
                   stroke="currentColor"
                   strokeWidth={2}
+                  style={{ color: "#9ca3af" }}
                   viewBox="0 0 12 12"
                   width="12"
-                  style={{ color: "#9ca3af" }}
                 >
-                  <circle cx="3" cy="3" r="1" fill="#9ca3af" />
-                  <circle cx="9" cy="3" r="1" fill="#9ca3af" />
-                  <circle cx="3" cy="6" r="1" fill="#9ca3af" />
-                  <circle cx="9" cy="6" r="1" fill="#9ca3af" />
-                  <circle cx="3" cy="9" r="1" fill="#9ca3af" />
-                  <circle cx="9" cy="9" r="1" fill="#9ca3af" />
+                  <circle cx="3" cy="3" fill="#9ca3af" r="1" />
+                  <circle cx="9" cy="3" fill="#9ca3af" r="1" />
+                  <circle cx="3" cy="6" fill="#9ca3af" r="1" />
+                  <circle cx="9" cy="6" fill="#9ca3af" r="1" />
+                  <circle cx="3" cy="9" fill="#9ca3af" r="1" />
+                  <circle cx="9" cy="9" fill="#9ca3af" r="1" />
                 </svg>
-                <h3 style={{ fontWeight: 600, fontSize: "0.875rem", color: "#111827" }}>
+                <h3
+                  style={{
+                    fontWeight: 600,
+                    fontSize: "0.875rem",
+                    color: "#111827",
+                  }}
+                >
                   Map Controls
                 </h3>
               </div>
               <button
                 className="rounded p-0.5 text-gray-400 hover:text-gray-700"
-                style={{ background: "none", border: "none", cursor: "pointer", lineHeight: 1 }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  lineHeight: 1,
+                }}
                 title="Collapse panel (hide)"
                 onClick={() => setPanelCollapsed(true)}
               >
-                <svg fill="currentColor" height="14" viewBox="0 0 14 14" width="14">
+                <svg
+                  fill="currentColor"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  width="14"
+                >
                   <path d="M2 9l5-5 5 5H2z" />
                 </svg>
               </button>
             </div>
 
             <div className="space-y-3">
-            {/* Mode Selection */}
-            <div>
-              <span
-                style={{
-                  fontSize: "0.875rem",
-                  fontWeight: 500,
-                  marginBottom: "0.5rem",
-                  display: "block",
-                  color: "#374151",
-                }}
-              >
-                Mode
-              </span>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  color={mode === "view" ? "primary" : "default"}
-                  size="sm"
-                  variant={mode === "view" ? "solid" : "flat"}
-                  onClick={() => switchMode("view")}
-                >
-                  View
-                </Button>
-                <Button
-                  color={mode === "add_point" ? "primary" : "default"}
-                  size="sm"
-                  variant={mode === "add_point" ? "solid" : "flat"}
-                  onClick={() => switchMode("add_point")}
-                >
-                  Point
-                </Button>
-                <Button
-                  color={mode === "add_road" ? "primary" : "default"}
-                  size="sm"
-                  variant={mode === "add_road" ? "solid" : "flat"}
-                  onClick={() => switchMode("add_road")}
-                >
-                  Road
-                </Button>
-                <Button
-                  color={mode === "add_destination" ? "primary" : "default"}
-                  size="sm"
-                  variant={mode === "add_destination" ? "solid" : "flat"}
-                  onClick={() => switchMode("add_destination")}
-                >
-                  Dest.
-                </Button>
-                <Button
-                  color={mode === "test_route" ? "primary" : "default"}
-                  size="sm"
-                  variant={mode === "test_route" ? "solid" : "flat"}
-                  onClick={() => switchMode("test_route")}
-                >
-                  Route
-                </Button>
-                <Button
-                  color={mode === "transit_route" ? "secondary" : "default"}
-                  size="sm"
-                  variant={mode === "transit_route" ? "solid" : "flat"}
-                  onClick={() => switchMode("transit_route")}
-                >
-                  Transit
-                </Button>
-              </div>
-            </div>
-
-            {/* Add Point Controls */}
-            {mode === "add_point" && (
-              <>
-                <Select
-                  label="Point Type"
-                  popoverProps={{ className: "map-select-popover" }}
-                  selectedKeys={[pointType]}
-                  size="sm"
-                  onChange={(e) =>
-                    setPointType(e.target.value as NewPoint["point_type"])
-                  }
-                >
-                  <SelectItem key="tourist_spot">Tourist Spot</SelectItem>
-                  <SelectItem key="bus_terminal">Bus Terminal</SelectItem>
-                  <SelectItem key="bus_stop">Bus Stop</SelectItem>
-                  <SelectItem key="pier">Pier</SelectItem>
-                  <SelectItem key="intersection">Intersection</SelectItem>
-                </Select>
-                <p
+              {/* Mode Selection */}
+              <div>
+                <span
                   style={{
-                    fontSize: "0.75rem",
-                    color: "#6b7280",
-                    fontStyle: "italic",
+                    fontSize: "0.875rem",
+                    fontWeight: 500,
+                    marginBottom: "0.5rem",
+                    display: "block",
+                    color: "#374151",
                   }}
                 >
-                  Click on the map to place a point
-                </p>
-              </>
-            )}
+                  Mode
+                </span>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    color={mode === "view" ? "primary" : "default"}
+                    size="sm"
+                    variant={mode === "view" ? "solid" : "flat"}
+                    onClick={() => switchMode("view")}
+                  >
+                    View
+                  </Button>
+                  <Button
+                    color={mode === "add_point" ? "primary" : "default"}
+                    size="sm"
+                    variant={mode === "add_point" ? "solid" : "flat"}
+                    onClick={() => switchMode("add_point")}
+                  >
+                    Point
+                  </Button>
+                  <Button
+                    color={mode === "add_road" ? "primary" : "default"}
+                    size="sm"
+                    variant={mode === "add_road" ? "solid" : "flat"}
+                    onClick={() => switchMode("add_road")}
+                  >
+                    Road
+                  </Button>
+                  <Button
+                    color={mode === "add_destination" ? "primary" : "default"}
+                    size="sm"
+                    variant={mode === "add_destination" ? "solid" : "flat"}
+                    onClick={() => switchMode("add_destination")}
+                  >
+                    Dest.
+                  </Button>
+                  <Button
+                    color={mode === "test_route" ? "primary" : "default"}
+                    size="sm"
+                    variant={mode === "test_route" ? "solid" : "flat"}
+                    onClick={() => switchMode("test_route")}
+                  >
+                    Route
+                  </Button>
+                  <Button
+                    color={mode === "transit_route" ? "secondary" : "default"}
+                    size="sm"
+                    variant={mode === "transit_route" ? "solid" : "flat"}
+                    onClick={() => switchMode("transit_route")}
+                  >
+                    Transit
+                  </Button>
+                </div>
+              </div>
 
-            {/* Add Road Controls */}
-            {mode === "add_road" && (
-              <>
-                <Select
-                  label="Road Type"
-                  popoverProps={{ className: "map-select-popover" }}
-                  selectedKeys={[roadType]}
-                  size="sm"
-                  onChange={(e) =>
-                    setRoadType(e.target.value as NewRoad["road_type"])
-                  }
-                >
-                  <SelectItem key="highway">Highway</SelectItem>
-                  <SelectItem key="main_road">Main Road</SelectItem>
-                  <SelectItem key="local_road">Local Road</SelectItem>
-                  <SelectItem key="ferry">Ferry Route</SelectItem>
-                </Select>
-
-                {/* Direction toggle */}
-                <div>
+              {/* Add Point Controls */}
+              {mode === "add_point" && (
+                <>
+                  <Select
+                    label="Point Type"
+                    popoverProps={{ className: "map-select-popover" }}
+                    selectedKeys={[pointType]}
+                    size="sm"
+                    onChange={(e) =>
+                      setPointType(e.target.value as NewPoint["point_type"])
+                    }
+                  >
+                    <SelectItem key="tourist_spot">Tourist Spot</SelectItem>
+                    <SelectItem key="bus_terminal">Bus Terminal</SelectItem>
+                    <SelectItem key="bus_stop">Bus Stop</SelectItem>
+                    <SelectItem key="pier">Pier</SelectItem>
+                    <SelectItem key="intersection">Intersection</SelectItem>
+                  </Select>
                   <p
                     style={{
-                      fontSize: "0.7rem",
+                      fontSize: "0.75rem",
                       color: "#6b7280",
-                      marginBottom: "4px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
+                      fontStyle: "italic",
                     }}
                   >
-                    Direction
+                    Click on the map to place a point
                   </p>
-                  <div className="flex gap-1">
+                </>
+              )}
+
+              {/* Add Road Controls */}
+              {mode === "add_road" && (
+                <>
+                  <Select
+                    label="Road Type"
+                    popoverProps={{ className: "map-select-popover" }}
+                    selectedKeys={[roadType]}
+                    size="sm"
+                    onChange={(e) =>
+                      setRoadType(e.target.value as NewRoad["road_type"])
+                    }
+                  >
+                    <SelectItem key="highway">Highway</SelectItem>
+                    <SelectItem key="main_road">Main Road</SelectItem>
+                    <SelectItem key="local_road">Local Road</SelectItem>
+                    <SelectItem key="ferry">Ferry Route</SelectItem>
+                  </Select>
+
+                  {/* Direction toggle */}
+                  <div>
+                    <p
+                      style={{
+                        fontSize: "0.7rem",
+                        color: "#6b7280",
+                        marginBottom: "4px",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                      }}
+                    >
+                      Direction
+                    </p>
+                    <div className="flex gap-1">
+                      <Button
+                        className="flex-1"
+                        color={!isBidirectional ? "primary" : "default"}
+                        size="sm"
+                        variant={!isBidirectional ? "solid" : "flat"}
+                        onClick={() => setIsBidirectional(false)}
+                      >
+                        → 1-Way
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        color={isBidirectional ? "primary" : "default"}
+                        size="sm"
+                        variant={isBidirectional ? "solid" : "flat"}
+                        onClick={() => setIsBidirectional(true)}
+                      >
+                        ↔ 2-Way
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Auto-create intersection toggle */}
+                  <div
+                    className="rounded-lg p-2"
+                    style={{
+                      background: autoCreateIntersection
+                        ? "rgba(34,197,94,0.08)"
+                        : "rgba(0,0,0,0.04)",
+                      border: `1px solid ${autoCreateIntersection ? "rgba(34,197,94,0.4)" : "transparent"}`,
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#374151",
+                            fontWeight: 500,
+                          }}
+                        >
+                          Auto-create intersections
+                        </p>
+                        <p style={{ fontSize: "0.65rem", color: "#6b7280" }}>
+                          {autoCreateIntersection
+                            ? "Click map → names & snaps new intersection"
+                            : "Click map → free road point"}
+                        </p>
+                      </div>
+                      <Button
+                        color={autoCreateIntersection ? "success" : "default"}
+                        size="sm"
+                        variant={autoCreateIntersection ? "solid" : "flat"}
+                        onClick={() => {
+                          const next = !autoCreateIntersection;
+
+                          setAutoCreateIntersection(next);
+                          if (next) setPointType("intersection");
+                        }}
+                      >
+                        {autoCreateIntersection ? "ON" : "OFF"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div
+                    className="space-y-1"
+                    style={{ fontSize: "0.875rem", color: "#374151" }}
+                  >
+                    <p>Points added: {roadPoints.length}</p>
+                    {snappedIndices.size > 0 && (
+                      <p style={{ color: "#16a34a" }}>
+                        Snapped: {snappedIndices.size} point
+                        {snappedIndices.size > 1 ? "s" : ""}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
                     <Button
                       className="flex-1"
-                      color={!isBidirectional ? "primary" : "default"}
+                      color="success"
                       size="sm"
-                      variant={!isBidirectional ? "solid" : "flat"}
-                      onClick={() => setIsBidirectional(false)}
+                      onClick={finishRoad}
                     >
-                      → 1-Way
+                      Finish Road
                     </Button>
                     <Button
-                      className="flex-1"
-                      color={isBidirectional ? "primary" : "default"}
+                      color="warning"
+                      isDisabled={roadPoints.length === 0}
                       size="sm"
-                      variant={isBidirectional ? "solid" : "flat"}
-                      onClick={() => setIsBidirectional(true)}
+                      title="Undo last point (Ctrl+Z)"
+                      variant="flat"
+                      onClick={undoLastPoint}
                     >
-                      ↔ 2-Way
+                      ↩ Undo
+                    </Button>
+                    <Button
+                      color="danger"
+                      size="sm"
+                      variant="flat"
+                      onClick={cancelRoad}
+                    >
+                      Cancel
                     </Button>
                   </div>
-                </div>
+                </>
+              )}
 
-                {/* Auto-create intersection toggle */}
+              {/* Add Destination Controls */}
+              {mode === "add_destination" && (
                 <div
-                  className="rounded-lg p-2"
-                  style={{
-                    background: autoCreateIntersection
-                      ? "rgba(34,197,94,0.08)"
-                      : "rgba(0,0,0,0.04)",
-                    border: `1px solid ${autoCreateIntersection ? "rgba(34,197,94,0.4)" : "transparent"}`,
-                  }}
+                  className="space-y-1"
+                  style={{ fontSize: "0.875rem", color: "#374151" }}
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <p>Click on the map to place a new destination.</p>
+                  <p>A form will appear for you to enter details.</p>
+                  <p
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    Categories available: {categories?.length || 0}
+                  </p>
+                </div>
+              )}
+
+              {/* Route Testing Controls — Multi-stop Itinerary */}
+              {mode === "test_route" && (
+                <>
+                  <Select
+                    label="Optimize For"
+                    popoverProps={{ className: "map-select-popover" }}
+                    selectedKeys={[routeOptimizeFor]}
+                    size="sm"
+                    onChange={(e) =>
+                      setRouteOptimizeFor(e.target.value as "distance" | "time")
+                    }
+                  >
+                    <SelectItem key="distance">Shortest Distance</SelectItem>
+                    <SelectItem key="time">Fastest Time</SelectItem>
+                  </Select>
+
+                  {/* Destination selector — show when start is set */}
+                  {routeStart && destinationMarkers.length > 0 && (
+                    <Select
+                      label="Add Destination Stop"
+                      placeholder="Choose a destination..."
+                      popoverProps={{ className: "map-select-popover" }}
+                      selectedKeys={[]}
+                      size="sm"
+                      onChange={(e) => {
+                        if (e.target.value) addDestinationStop(e.target.value);
+                      }}
+                    >
+                      {destinationMarkers.map((dest) => (
+                        <SelectItem key={dest.id}>
+                          {dest.name}
+                          {dest.categoryName ? ` (${dest.categoryName})` : ""}
+                        </SelectItem>
+                      ))}
+                    </Select>
+                  )}
+
+                  {/* Itinerary stops list */}
+                  {routeStops.length > 0 && (
+                    <div className="space-y-1">
                       <p
                         style={{
                           fontSize: "0.75rem",
-                          color: "#374151",
                           fontWeight: 500,
+                          color: "#374151",
                         }}
                       >
-                        Auto-create intersections
+                        Itinerary ({routeStops.length} stop
+                        {routeStops.length > 1 ? "s" : ""})
                       </p>
-                      <p style={{ fontSize: "0.65rem", color: "#6b7280" }}>
-                        {autoCreateIntersection
-                          ? "Click map → names & snaps new intersection"
-                          : "Click map → free road point"}
-                      </p>
-                    </div>
-                    <Button
-                      color={autoCreateIntersection ? "success" : "default"}
-                      size="sm"
-                      variant={autoCreateIntersection ? "solid" : "flat"}
-                      onClick={() => {
-                        const next = !autoCreateIntersection;
-
-                        setAutoCreateIntersection(next);
-                        if (next) setPointType("intersection");
-                      }}
-                    >
-                      {autoCreateIntersection ? "ON" : "OFF"}
-                    </Button>
-                  </div>
-                </div>
-
-                <div
-                  className="space-y-1"
-                  style={{ fontSize: "0.875rem", color: "#374151" }}
-                >
-                  <p>Points added: {roadPoints.length}</p>
-                  {snappedIndices.size > 0 && (
-                    <p style={{ color: "#16a34a" }}>
-                      Snapped: {snappedIndices.size} point
-                      {snappedIndices.size > 1 ? "s" : ""}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex gap-2">
-                  <Button
-                    className="flex-1"
-                    color="success"
-                    size="sm"
-                    onClick={finishRoad}
-                  >
-                    Finish Road
-                  </Button>
-                  <Button
-                    color="warning"
-                    isDisabled={roadPoints.length === 0}
-                    size="sm"
-                    title="Undo last point (Ctrl+Z)"
-                    variant="flat"
-                    onClick={undoLastPoint}
-                  >
-                    ↩ Undo
-                  </Button>
-                  <Button
-                    color="danger"
-                    size="sm"
-                    variant="flat"
-                    onClick={cancelRoad}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </>
-            )}
-
-            {/* Add Destination Controls */}
-            {mode === "add_destination" && (
-              <div
-                className="space-y-1"
-                style={{ fontSize: "0.875rem", color: "#374151" }}
-              >
-                <p>Click on the map to place a new destination.</p>
-                <p>A form will appear for you to enter details.</p>
-                <p
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "#6b7280",
-                    fontStyle: "italic",
-                  }}
-                >
-                  Categories available: {categories?.length || 0}
-                </p>
-              </div>
-            )}
-
-            {/* Route Testing Controls — Multi-stop Itinerary */}
-            {mode === "test_route" && (
-              <>
-                <Select
-                  label="Optimize For"
-                  popoverProps={{ className: "map-select-popover" }}
-                  selectedKeys={[routeOptimizeFor]}
-                  size="sm"
-                  onChange={(e) =>
-                    setRouteOptimizeFor(e.target.value as "distance" | "time")
-                  }
-                >
-                  <SelectItem key="distance">Shortest Distance</SelectItem>
-                  <SelectItem key="time">Fastest Time</SelectItem>
-                </Select>
-
-                {/* Destination selector — show when start is set */}
-                {routeStart && destinationMarkers.length > 0 && (
-                  <Select
-                    label="Add Destination Stop"
-                    placeholder="Choose a destination..."
-                    popoverProps={{ className: "map-select-popover" }}
-                    selectedKeys={[]}
-                    size="sm"
-                    onChange={(e) => {
-                      if (e.target.value) addDestinationStop(e.target.value);
-                    }}
-                  >
-                    {destinationMarkers.map((dest) => (
-                      <SelectItem key={dest.id}>
-                        {dest.name}
-                        {dest.categoryName ? ` (${dest.categoryName})` : ""}
-                      </SelectItem>
-                    ))}
-                  </Select>
-                )}
-
-                {/* Itinerary stops list */}
-                {routeStops.length > 0 && (
-                  <div className="space-y-1">
-                    <p
-                      style={{
-                        fontSize: "0.75rem",
-                        fontWeight: 500,
-                        color: "#374151",
-                      }}
-                    >
-                      Itinerary ({routeStops.length} stop
-                      {routeStops.length > 1 ? "s" : ""})
-                    </p>
-                    {routeStops.map((stop, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between p-1.5 rounded"
-                        style={{ background: "rgba(0,0,0,0.04)" }}
-                      >
-                        <span style={{ fontSize: "0.75rem", color: "#374151" }}>
-                          {idx + 1}. {stop.name}
-                        </span>
-                        <button
-                          style={{
-                            fontSize: "0.7rem",
-                            color: "#dc2626",
-                            cursor: "pointer",
-                            background: "none",
-                            border: "none",
-                            padding: "2px 6px",
-                          }}
-                          onClick={() => removeStop(idx)}
+                      {routeStops.map((stop, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between p-1.5 rounded"
+                          style={{ background: "rgba(0,0,0,0.04)" }}
                         >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div
-                  className="space-y-1"
-                  style={{ fontSize: "0.875rem", color: "#374151" }}
-                >
-                  {!routeStart ? (
-                    <div
-                      className="p-2 rounded"
-                      style={{ background: "rgba(59, 130, 246, 0.08)" }}
-                    >
-                      <p style={{ fontWeight: 500 }}>
-                        Step 1: Set your starting point
-                      </p>
-                      <p style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                        Click anywhere on the map
-                      </p>
+                          <span
+                            style={{ fontSize: "0.75rem", color: "#374151" }}
+                          >
+                            {idx + 1}. {stop.name}
+                          </span>
+                          <button
+                            style={{
+                              fontSize: "0.7rem",
+                              color: "#dc2626",
+                              cursor: "pointer",
+                              background: "none",
+                              border: "none",
+                              padding: "2px 6px",
+                            }}
+                            onClick={() => removeStop(idx)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ) : routeStops.length === 0 ? (
-                    <>
-                      <p style={{ color: "#16a34a" }}>
-                        Start: {routeStart[0].toFixed(6)},{" "}
-                        {routeStart[1].toFixed(6)}
-                      </p>
+                  )}
+
+                  <div
+                    className="space-y-1"
+                    style={{ fontSize: "0.875rem", color: "#374151" }}
+                  >
+                    {!routeStart ? (
                       <div
                         className="p-2 rounded"
                         style={{ background: "rgba(59, 130, 246, 0.08)" }}
                       >
                         <p style={{ fontWeight: 500 }}>
-                          Step 2: Add destinations
+                          Step 1: Set your starting point
                         </p>
                         <p style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                          {destinationMarkers.length > 0
-                            ? "Select from the dropdown above or click on the map"
-                            : "Click on the map to add stops"}
+                          Click anywhere on the map
                         </p>
                       </div>
-                    </>
-                  ) : routeLoading ? (
-                    <div
-                      className="flex items-center gap-2 p-2 rounded"
-                      style={{ background: "rgba(59, 130, 246, 0.08)" }}
-                    >
+                    ) : routeStops.length === 0 ? (
+                      <>
+                        <p style={{ color: "#16a34a" }}>
+                          Start: {routeStart[0].toFixed(6)},{" "}
+                          {routeStart[1].toFixed(6)}
+                        </p>
+                        <div
+                          className="p-2 rounded"
+                          style={{ background: "rgba(59, 130, 246, 0.08)" }}
+                        >
+                          <p style={{ fontWeight: 500 }}>
+                            Step 2: Add destinations
+                          </p>
+                          <p style={{ fontSize: "0.75rem", color: "#6b7280" }}>
+                            {destinationMarkers.length > 0
+                              ? "Select from the dropdown above or click on the map"
+                              : "Click on the map to add stops"}
+                          </p>
+                        </div>
+                      </>
+                    ) : routeLoading ? (
                       <div
-                        className="animate-spin rounded-full h-4 w-4 border-b-2"
-                        style={{ borderColor: "#2563eb" }}
-                      />
-                      <p style={{ color: "#2563eb", fontWeight: 500 }}>
-                        Calculating route...
-                      </p>
-                    </div>
-                  ) : routeLegs.length > 0 ? (
-                    <>
-                      {/* Total summary */}
-                      <div
-                        className="grid grid-cols-2 gap-2 p-2 rounded"
-                        style={{ background: "rgba(34, 197, 94, 0.1)" }}
+                        className="flex items-center gap-2 p-2 rounded"
+                        style={{ background: "rgba(59, 130, 246, 0.08)" }}
                       >
-                        <div>
-                          <p style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                            Total Distance
-                          </p>
-                          <p style={{ fontWeight: 700, color: "#111827" }}>
-                            {routeLegs
-                              .reduce(
-                                (sum, l) => sum + Number(l.totalDistance),
-                                0,
-                              )
-                              .toFixed(2)}{" "}
-                            km
-                          </p>
-                        </div>
-                        <div>
-                          <p style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                            Total Time
-                          </p>
-                          <p style={{ fontWeight: 700, color: "#111827" }}>
-                            {routeLegs.reduce(
-                              (sum, l) => sum + l.estimatedTime,
-                              0,
-                            )}{" "}
-                            min
-                          </p>
-                        </div>
+                        <div
+                          className="animate-spin rounded-full h-4 w-4 border-b-2"
+                          style={{ borderColor: "#2563eb" }}
+                        />
+                        <p style={{ color: "#2563eb", fontWeight: 500 }}>
+                          Calculating route...
+                        </p>
                       </div>
+                    ) : routeLegs.length > 0 ? (
+                      <>
+                        {/* Total summary */}
+                        <div
+                          className="grid grid-cols-2 gap-2 p-2 rounded"
+                          style={{ background: "rgba(34, 197, 94, 0.1)" }}
+                        >
+                          <div>
+                            <p
+                              style={{ fontSize: "0.75rem", color: "#6b7280" }}
+                            >
+                              Total Distance
+                            </p>
+                            <p style={{ fontWeight: 700, color: "#111827" }}>
+                              {routeLegs
+                                .reduce(
+                                  (sum, l) => sum + Number(l.totalDistance),
+                                  0,
+                                )
+                                .toFixed(2)}{" "}
+                              km
+                            </p>
+                          </div>
+                          <div>
+                            <p
+                              style={{ fontSize: "0.75rem", color: "#6b7280" }}
+                            >
+                              Total Time
+                            </p>
+                            <p style={{ fontWeight: 700, color: "#111827" }}>
+                              {routeLegs.reduce(
+                                (sum, l) => sum + l.estimatedTime,
+                                0,
+                              )}{" "}
+                              min
+                            </p>
+                          </div>
+                        </div>
 
-                      {/* Per-leg breakdown */}
-                      {routeLegs.length > 1 && (
-                        <div className="space-y-1 pt-1">
-                          <p
-                            style={{
-                              fontSize: "0.7rem",
-                              fontWeight: 500,
-                              color: "#6b7280",
-                            }}
-                          >
-                            Legs
-                          </p>
-                          {routeLegs.map((leg, idx) => (
-                            <div
-                              key={idx}
-                              className="p-1.5 rounded"
+                        {/* Per-leg breakdown */}
+                        {routeLegs.length > 1 && (
+                          <div className="space-y-1 pt-1">
+                            <p
+                              style={{
+                                fontSize: "0.7rem",
+                                fontWeight: 500,
+                                color: "#6b7280",
+                              }}
+                            >
+                              Legs
+                            </p>
+                            {routeLegs.map((leg, idx) => (
+                              <div
+                                key={idx}
+                                className="p-1.5 rounded"
+                                style={{
+                                  fontSize: "0.75rem",
+                                  background: "rgba(0,0,0,0.04)",
+                                  color: "#374151",
+                                }}
+                              >
+                                <span
+                                  style={{ fontWeight: 500, color: "#7c3aed" }}
+                                >
+                                  Leg {idx + 1}
+                                </span>
+                                {": "}
+                                {idx === 0
+                                  ? "Start"
+                                  : (routeStops[idx - 1]?.name ?? "Stop")}{" "}
+                                {"\u2192"}{" "}
+                                {routeStops[idx]?.name ?? "Destination"}
+                                <span style={{ color: "#6b7280" }}>
+                                  {" "}
+                                  ({Number(leg.totalDistance).toFixed(2)}km, ~
+                                  {leg.estimatedTime}min)
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Directions */}
+                        {routeLegs.some((l) => l.steps.length > 0) && (
+                          <div className="pt-2">
+                            <p
                               style={{
                                 fontSize: "0.75rem",
-                                background: "rgba(0,0,0,0.04)",
+                                fontWeight: 500,
+                                marginBottom: "0.25rem",
                                 color: "#374151",
                               }}
                             >
-                              <span
-                                style={{ fontWeight: 500, color: "#7c3aed" }}
-                              >
-                                Leg {idx + 1}
-                              </span>
-                              {": "}
-                              {idx === 0
-                                ? "Start"
-                                : (routeStops[idx - 1]?.name ?? "Stop")}{" "}
-                              {"\u2192"}{" "}
-                              {routeStops[idx]?.name ?? "Destination"}
-                              <span style={{ color: "#6b7280" }}>
-                                {" "}
-                                ({Number(leg.totalDistance).toFixed(2)}km, ~
-                                {leg.estimatedTime}min)
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Directions */}
-                      {routeLegs.some((l) => l.steps.length > 0) && (
-                        <div className="pt-2">
-                          <p
-                            style={{
-                              fontSize: "0.75rem",
-                              fontWeight: 500,
-                              marginBottom: "0.25rem",
-                              color: "#374151",
-                            }}
-                          >
-                            Directions
-                          </p>
-                          <div className="max-h-32 overflow-y-auto space-y-1">
-                            {routeLegs.flatMap((leg, legIdx) =>
-                              leg.steps.map((step, stepIdx) => (
-                                <div
-                                  key={`${legIdx}-${stepIdx}`}
-                                  className="p-1.5 rounded"
-                                  style={{
-                                    fontSize: "0.75rem",
-                                    background: "rgba(0,0,0,0.04)",
-                                    color: "#374151",
-                                  }}
-                                >
-                                  {routeLegs.length > 1 && (
-                                    <span
-                                      style={{
-                                        fontSize: "0.65rem",
-                                        color: "#9ca3af",
-                                      }}
-                                    >
-                                      [Leg {legIdx + 1}]{" "}
-                                    </span>
-                                  )}
-                                  <span
+                              Directions
+                            </p>
+                            <div className="max-h-32 overflow-y-auto space-y-1">
+                              {routeLegs.flatMap((leg, legIdx) =>
+                                leg.steps.map((step, stepIdx) => (
+                                  <div
+                                    key={`${legIdx}-${stepIdx}`}
+                                    className="p-1.5 rounded"
                                     style={{
-                                      fontWeight: 500,
-                                      color: "#2563eb",
+                                      fontSize: "0.75rem",
+                                      background: "rgba(0,0,0,0.04)",
+                                      color: "#374151",
                                     }}
                                   >
-                                    {stepIdx + 1}.
-                                  </span>{" "}
-                                  {step.instruction}
-                                  <span style={{ color: "#6b7280" }}>
-                                    {" "}
-                                    ({Number(step.distance).toFixed(2)}km)
-                                  </span>
-                                </div>
-                              )),
-                            )}
+                                    {routeLegs.length > 1 && (
+                                      <span
+                                        style={{
+                                          fontSize: "0.65rem",
+                                          color: "#9ca3af",
+                                        }}
+                                      >
+                                        [Leg {legIdx + 1}]{" "}
+                                      </span>
+                                    )}
+                                    <span
+                                      style={{
+                                        fontWeight: 500,
+                                        color: "#2563eb",
+                                      }}
+                                    >
+                                      {stepIdx + 1}.
+                                    </span>{" "}
+                                    {step.instruction}
+                                    <span style={{ color: "#6b7280" }}>
+                                      {" "}
+                                      ({Number(step.distance).toFixed(2)}km)
+                                    </span>
+                                  </div>
+                                )),
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {routeError && (
-                        <div
-                          className="p-2 rounded"
-                          style={{ background: "rgba(220, 38, 38, 0.08)" }}
+                        {routeError && (
+                          <div
+                            className="p-2 rounded"
+                            style={{ background: "rgba(220, 38, 38, 0.08)" }}
+                          >
+                            <p
+                              style={{ color: "#dc2626", fontSize: "0.75rem" }}
+                            >
+                              {routeError}
+                            </p>
+                          </div>
+                        )}
+
+                        <p
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#6b7280",
+                            fontStyle: "italic",
+                          }}
                         >
-                          <p style={{ color: "#dc2626", fontSize: "0.75rem" }}>
-                            {routeError}
-                          </p>
-                        </div>
-                      )}
-
-                      <p
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "#6b7280",
-                          fontStyle: "italic",
-                        }}
+                          Add more stops from the dropdown or click the map
+                        </p>
+                      </>
+                    ) : routeError ? (
+                      <div
+                        className="p-2 rounded"
+                        style={{ background: "rgba(220, 38, 38, 0.08)" }}
                       >
-                        Add more stops from the dropdown or click the map
-                      </p>
-                    </>
-                  ) : routeError ? (
-                    <div
-                      className="p-2 rounded"
-                      style={{ background: "rgba(220, 38, 38, 0.08)" }}
-                    >
-                      <p
-                        style={{
-                          color: "#dc2626",
-                          fontWeight: 600,
-                          fontSize: "0.8rem",
-                        }}
-                      >
-                        Route not found
-                      </p>
-                      <p style={{ fontSize: "0.7rem", color: "#991b1b" }}>
-                        {routeError}
-                      </p>
-                    </div>
-                  ) : null}
-                </div>
-
-                {(routeStart || routeLegs.length > 0) && (
-                  <Button
-                    className="w-full"
-                    color="danger"
-                    size="sm"
-                    variant="flat"
-                    onClick={clearRoute}
-                  >
-                    Clear Route
-                  </Button>
-                )}
-              </>
-            )}
-
-            {/* Transit Route Mode Panel */}
-            {mode === "transit_route" && (
-              <div className="space-y-2">
-                <div
-                  className="p-2 rounded"
-                  style={{
-                    background: "rgba(139,92,246,0.08)",
-                    border: "1px solid rgba(139,92,246,0.2)",
-                  }}
-                >
-                  <p
-                    style={{
-                      fontSize: "0.75rem",
-                      fontWeight: 600,
-                      color: "#7c3aed",
-                    }}
-                  >
-                    Transit Route Builder
-                  </p>
-                  <p
-                    style={{
-                      fontSize: "0.7rem",
-                      color: "#6b7280",
-                      marginTop: "2px",
-                    }}
-                  >
-                    Click roads to add/remove from route.
-                    {transitPickupMode === "stops_only" &&
-                      " Click transit stops to toggle them."}
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div
-                    className="p-2 rounded text-center"
-                    style={{ background: "rgba(0,0,0,0.04)" }}
-                  >
-                    <p style={{ fontSize: "0.65rem", color: "#6b7280" }}>
-                      Roads
-                    </p>
-                    <p style={{ fontWeight: 700, color: "#7c3aed" }}>
-                      {transitSelectedRoadIds.length}
-                    </p>
+                        <p
+                          style={{
+                            color: "#dc2626",
+                            fontWeight: 600,
+                            fontSize: "0.8rem",
+                          }}
+                        >
+                          Route not found
+                        </p>
+                        <p style={{ fontSize: "0.7rem", color: "#991b1b" }}>
+                          {routeError}
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
-                  <div
-                    className="p-2 rounded text-center"
-                    style={{ background: "rgba(0,0,0,0.04)" }}
-                  >
-                    <p style={{ fontSize: "0.65rem", color: "#6b7280" }}>
-                      Stops
-                    </p>
-                    <p style={{ fontWeight: 700, color: "#7c3aed" }}>
-                      {transitSelectedStopIds.length}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-6 h-1 rounded"
-                    style={{ background: transitRouteColor }}
-                  />
-                  <span style={{ fontSize: "0.7rem", color: "#374151" }}>
-                    Selected road
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-6 h-1 rounded"
-                    style={{ background: "#94a3b8" }}
-                  />
-                  <span style={{ fontSize: "0.7rem", color: "#374151" }}>
-                    Unselected road
-                  </span>
-                </div>
-                {transitPickupMode === "stops_only" && (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ background: "#3b82f6" }}
-                      />
-                      <span style={{ fontSize: "0.7rem", color: "#374151" }}>
-                        Bus Stop
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ background: "#8b5cf6" }}
-                      />
-                      <span style={{ fontSize: "0.7rem", color: "#374151" }}>
-                        Bus Terminal
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ background: "#0891b2" }}
-                      />
-                      <span style={{ fontSize: "0.7rem", color: "#374151" }}>
-                        Pier / Port
-                      </span>
-                    </div>
-                  </>
-                )}
-                {(transitSelectedRoadIds.length > 0 ||
-                  transitSelectedStopIds.length > 0) &&
-                  onTransitRoadsChange && (
+
+                  {(routeStart || routeLegs.length > 0) && (
                     <Button
                       className="w-full"
                       color="danger"
                       size="sm"
                       variant="flat"
-                      onClick={() => {
-                        onTransitRoadsChange([]);
-                        onTransitStopsChange?.([]);
-                      }}
+                      onClick={clearRoute}
                     >
-                      Clear Selection
+                      Clear Route
                     </Button>
                   )}
-              </div>
-            )}
+                </>
+              )}
 
-            {/* Legend */}
-            <div
-              className="pt-3"
-              style={{ borderTop: "1px solid rgba(0,0,0,0.1)" }}
-            >
-              <p
-                style={{
-                  fontSize: "0.875rem",
-                  fontWeight: 500,
-                  marginBottom: "0.5rem",
-                  color: "#111827",
-                }}
-              >
-                Legend
-              </p>
-              <div
-                className="space-y-1"
-                style={{ fontSize: "0.75rem", color: "#374151" }}
-              >
-                {/* Points section - circles for intersection-type points */}
-                <p
-                  style={{
-                    fontSize: "0.7rem",
-                    color: "#6b7280",
-                    marginBottom: "2px",
-                    fontWeight: 500,
-                  }}
-                >
-                  Points
-                </p>
-                {[
-                  { type: "bus_terminal", label: "Bus Terminal" },
-                  { type: "bus_stop", label: "Bus Stop" },
-                  { type: "pier", label: "Pier" },
-                  { type: "intersection", label: "Intersection" },
-                ].map((item) => (
-                  <div key={item.type} className="flex items-center gap-2">
-                    <div
-                      className="flex-shrink-0"
-                      style={{
-                        width: "12px",
-                        height: "12px",
-                        borderRadius: "50%",
-                        backgroundColor: getCircleMarkerColor(item.type),
-                        border: "2px solid white",
-                        boxShadow: "0 0 0 1px rgba(0,0,0,0.15)",
-                      }}
-                    />
-                    <span>{item.label}</span>
-                  </div>
-                ))}
-
-                {/* Destinations section - pin marker icon */}
-                <div
-                  style={{
-                    borderTop: "1px solid rgba(0,0,0,0.08)",
-                    margin: "6px 0",
-                  }}
-                />
-                <p
-                  style={{
-                    fontSize: "0.7rem",
-                    color: "#6b7280",
-                    marginBottom: "2px",
-                    fontWeight: 500,
-                  }}
-                >
-                  Destinations
-                </p>
-                <div className="flex items-center gap-2">
-                  <svg
-                    className="flex-shrink-0"
-                    fill="none"
-                    height="18"
-                    viewBox="0 0 28 36"
-                    width="14"
+              {/* Transit Route Mode Panel */}
+              {mode === "transit_route" && (
+                <div className="space-y-2">
+                  <div
+                    className="p-2 rounded"
+                    style={{
+                      background: "rgba(139,92,246,0.08)",
+                      border: "1px solid rgba(139,92,246,0.2)",
+                    }}
                   >
-                    <path
-                      d="M14 0C6.268 0 0 6.268 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.268 21.732 0 14 0z"
-                      fill="#e11d48"
-                    />
-                    <circle
-                      cx="14"
-                      cy="14"
-                      fill="white"
-                      fillOpacity="0.9"
-                      r="7"
-                    />
-                    <circle cx="14" cy="14" fill="#e11d48" r="4" />
-                  </svg>
-                  <span>Destination</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <svg
-                    className="flex-shrink-0"
-                    fill="none"
-                    height="18"
-                    viewBox="0 0 28 36"
-                    width="14"
-                  >
-                    <path
-                      d="M14 0C6.268 0 0 6.268 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.268 21.732 0 14 0z"
-                      fill="#f59e0b"
-                    />
-                    <circle
-                      cx="14"
-                      cy="14"
-                      fill="white"
-                      fillOpacity="0.9"
-                      r="7"
-                    />
-                    <circle cx="14" cy="14" fill="#f59e0b" r="4" />
-                  </svg>
-                  <span>Featured Destination</span>
-                </div>
-                <p
-                  style={{
-                    fontSize: "0.65rem",
-                    color: "#9ca3af",
-                    fontStyle: "italic",
-                    marginTop: "2px",
-                  }}
-                >
-                  Zoom in to see images
-                </p>
-
-                {/* Roads section */}
-                {savedRoads.length > 0 && (
-                  <>
-                    <div
+                    <p
                       style={{
-                        borderTop: "1px solid rgba(0,0,0,0.08)",
-                        margin: "6px 0",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        color: "#7c3aed",
                       }}
-                    />
+                    >
+                      Transit Route Builder
+                    </p>
                     <p
                       style={{
                         fontSize: "0.7rem",
                         color: "#6b7280",
-                        marginBottom: "2px",
-                        fontWeight: 500,
+                        marginTop: "2px",
                       }}
                     >
-                      Roads ({savedRoads.length})
+                      Click roads to add/remove from route.
+                      {transitPickupMode === "stops_only" &&
+                        " Click transit stops to toggle them."}
                     </p>
-                    {[
-                      { type: "highway", label: "Highway", color: "#dc2626" },
-                      {
-                        type: "main_road",
-                        label: "Main Road",
-                        color: "#2563eb",
-                      },
-                      {
-                        type: "local_road",
-                        label: "Local Road",
-                        color: "#16a34a",
-                      },
-                      {
-                        type: "ferry",
-                        label: "Ferry Route",
-                        color: "#7c3aed",
-                      },
-                    ].map((item) => (
-                      <div key={item.type} className="flex items-center gap-2">
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div
+                      className="p-2 rounded text-center"
+                      style={{ background: "rgba(0,0,0,0.04)" }}
+                    >
+                      <p style={{ fontSize: "0.65rem", color: "#6b7280" }}>
+                        Roads
+                      </p>
+                      <p style={{ fontWeight: 700, color: "#7c3aed" }}>
+                        {transitSelectedRoadIds.length}
+                      </p>
+                    </div>
+                    <div
+                      className="p-2 rounded text-center"
+                      style={{ background: "rgba(0,0,0,0.04)" }}
+                    >
+                      <p style={{ fontSize: "0.65rem", color: "#6b7280" }}>
+                        Stops
+                      </p>
+                      <p style={{ fontWeight: 700, color: "#7c3aed" }}>
+                        {transitSelectedStopIds.length}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-6 h-1 rounded"
+                      style={{ background: transitRouteColor }}
+                    />
+                    <span style={{ fontSize: "0.7rem", color: "#374151" }}>
+                      Selected road
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-6 h-1 rounded"
+                      style={{ background: "#94a3b8" }}
+                    />
+                    <span style={{ fontSize: "0.7rem", color: "#374151" }}>
+                      Unselected road
+                    </span>
+                  </div>
+                  {transitPickupMode === "stops_only" && (
+                    <>
+                      <div className="flex items-center gap-2">
                         <div
-                          style={{
-                            width: "16px",
-                            height: "3px",
-                            background: item.color,
-                            borderRadius: "2px",
-                          }}
+                          className="w-3 h-3 rounded-full"
+                          style={{ background: "#3b82f6" }}
                         />
-                        <span>{item.label}</span>
+                        <span style={{ fontSize: "0.7rem", color: "#374151" }}>
+                          Bus Stop
+                        </span>
                       </div>
-                    ))}
-                  </>
-                )}
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ background: "#8b5cf6" }}
+                        />
+                        <span style={{ fontSize: "0.7rem", color: "#374151" }}>
+                          Bus Terminal
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ background: "#0891b2" }}
+                        />
+                        <span style={{ fontSize: "0.7rem", color: "#374151" }}>
+                          Pier / Port
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  {(transitSelectedRoadIds.length > 0 ||
+                    transitSelectedStopIds.length > 0) &&
+                    onTransitRoadsChange && (
+                      <Button
+                        className="w-full"
+                        color="danger"
+                        size="sm"
+                        variant="flat"
+                        onClick={() => {
+                          onTransitRoadsChange([]);
+                          onTransitStopsChange?.([]);
+                        }}
+                      >
+                        Clear Selection
+                      </Button>
+                    )}
+                </div>
+              )}
+
+              {/* Legend */}
+              <div
+                className="pt-3"
+                style={{ borderTop: "1px solid rgba(0,0,0,0.1)" }}
+              >
+                <p
+                  style={{
+                    fontSize: "0.875rem",
+                    fontWeight: 500,
+                    marginBottom: "0.5rem",
+                    color: "#111827",
+                  }}
+                >
+                  Legend
+                </p>
+                <div
+                  className="space-y-1"
+                  style={{ fontSize: "0.75rem", color: "#374151" }}
+                >
+                  {/* Points section - circles for intersection-type points */}
+                  <p
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#6b7280",
+                      marginBottom: "2px",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Points
+                  </p>
+                  {[
+                    { type: "bus_terminal", label: "Bus Terminal" },
+                    { type: "bus_stop", label: "Bus Stop" },
+                    { type: "pier", label: "Pier" },
+                    { type: "intersection", label: "Intersection" },
+                  ].map((item) => (
+                    <div key={item.type} className="flex items-center gap-2">
+                      <div
+                        className="flex-shrink-0"
+                        style={{
+                          width: "12px",
+                          height: "12px",
+                          borderRadius: "50%",
+                          backgroundColor: getCircleMarkerColor(item.type),
+                          border: "2px solid white",
+                          boxShadow: "0 0 0 1px rgba(0,0,0,0.15)",
+                        }}
+                      />
+                      <span>{item.label}</span>
+                    </div>
+                  ))}
+
+                  {/* Destinations section - pin marker icon */}
+                  <div
+                    style={{
+                      borderTop: "1px solid rgba(0,0,0,0.08)",
+                      margin: "6px 0",
+                    }}
+                  />
+                  <p
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#6b7280",
+                      marginBottom: "2px",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Destinations
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="flex-shrink-0"
+                      fill="none"
+                      height="18"
+                      viewBox="0 0 28 36"
+                      width="14"
+                    >
+                      <path
+                        d="M14 0C6.268 0 0 6.268 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.268 21.732 0 14 0z"
+                        fill="#e11d48"
+                      />
+                      <circle
+                        cx="14"
+                        cy="14"
+                        fill="white"
+                        fillOpacity="0.9"
+                        r="7"
+                      />
+                      <circle cx="14" cy="14" fill="#e11d48" r="4" />
+                    </svg>
+                    <span>Destination</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="flex-shrink-0"
+                      fill="none"
+                      height="18"
+                      viewBox="0 0 28 36"
+                      width="14"
+                    >
+                      <path
+                        d="M14 0C6.268 0 0 6.268 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.268 21.732 0 14 0z"
+                        fill="#f59e0b"
+                      />
+                      <circle
+                        cx="14"
+                        cy="14"
+                        fill="white"
+                        fillOpacity="0.9"
+                        r="7"
+                      />
+                      <circle cx="14" cy="14" fill="#f59e0b" r="4" />
+                    </svg>
+                    <span>Featured Destination</span>
+                  </div>
+                  <p
+                    style={{
+                      fontSize: "0.65rem",
+                      color: "#9ca3af",
+                      fontStyle: "italic",
+                      marginTop: "2px",
+                    }}
+                  >
+                    Zoom in to see images
+                  </p>
+
+                  {/* Roads section */}
+                  {savedRoads.length > 0 && (
+                    <>
+                      <div
+                        style={{
+                          borderTop: "1px solid rgba(0,0,0,0.08)",
+                          margin: "6px 0",
+                        }}
+                      />
+                      <p
+                        style={{
+                          fontSize: "0.7rem",
+                          color: "#6b7280",
+                          marginBottom: "2px",
+                          fontWeight: 500,
+                        }}
+                      >
+                        Roads ({savedRoads.length})
+                      </p>
+                      {[
+                        { type: "highway", label: "Highway", color: "#dc2626" },
+                        {
+                          type: "main_road",
+                          label: "Main Road",
+                          color: "#2563eb",
+                        },
+                        {
+                          type: "local_road",
+                          label: "Local Road",
+                          color: "#16a34a",
+                        },
+                        {
+                          type: "ferry",
+                          label: "Ferry Route",
+                          color: "#7c3aed",
+                        },
+                      ].map((item) => (
+                        <div
+                          key={item.type}
+                          className="flex items-center gap-2"
+                        >
+                          <div
+                            style={{
+                              width: "16px",
+                              height: "3px",
+                              background: item.color,
+                              borderRadius: "2px",
+                            }}
+                          />
+                          <span>{item.label}</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
           </CardBody>
         </Card>
       )}
@@ -2789,13 +2843,21 @@ export default function MapManager({
         <button
           className="map-fab"
           title="Reset view (0)"
-          onClick={() => mapImperativeRef.current?.setView([10.3157, 123.8854], 11)}
+          onClick={() =>
+            mapImperativeRef.current?.setView([10.3157, 123.8854], 11)
+          }
         >
           ⊙
         </button>
 
         {/* Divider */}
-        <div style={{ height: 1, background: "rgba(0,0,0,0.1)", margin: "2px 4px" }} />
+        <div
+          style={{
+            height: 1,
+            background: "rgba(0,0,0,0.1)",
+            margin: "2px 4px",
+          }}
+        />
 
         {/* Layer picker toggle */}
         <div className="relative">
@@ -2809,14 +2871,19 @@ export default function MapManager({
           {showLayerPicker && (
             <div
               className="absolute right-12 top-0 flex flex-col gap-1 rounded-xl shadow-xl p-2"
-              style={{ background: "white", border: "1px solid rgba(0,0,0,0.12)", minWidth: 130 }}
+              style={{
+                background: "white",
+                border: "1px solid rgba(0,0,0,0.12)",
+                minWidth: 130,
+              }}
             >
               {(Object.keys(TILE_LAYERS) as TileLayerKey[]).map((key) => (
                 <button
                   key={key}
                   className="flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm"
                   style={{
-                    background: tileLayer === key ? "rgba(37,99,235,0.1)" : "transparent",
+                    background:
+                      tileLayer === key ? "rgba(37,99,235,0.1)" : "transparent",
                     color: tileLayer === key ? "#2563eb" : "#374151",
                     fontWeight: tileLayer === key ? 600 : 400,
                     cursor: "pointer",
@@ -2841,7 +2908,9 @@ export default function MapManager({
           title={isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"}
           onClick={() => {
             if (!document.fullscreenElement) {
-              void (mapContainerRef.current ?? document.documentElement).requestFullscreen();
+              void (
+                mapContainerRef.current ?? document.documentElement
+              ).requestFullscreen();
             } else {
               void document.exitFullscreen();
             }
@@ -2872,25 +2941,34 @@ export default function MapManager({
           <ModalBody>
             <div className="space-y-3 pb-2">
               {[
-                { group: "Modes", rows: [
-                  { key: "V", label: "View mode" },
-                  { key: "P", label: "Add Point mode" },
-                  { key: "R", label: "Add Road mode" },
-                  { key: "D", label: "Add Destination mode" },
-                  { key: "T", label: "Route Test mode" },
-                  { key: "X", label: "Transit Route mode" },
-                ]},
-                { group: "Map", rows: [
-                  { key: "+ / =", label: "Zoom in" },
-                  { key: "−", label: "Zoom out" },
-                  { key: "0", label: "Reset view to Cebu" },
-                  { key: "F", label: "Toggle fullscreen" },
-                ]},
-                { group: "Editing", rows: [
-                  { key: "Ctrl + Z", label: "Undo last road point" },
-                  { key: "Esc", label: "Close layer picker / this modal" },
-                  { key: "?", label: "Toggle this shortcuts panel" },
-                ]},
+                {
+                  group: "Modes",
+                  rows: [
+                    { key: "V", label: "View mode" },
+                    { key: "P", label: "Add Point mode" },
+                    { key: "R", label: "Add Road mode" },
+                    { key: "D", label: "Add Destination mode" },
+                    { key: "T", label: "Route Test mode" },
+                    { key: "X", label: "Transit Route mode" },
+                  ],
+                },
+                {
+                  group: "Map",
+                  rows: [
+                    { key: "+ / =", label: "Zoom in" },
+                    { key: "−", label: "Zoom out" },
+                    { key: "0", label: "Reset view to Cebu" },
+                    { key: "F", label: "Toggle fullscreen" },
+                  ],
+                },
+                {
+                  group: "Editing",
+                  rows: [
+                    { key: "Ctrl + Z", label: "Undo last road point" },
+                    { key: "Esc", label: "Close layer picker / this modal" },
+                    { key: "?", label: "Toggle this shortcuts panel" },
+                  ],
+                },
               ].map(({ group, rows }) => (
                 <div key={group}>
                   <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1.5">
@@ -2901,7 +2979,10 @@ export default function MapManager({
                       <div
                         key={key}
                         className="flex items-center justify-between px-3 py-2"
-                        style={{ background: i % 2 === 0 ? "rgba(0,0,0,0.02)" : "transparent" }}
+                        style={{
+                          background:
+                            i % 2 === 0 ? "rgba(0,0,0,0.02)" : "transparent",
+                        }}
                       >
                         <span className="text-sm text-gray-700">{label}</span>
                         <kbd
@@ -2922,7 +3003,11 @@ export default function MapManager({
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button color="primary" variant="flat" onClick={() => setShowShortcutsModal(false)}>
+            <Button
+              color="primary"
+              variant="flat"
+              onClick={() => setShowShortcutsModal(false)}
+            >
               Close
             </Button>
           </ModalFooter>

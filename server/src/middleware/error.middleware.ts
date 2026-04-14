@@ -1,7 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
-import { AppError } from '../types';
-import { logger } from '../utils/logger';
-import { config } from '../config/env';
+import { Request, Response, NextFunction } from "express";
+import { AppError } from "../types";
+import { logger } from "../utils/logger";
+import { config } from "../config/env";
 
 /**
  * Error handling middleware
@@ -10,10 +10,10 @@ export const errorHandler = (
   err: Error | AppError,
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void => {
   // Log error
-  logger.error('Error:', {
+  logger.error("Error:", {
     message: err.message,
     stack: err.stack,
     url: req.url,
@@ -31,54 +31,58 @@ export const errorHandler = (
   }
 
   // Handle JWT errors
-  if (err.name === 'JsonWebTokenError') {
+  if (err.name === "JsonWebTokenError") {
     res.status(401).json({
       success: false,
-      error: 'Invalid authentication token',
+      error: "Invalid authentication token",
     });
     return;
   }
 
-  if (err.name === 'TokenExpiredError') {
+  if (err.name === "TokenExpiredError") {
     res.status(401).json({
       success: false,
-      error: 'Authentication token expired',
+      error: "Authentication token expired",
     });
     return;
   }
 
   // Handle MySQL errors
-  if (err.name === 'ER_DUP_ENTRY' || (err as any).code === 'ER_DUP_ENTRY') {
+  if (err.name === "ER_DUP_ENTRY" || (err as any).code === "ER_DUP_ENTRY") {
     res.status(409).json({
       success: false,
-      error: 'Duplicate entry. Resource already exists.',
+      error: "Duplicate entry. Resource already exists.",
     });
     return;
   }
 
   // Handle FK constraint violations
-  if ((err as any).code === 'ER_NO_REFERENCED_ROW_2' || (err as any).code === 'ER_NO_REFERENCED_ROW') {
+  if (
+    (err as any).code === "ER_NO_REFERENCED_ROW_2" ||
+    (err as any).code === "ER_NO_REFERENCED_ROW"
+  ) {
     res.status(400).json({
       success: false,
-      error: 'Referenced record not found. Please ensure all related records exist (e.g., category, intersection).',
+      error:
+        "Referenced record not found. Please ensure all related records exist (e.g., category, intersection).",
     });
     return;
   }
 
   // Handle validation errors from MySQL
-  if ((err as any).code === 'ER_BAD_FIELD_ERROR') {
+  if ((err as any).code === "ER_BAD_FIELD_ERROR") {
     res.status(400).json({
       success: false,
-      error: 'Invalid field in request',
+      error: "Invalid field in request",
     });
     return;
   }
 
   // Handle data too long for column
-  if ((err as any).code === 'ER_DATA_TOO_LONG') {
+  if ((err as any).code === "ER_DATA_TOO_LONG") {
     res.status(400).json({
       success: false,
-      error: 'Data too long for one or more fields. Please shorten your input.',
+      error: "Data too long for one or more fields. Please shorten your input.",
     });
     return;
   }
@@ -86,7 +90,7 @@ export const errorHandler = (
   // Default server error
   res.status(500).json({
     success: false,
-    error: config.isDevelopment ? err.message : 'Internal server error',
+    error: config.isDevelopment ? err.message : "Internal server error",
     ...(config.isDevelopment && { stack: err.stack }),
   });
 };
@@ -97,7 +101,7 @@ export const errorHandler = (
 export const notFoundHandler = (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void => {
   const error = new AppError(`Route not found: ${req.originalUrl}`, 404);
   next(error);
@@ -107,7 +111,7 @@ export const notFoundHandler = (
  * Async handler wrapper to catch errors in async route handlers
  */
 export const asyncHandler = (
-  fn: (req: Request, res: Response, next: NextFunction) => Promise<any>
+  fn: (req: Request, res: Response, next: NextFunction) => Promise<any>,
 ) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     Promise.resolve(fn(req, res, next)).catch(next);

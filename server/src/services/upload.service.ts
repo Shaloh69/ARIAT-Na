@@ -1,6 +1,6 @@
-import { supabase, STORAGE_BUCKET } from '../config/supabase-storage';
-import { v4 as uuidv4 } from 'uuid';
-import path from 'path';
+import { supabase, STORAGE_BUCKET } from "../config/supabase-storage";
+import { v4 as uuidv4 } from "uuid";
+import path from "path";
 
 export interface UploadResult {
   url: string;
@@ -22,7 +22,7 @@ export interface UploadOptions {
 export const uploadFile = async (
   fileBuffer: Buffer,
   originalFilename: string,
-  options: UploadOptions = {}
+  options: UploadOptions = {},
 ): Promise<UploadResult> => {
   try {
     // Extract file extension
@@ -32,7 +32,7 @@ export const uploadFile = async (
     const filename = options.filename || `${uuidv4()}${ext}`;
 
     // Construct storage path
-    const folder = options.folder || 'uploads';
+    const folder = options.folder || "uploads";
     const storagePath = `${folder}/${filename}`;
 
     // Determine content type
@@ -44,7 +44,7 @@ export const uploadFile = async (
       .upload(storagePath, fileBuffer, {
         contentType,
         upsert: options.upsert || false,
-        duplex: 'half',
+        duplex: "half",
       });
 
     if (error) {
@@ -52,9 +52,9 @@ export const uploadFile = async (
     }
 
     // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from(STORAGE_BUCKET)
-      .getPublicUrl(storagePath);
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
 
     return {
       url: publicUrl,
@@ -72,10 +72,10 @@ export const uploadFile = async (
  */
 export const uploadMultipleFiles = async (
   files: Array<{ buffer: Buffer; originalname: string }>,
-  options: UploadOptions = {}
+  options: UploadOptions = {},
 ): Promise<UploadResult[]> => {
-  const uploadPromises = files.map(file =>
-    uploadFile(file.buffer, file.originalname, options)
+  const uploadPromises = files.map((file) =>
+    uploadFile(file.buffer, file.originalname, options),
   );
 
   return await Promise.all(uploadPromises);
@@ -105,10 +105,12 @@ export const deleteFileByUrl = async (publicUrl: string): Promise<void> => {
   try {
     // Extract path from URL
     // URL format: https://xxx.supabase.co/storage/v1/object/public/bucket-name/path/to/file.jpg
-    const urlParts = publicUrl.split(`/storage/v1/object/public/${STORAGE_BUCKET}/`);
+    const urlParts = publicUrl.split(
+      `/storage/v1/object/public/${STORAGE_BUCKET}/`,
+    );
 
     if (urlParts.length < 2) {
-      throw new Error('Invalid Supabase Storage URL');
+      throw new Error("Invalid Supabase Storage URL");
     }
 
     const filePath = urlParts[1];
@@ -121,7 +123,9 @@ export const deleteFileByUrl = async (publicUrl: string): Promise<void> => {
 /**
  * Delete multiple files
  */
-export const deleteMultipleFiles = async (filePaths: string[]): Promise<void> => {
+export const deleteMultipleFiles = async (
+  filePaths: string[],
+): Promise<void> => {
   try {
     const { error } = await supabase.storage
       .from(STORAGE_BUCKET)
@@ -139,9 +143,9 @@ export const deleteMultipleFiles = async (filePaths: string[]): Promise<void> =>
  * Get public URL for a file
  */
 export const getPublicUrl = (filePath: string): string => {
-  const { data: { publicUrl } } = supabase.storage
-    .from(STORAGE_BUCKET)
-    .getPublicUrl(filePath);
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
 
   return publicUrl;
 };
@@ -149,14 +153,14 @@ export const getPublicUrl = (filePath: string): string => {
 /**
  * List files in a folder
  */
-export const listFiles = async (folderPath: string = ''): Promise<any[]> => {
+export const listFiles = async (folderPath: string = ""): Promise<any[]> => {
   try {
     const { data, error } = await supabase.storage
       .from(STORAGE_BUCKET)
       .list(folderPath, {
         limit: 100,
         offset: 0,
-        sortBy: { column: 'created_at', order: 'desc' },
+        sortBy: { column: "created_at", order: "desc" },
       });
 
     if (error) {
@@ -181,7 +185,7 @@ export const getFileMetadata = async (filePath: string): Promise<any> => {
       });
 
     if (error || !data || data.length === 0) {
-      throw new Error('File not found');
+      throw new Error("File not found");
     }
 
     return data[0];
@@ -196,29 +200,30 @@ export const getFileMetadata = async (filePath: string): Promise<any> => {
 function getContentType(ext: string): string {
   const contentTypes: Record<string, string> = {
     // Images
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-    '.svg': 'image/svg+xml',
-    '.bmp': 'image/bmp',
-    '.ico': 'image/x-icon',
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".bmp": "image/bmp",
+    ".ico": "image/x-icon",
 
     // Videos
-    '.mp4': 'video/mp4',
-    '.webm': 'video/webm',
-    '.ogg': 'video/ogg',
-    '.mov': 'video/quicktime',
-    '.avi': 'video/x-msvideo',
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".ogg": "video/ogg",
+    ".mov": "video/quicktime",
+    ".avi": "video/x-msvideo",
 
     // Documents
-    '.pdf': 'application/pdf',
-    '.doc': 'application/msword',
-    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx":
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   };
 
-  return contentTypes[ext] || 'application/octet-stream';
+  return contentTypes[ext] || "application/octet-stream";
 }
 
 /**
@@ -226,9 +231,9 @@ function getContentType(ext: string): string {
  */
 export const validateFileType = (
   mimetype: string,
-  allowedTypes: string[]
+  allowedTypes: string[],
 ): boolean => {
-  return allowedTypes.some(type => mimetype.startsWith(type));
+  return allowedTypes.some((type) => mimetype.startsWith(type));
 };
 
 /**
@@ -236,7 +241,7 @@ export const validateFileType = (
  */
 export const validateFileSize = (
   fileSize: number,
-  maxSizeInMB: number
+  maxSizeInMB: number,
 ): boolean => {
   const maxSizeInBytes = maxSizeInMB * 1024 * 1024;
   return fileSize <= maxSizeInBytes;
@@ -245,18 +250,18 @@ export const validateFileSize = (
 // Preset configurations for different upload types
 export const UPLOAD_CONFIGS = {
   IMAGE: {
-    allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+    allowedTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
     maxSizeInMB: 5,
-    folder: 'destinations',
+    folder: "destinations",
   },
   VIDEO: {
-    allowedTypes: ['video/mp4', 'video/webm', 'video/quicktime'],
+    allowedTypes: ["video/mp4", "video/webm", "video/quicktime"],
     maxSizeInMB: 50,
-    folder: 'videos',
+    folder: "videos",
   },
   CATEGORY_ICON: {
-    allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'],
+    allowedTypes: ["image/jpeg", "image/png", "image/webp", "image/svg+xml"],
     maxSizeInMB: 2,
-    folder: 'categories',
+    folder: "categories",
   },
 };

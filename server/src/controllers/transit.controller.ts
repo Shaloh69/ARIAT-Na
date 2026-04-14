@@ -1,7 +1,7 @@
-import { Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import { AuthRequest, AppError } from '../types';
-import { pool } from '../config/database';
+import { Response } from "express";
+import { v4 as uuidv4 } from "uuid";
+import { AuthRequest, AppError } from "../types";
+import { pool } from "../config/database";
 
 // ─── Transit Stops (bus_stop, bus_terminal, pier) ────────────────────────────
 
@@ -11,19 +11,18 @@ import { pool } from '../config/database';
  */
 export const getTransitStops = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { type } = req.query;
 
-  const transitTypes = ['bus_stop', 'bus_terminal', 'pier'];
-  const typeFilter = type && transitTypes.includes(String(type))
-    ? [String(type)]
-    : transitTypes;
+  const transitTypes = ["bus_stop", "bus_terminal", "pier"];
+  const typeFilter =
+    type && transitTypes.includes(String(type)) ? [String(type)] : transitTypes;
 
-  const placeholders = typeFilter.map(() => '?').join(', ');
+  const placeholders = typeFilter.map(() => "?").join(", ");
   const [rows]: any = await pool.execute(
     `SELECT * FROM intersections WHERE point_type IN (${placeholders}) ORDER BY point_type ASC, name ASC`,
-    typeFilter
+    typeFilter,
   );
 
   res.json({ success: true, data: rows });
@@ -35,27 +34,35 @@ export const getTransitStops = async (
  */
 export const createTransitStop = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { name, latitude, longitude, point_type, address } = req.body;
 
-  const validTypes = ['bus_stop', 'bus_terminal', 'pier'];
+  const validTypes = ["bus_stop", "bus_terminal", "pier"];
   if (!name || latitude === undefined || longitude === undefined) {
-    throw new AppError('name, latitude, and longitude are required', 400);
+    throw new AppError("name, latitude, and longitude are required", 400);
   }
   if (!point_type || !validTypes.includes(point_type)) {
-    throw new AppError(`point_type must be one of: ${validTypes.join(', ')}`, 400);
+    throw new AppError(
+      `point_type must be one of: ${validTypes.join(", ")}`,
+      400,
+    );
   }
 
   const id = uuidv4();
   await pool.execute(
     `INSERT INTO intersections (id, name, latitude, longitude, point_type, address, is_destination)
      VALUES (?, ?, ?, ?, ?, ?, FALSE)`,
-    [id, name, latitude, longitude, point_type, address || null]
+    [id, name, latitude, longitude, point_type, address || null],
   );
 
-  const [rows]: any = await pool.execute('SELECT * FROM intersections WHERE id = ?', [id]);
-  res.status(201).json({ success: true, message: 'Transit stop created', data: rows[0] });
+  const [rows]: any = await pool.execute(
+    "SELECT * FROM intersections WHERE id = ?",
+    [id],
+  );
+  res
+    .status(201)
+    .json({ success: true, message: "Transit stop created", data: rows[0] });
 };
 
 /**
@@ -64,35 +71,53 @@ export const createTransitStop = async (
  */
 export const updateTransitStop = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
   const { name, latitude, longitude, point_type, address } = req.body;
 
   const [existing]: any = await pool.execute(
     "SELECT id FROM intersections WHERE id = ? AND point_type IN ('bus_stop','bus_terminal','pier')",
-    [id]
+    [id],
   );
-  if (existing.length === 0) throw new AppError('Transit stop not found', 404);
+  if (existing.length === 0) throw new AppError("Transit stop not found", 404);
 
   const fields: string[] = [];
   const values: any[] = [];
 
-  if (name !== undefined)      { fields.push('name = ?');       values.push(name); }
-  if (latitude !== undefined)  { fields.push('latitude = ?');   values.push(latitude); }
-  if (longitude !== undefined) { fields.push('longitude = ?');  values.push(longitude); }
-  if (point_type !== undefined){ fields.push('point_type = ?'); values.push(point_type); }
-  if (address !== undefined)   { fields.push('address = ?');    values.push(address); }
+  if (name !== undefined) {
+    fields.push("name = ?");
+    values.push(name);
+  }
+  if (latitude !== undefined) {
+    fields.push("latitude = ?");
+    values.push(latitude);
+  }
+  if (longitude !== undefined) {
+    fields.push("longitude = ?");
+    values.push(longitude);
+  }
+  if (point_type !== undefined) {
+    fields.push("point_type = ?");
+    values.push(point_type);
+  }
+  if (address !== undefined) {
+    fields.push("address = ?");
+    values.push(address);
+  }
 
-  if (fields.length === 0) throw new AppError('No valid fields to update', 400);
+  if (fields.length === 0) throw new AppError("No valid fields to update", 400);
 
   await pool.execute(
-    `UPDATE intersections SET ${fields.join(', ')}, updated_at = NOW() WHERE id = ?`,
-    [...values, id]
+    `UPDATE intersections SET ${fields.join(", ")}, updated_at = NOW() WHERE id = ?`,
+    [...values, id],
   );
 
-  const [rows]: any = await pool.execute('SELECT * FROM intersections WHERE id = ?', [id]);
-  res.json({ success: true, message: 'Transit stop updated', data: rows[0] });
+  const [rows]: any = await pool.execute(
+    "SELECT * FROM intersections WHERE id = ?",
+    [id],
+  );
+  res.json({ success: true, message: "Transit stop updated", data: rows[0] });
 };
 
 /**
@@ -100,17 +125,18 @@ export const updateTransitStop = async (
  */
 export const deleteTransitStop = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
 
   const [result]: any = await pool.execute(
     "DELETE FROM intersections WHERE id = ? AND point_type IN ('bus_stop','bus_terminal','pier')",
-    [id]
+    [id],
   );
-  if (result.affectedRows === 0) throw new AppError('Transit stop not found', 404);
+  if (result.affectedRows === 0)
+    throw new AppError("Transit stop not found", 404);
 
-  res.json({ success: true, message: 'Transit stop deleted' });
+  res.json({ success: true, message: "Transit stop deleted" });
 };
 
 // ─── Transit Routes ───────────────────────────────────────────────────────────
@@ -121,7 +147,7 @@ export const deleteTransitStop = async (
  */
 export const getTransitRoutes = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { transport_type, active } = req.query;
 
@@ -129,14 +155,14 @@ export const getTransitRoutes = async (
   const params: any[] = [];
 
   if (transport_type) {
-    conditions.push('tr.transport_type = ?');
+    conditions.push("tr.transport_type = ?");
     params.push(transport_type);
   }
-  if (active === 'true') {
-    conditions.push('tr.is_active = TRUE');
+  if (active === "true") {
+    conditions.push("tr.is_active = TRUE");
   }
 
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const [rows]: any = await pool.execute(
     `SELECT tr.*, fc.display_name AS fare_config_name
@@ -144,7 +170,7 @@ export const getTransitRoutes = async (
      LEFT JOIN fare_configs fc ON fc.id = tr.fare_config_id
      ${where}
      ORDER BY tr.transport_type ASC, tr.route_name ASC`,
-    params
+    params,
   );
 
   res.json({ success: true, data: rows });
@@ -155,7 +181,7 @@ export const getTransitRoutes = async (
  */
 export const getTransitRouteById = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
   const [rows]: any = await pool.execute(
@@ -163,9 +189,9 @@ export const getTransitRouteById = async (
      FROM transit_routes tr
      LEFT JOIN fare_configs fc ON fc.id = tr.fare_config_id
      WHERE tr.id = ?`,
-    [id]
+    [id],
   );
-  if (rows.length === 0) throw new AppError('Transit route not found', 404);
+  if (rows.length === 0) throw new AppError("Transit route not found", 404);
   res.json({ success: true, data: rows[0] });
 };
 
@@ -176,7 +202,7 @@ export const getTransitRouteById = async (
  */
 export const createTransitRoute = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const {
     fare_config_id,
@@ -184,24 +210,30 @@ export const createTransitRoute = async (
     transport_type,
     road_ids = [],
     stop_ids = [],
-    pickup_mode = 'stops_only',
-    color = '#3b82f6',
+    pickup_mode = "stops_only",
+    color = "#3b82f6",
     description,
     is_active = true,
   } = req.body;
 
   if (!fare_config_id || !route_name || !transport_type) {
-    throw new AppError('fare_config_id, route_name, and transport_type are required', 400);
+    throw new AppError(
+      "fare_config_id, route_name, and transport_type are required",
+      400,
+    );
   }
 
-  const validPickup = ['anywhere', 'stops_only'];
+  const validPickup = ["anywhere", "stops_only"];
   if (!validPickup.includes(pickup_mode)) {
     throw new AppError('pickup_mode must be "anywhere" or "stops_only"', 400);
   }
 
   // Verify fare_config exists
-  const [fc]: any = await pool.execute('SELECT id FROM fare_configs WHERE id = ?', [fare_config_id]);
-  if (fc.length === 0) throw new AppError('fare_config not found', 404);
+  const [fc]: any = await pool.execute(
+    "SELECT id FROM fare_configs WHERE id = ?",
+    [fare_config_id],
+  );
+  if (fc.length === 0) throw new AppError("fare_config not found", 404);
 
   const id = uuidv4();
   await pool.execute(
@@ -209,19 +241,28 @@ export const createTransitRoute = async (
        (id, fare_config_id, route_name, transport_type, road_ids, stop_ids, pickup_mode, color, description, is_active)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      id, fare_config_id, route_name, transport_type,
-      JSON.stringify(road_ids), JSON.stringify(stop_ids),
-      pickup_mode, color, description || null, is_active,
-    ]
+      id,
+      fare_config_id,
+      route_name,
+      transport_type,
+      JSON.stringify(road_ids),
+      JSON.stringify(stop_ids),
+      pickup_mode,
+      color,
+      description || null,
+      is_active,
+    ],
   );
 
   const [rows]: any = await pool.execute(
     `SELECT tr.*, fc.display_name AS fare_config_name
      FROM transit_routes tr LEFT JOIN fare_configs fc ON fc.id = tr.fare_config_id
      WHERE tr.id = ?`,
-    [id]
+    [id],
   );
-  res.status(201).json({ success: true, message: 'Transit route created', data: rows[0] });
+  res
+    .status(201)
+    .json({ success: true, message: "Transit route created", data: rows[0] });
 };
 
 /**
@@ -229,16 +270,29 @@ export const createTransitRoute = async (
  */
 export const updateTransitRoute = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
   const updates = req.body;
 
-  const [existing]: any = await pool.execute('SELECT id FROM transit_routes WHERE id = ?', [id]);
-  if (existing.length === 0) throw new AppError('Transit route not found', 404);
+  const [existing]: any = await pool.execute(
+    "SELECT id FROM transit_routes WHERE id = ?",
+    [id],
+  );
+  if (existing.length === 0) throw new AppError("Transit route not found", 404);
 
-  const allowed = ['fare_config_id','route_name','transport_type','road_ids','stop_ids','pickup_mode','color','description','is_active'];
-  const jsonFields = ['road_ids', 'stop_ids'];
+  const allowed = [
+    "fare_config_id",
+    "route_name",
+    "transport_type",
+    "road_ids",
+    "stop_ids",
+    "pickup_mode",
+    "color",
+    "description",
+    "is_active",
+  ];
+  const jsonFields = ["road_ids", "stop_ids"];
 
   const fields: string[] = [];
   const values: any[] = [];
@@ -246,24 +300,26 @@ export const updateTransitRoute = async (
   Object.keys(updates).forEach((key) => {
     if (allowed.includes(key)) {
       fields.push(`${key} = ?`);
-      values.push(jsonFields.includes(key) ? JSON.stringify(updates[key]) : updates[key]);
+      values.push(
+        jsonFields.includes(key) ? JSON.stringify(updates[key]) : updates[key],
+      );
     }
   });
 
-  if (fields.length === 0) throw new AppError('No valid fields to update', 400);
+  if (fields.length === 0) throw new AppError("No valid fields to update", 400);
 
   await pool.execute(
-    `UPDATE transit_routes SET ${fields.join(', ')}, updated_at = NOW() WHERE id = ?`,
-    [...values, id]
+    `UPDATE transit_routes SET ${fields.join(", ")}, updated_at = NOW() WHERE id = ?`,
+    [...values, id],
   );
 
   const [rows]: any = await pool.execute(
     `SELECT tr.*, fc.display_name AS fare_config_name
      FROM transit_routes tr LEFT JOIN fare_configs fc ON fc.id = tr.fare_config_id
      WHERE tr.id = ?`,
-    [id]
+    [id],
   );
-  res.json({ success: true, message: 'Transit route updated', data: rows[0] });
+  res.json({ success: true, message: "Transit route updated", data: rows[0] });
 };
 
 /**
@@ -271,10 +327,14 @@ export const updateTransitRoute = async (
  */
 export const deleteTransitRoute = async (
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { id } = req.params;
-  const [result]: any = await pool.execute('DELETE FROM transit_routes WHERE id = ?', [id]);
-  if (result.affectedRows === 0) throw new AppError('Transit route not found', 404);
-  res.json({ success: true, message: 'Transit route deleted' });
+  const [result]: any = await pool.execute(
+    "DELETE FROM transit_routes WHERE id = ?",
+    [id],
+  );
+  if (result.affectedRows === 0)
+    throw new AppError("Transit route not found", 404);
+  res.json({ success: true, message: "Transit route deleted" });
 };

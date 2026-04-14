@@ -1,5 +1,5 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
 
 dotenv.config();
 
@@ -9,11 +9,13 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
 if (!supabaseUrl) {
-  throw new Error('SUPABASE_URL is not defined in environment variables');
+  throw new Error("SUPABASE_URL is not defined in environment variables");
 }
 
 if (!supabaseServiceKey) {
-  throw new Error('SUPABASE_SERVICE_KEY is not defined in environment variables');
+  throw new Error(
+    "SUPABASE_SERVICE_KEY is not defined in environment variables",
+  );
 }
 
 // Service role client (for backend operations)
@@ -25,13 +27,13 @@ export const supabaseAdmin: SupabaseClient = createClient(
       autoRefreshToken: false,
       persistSession: false,
     },
-  }
+  },
 );
 
 // Public client (for frontend operations)
 export const supabasePublic: SupabaseClient = createClient(
   supabaseUrl,
-  supabaseAnonKey || supabaseServiceKey
+  supabaseAnonKey || supabaseServiceKey,
 );
 
 // ===== Authentication Functions =====
@@ -39,7 +41,11 @@ export const supabasePublic: SupabaseClient = createClient(
 /**
  * Sign up a new user
  */
-export const signUpUser = async (email: string, password: string, metadata?: any) => {
+export const signUpUser = async (
+  email: string,
+  password: string,
+  metadata?: any,
+) => {
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email,
     password,
@@ -92,7 +98,7 @@ export const uploadFile = async (
   bucket: string,
   path: string,
   file: Buffer | Blob,
-  contentType?: string
+  contentType?: string,
 ) => {
   const { data, error } = await supabaseAdmin.storage
     .from(bucket)
@@ -104,9 +110,9 @@ export const uploadFile = async (
   if (error) throw error;
 
   // Get public URL
-  const { data: { publicUrl } } = supabaseAdmin.storage
-    .from(bucket)
-    .getPublicUrl(path);
+  const {
+    data: { publicUrl },
+  } = supabaseAdmin.storage.from(bucket).getPublicUrl(path);
 
   return { ...data, publicUrl };
 };
@@ -115,9 +121,7 @@ export const uploadFile = async (
  * Delete file from Supabase Storage
  */
 export const deleteFile = async (bucket: string, path: string) => {
-  const { error } = await supabaseAdmin.storage
-    .from(bucket)
-    .remove([path]);
+  const { error } = await supabaseAdmin.storage.from(bucket).remove([path]);
 
   if (error) throw error;
 };
@@ -126,9 +130,9 @@ export const deleteFile = async (bucket: string, path: string) => {
  * Get public URL for a file
  */
 export const getPublicUrl = (bucket: string, path: string): string => {
-  const { data: { publicUrl } } = supabaseAdmin.storage
-    .from(bucket)
-    .getPublicUrl(path);
+  const {
+    data: { publicUrl },
+  } = supabaseAdmin.storage.from(bucket).getPublicUrl(path);
 
   return publicUrl;
 };
@@ -155,12 +159,12 @@ export const insertRecord = async <T>(table: string, data: any): Promise<T> => {
 export const updateRecord = async <T>(
   table: string,
   id: string,
-  data: any
+  data: any,
 ): Promise<T> => {
   const { data: result, error } = await supabaseAdmin
     .from(table)
     .update(data)
-    .eq('id', id)
+    .eq("id", id)
     .select()
     .single();
 
@@ -171,11 +175,11 @@ export const updateRecord = async <T>(
 /**
  * Delete record
  */
-export const deleteRecord = async (table: string, id: string): Promise<void> => {
-  const { error } = await supabaseAdmin
-    .from(table)
-    .delete()
-    .eq('id', id);
+export const deleteRecord = async (
+  table: string,
+  id: string,
+): Promise<void> => {
+  const { error } = await supabaseAdmin.from(table).delete().eq("id", id);
 
   if (error) throw error;
 };
@@ -183,14 +187,17 @@ export const deleteRecord = async (table: string, id: string): Promise<void> => 
 /**
  * Get record by ID
  */
-export const getRecordById = async <T>(table: string, id: string): Promise<T | null> => {
+export const getRecordById = async <T>(
+  table: string,
+  id: string,
+): Promise<T | null> => {
   const { data, error } = await supabaseAdmin
     .from(table)
-    .select('*')
-    .eq('id', id)
+    .select("*")
+    .eq("id", id)
     .single();
 
-  if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
+  if (error && error.code !== "PGRST116") throw error; // PGRST116 = not found
   return data as T | null;
 };
 
@@ -205,9 +212,9 @@ export const listRecords = async <T>(
     orderBy?: string;
     ascending?: boolean;
     filters?: Record<string, any>;
-  }
+  },
 ): Promise<T[]> => {
-  let query = supabaseAdmin.from(table).select('*');
+  let query = supabaseAdmin.from(table).select("*");
 
   // Apply filters
   if (options?.filters) {
@@ -230,7 +237,7 @@ export const listRecords = async <T>(
   if (options?.offset) {
     query = query.range(
       options.offset,
-      options.offset + (options.limit || 10) - 1
+      options.offset + (options.limit || 10) - 1,
     );
   }
 
@@ -247,15 +254,11 @@ export const listRecords = async <T>(
  */
 export const subscribeToTable = (
   table: string,
-  callback: (payload: any) => void
+  callback: (payload: any) => void,
 ) => {
   return supabasePublic
     .channel(`public:${table}`)
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table },
-      callback
-    )
+    .on("postgres_changes", { event: "*", schema: "public", table }, callback)
     .subscribe();
 };
 

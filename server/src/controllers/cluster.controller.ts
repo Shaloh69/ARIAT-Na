@@ -1,18 +1,21 @@
-import { Request, Response } from 'express';
-import { pool } from '../config/database';
-import { RowDataPacket } from 'mysql2';
+import { Request, Response } from "express";
+import { pool } from "../config/database";
+import { RowDataPacket } from "mysql2";
 
 const toNum = (v: any, fallback: number | null = 0): number | null =>
-  v !== null && v !== undefined && v !== '' ? Number(v) : fallback;
+  v !== null && v !== undefined && v !== "" ? Number(v) : fallback;
 
-export const getClusters = async (_req: Request, res: Response): Promise<void> => {
+export const getClusters = async (
+  _req: Request,
+  res: Response,
+): Promise<void> => {
   const [rows] = await pool.execute<RowDataPacket[]>(
     `SELECT cl.*, COUNT(d.id) AS destination_count
      FROM clusters cl
      LEFT JOIN destinations d ON d.cluster_id = cl.id AND d.is_active = TRUE
      WHERE cl.is_active = TRUE
      GROUP BY cl.id
-     ORDER BY cl.display_order ASC`
+     ORDER BY cl.display_order ASC`,
   );
   const data = (rows as any[]).map((cl) => ({
     ...cl,
@@ -23,7 +26,10 @@ export const getClusters = async (_req: Request, res: Response): Promise<void> =
   res.json({ success: true, data });
 };
 
-export const getClusterById = async (req: Request, res: Response): Promise<void> => {
+export const getClusterById = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   const { id } = req.params;
   const [rows] = await pool.execute<RowDataPacket[]>(
     `SELECT cl.*, COUNT(d.id) AS destination_count
@@ -31,10 +37,10 @@ export const getClusterById = async (req: Request, res: Response): Promise<void>
      LEFT JOIN destinations d ON d.cluster_id = cl.id AND d.is_active = TRUE
      WHERE cl.id = ? OR cl.slug = ?
      GROUP BY cl.id`,
-    [id, id]
+    [id, id],
   );
   if ((rows as any[]).length === 0) {
-    res.status(404).json({ success: false, error: 'Cluster not found' });
+    res.status(404).json({ success: false, error: "Cluster not found" });
     return;
   }
   const raw = rows[0] as any;
@@ -55,19 +61,23 @@ export const getClusterById = async (req: Request, res: Response): Promise<void>
      WHERE d.cluster_id = ? AND d.is_active = TRUE
      ORDER BY d.is_featured DESC, d.popularity_score DESC, d.rating DESC
      LIMIT 6`,
-    [cluster.id]
+    [cluster.id],
   );
 
   const featured_places = (featuredRows as any[]).map((p) => ({
     ...p,
-    latitude:           toNum(p.latitude)           ?? 0,
-    longitude:          toNum(p.longitude)          ?? 0,
-    rating:             toNum(p.rating)             ?? 0,
+    latitude: toNum(p.latitude) ?? 0,
+    longitude: toNum(p.longitude) ?? 0,
+    rating: toNum(p.rating) ?? 0,
     entrance_fee_local: toNum(p.entrance_fee_local) ?? 0,
     images: (() => {
       if (p.images === null || p.images === undefined) return [];
-      if (typeof p.images === 'object') return p.images;
-      try { return JSON.parse(p.images); } catch { return []; }
+      if (typeof p.images === "object") return p.images;
+      try {
+        return JSON.parse(p.images);
+      } catch {
+        return [];
+      }
     })(),
   }));
 
