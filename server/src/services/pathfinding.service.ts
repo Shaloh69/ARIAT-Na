@@ -65,6 +65,15 @@ interface RouteResult {
   steps: RouteStep[];
   routeGeometry?: [number, number][]; // Full polyline coordinates [lat, lng] following actual road paths
   virtualConnections?: VirtualConnection[]; // For POIs far from roads
+  /** True when no road route exists and we fell back to a straight-line walk */
+  isWalkFallback?: boolean;
+  /** Last-mile walk segment — road ends here, walk the rest */
+  walkTail?: {
+    from: [number, number];
+    to: [number, number];
+    distanceKm: number;
+    walkMinutes: number;
+  };
 }
 
 interface RouteStep {
@@ -842,7 +851,38 @@ export async function calculateRoute(
   );
 
   if (!result.success) {
-    return result;
+    // Walk fallback — no road route exists between these two points.
+    // Return a straight-line walking route so the UI can still render something useful.
+    const walkDist = haversineDistance(startLat, startLon, endLat, endLon);
+    const walkMins = Math.ceil((walkDist / 5) * 60); // 5 km/h walking speed
+    return {
+      success: true,
+      path: [],
+      roads: [],
+      totalDistance: walkDist,
+      estimatedTime: walkMins,
+      steps: [
+        {
+          instruction: "Walk to destination — no road route available in this area",
+          roadName: "Walking",
+          distance: walkDist,
+          time: walkMins,
+          from: "Starting Point",
+          to: "Destination",
+        },
+      ],
+      routeGeometry: [
+        [startLat, startLon],
+        [endLat, endLon],
+      ],
+      isWalkFallback: true,
+      walkTail: {
+        from: [startLat, startLon],
+        to: [endLat, endLon],
+        distanceKm: walkDist,
+        walkMinutes: walkMins,
+      },
+    };
   }
 
   // Add virtual connections if needed
@@ -867,6 +907,7 @@ export async function calculateRoute(
 
   if (endNode.needsVirtualConnection) {
     const walkDistance = endNode.distance;
+    const walkMins = Math.max(1, Math.round((walkDistance / 5) * 60));
     virtualConnections.push({
       type: "end",
       from: {
@@ -879,7 +920,14 @@ export async function calculateRoute(
       isVirtual: true,
     });
     result.totalDistance += walkDistance;
-    result.estimatedTime += Math.max(1, Math.round((walkDistance / 5) * 60)); // Walking speed ~5 km/h
+    result.estimatedTime += walkMins;
+    // Expose as walkTail so the frontend can render a distinct last-mile walk segment
+    result.walkTail = {
+      from: [endNode.intersection.latitude, endNode.intersection.longitude],
+      to: [endLat, endLon],
+      distanceKm: walkDistance,
+      walkMinutes: walkMins,
+    };
   }
 
   if (virtualConnections.length > 0) {

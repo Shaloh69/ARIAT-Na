@@ -730,6 +730,33 @@ class _MapScreenState extends State<MapScreen> {
                 }).toList(),
               ),
 
+            // Walk fallback / walk-tail polylines (dashed blue)
+            if (_routeLegs.isNotEmpty)
+              PolylineLayer(
+                polylines: _routeLegs.expand((leg) {
+                  final List<Polyline> polys = [];
+                  if (leg.isWalkFallback && leg.routeGeometry != null && leg.routeGeometry!.length >= 2) {
+                    polys.add(Polyline(
+                      points: leg.routeGeometry!.map((c) => LatLng(c[0], c[1])).toList(),
+                      strokeWidth: 4,
+                      color: const Color(0xFF3B82F6).withAlpha(230),
+                      pattern: StrokePattern.dashed(segments: const [8, 6]),
+                    ));
+                  } else if (leg.walkTail != null) {
+                    polys.add(Polyline(
+                      points: [
+                        LatLng(leg.walkTail!.from[0], leg.walkTail!.from[1]),
+                        LatLng(leg.walkTail!.to[0], leg.walkTail!.to[1]),
+                      ],
+                      strokeWidth: 3,
+                      color: const Color(0xFF3B82F6).withAlpha(200),
+                      pattern: StrokePattern.dashed(segments: const [8, 6]),
+                    ));
+                  }
+                  return polys;
+                }).toList(),
+              ),
+
             // Route polylines — multi-modal (colour-coded per transport mode)
             if (_multiModalLegs.isNotEmpty)
               PolylineLayer(
@@ -1152,14 +1179,25 @@ class _MapScreenState extends State<MapScreen> {
                       child: Text(stop.name,
                           style: TextStyle(fontSize: 12, color: c.text),
                           overflow: TextOverflow.ellipsis)),
-                  if (i < _routeLegs.length)
+                  if (i < _routeLegs.length) ...[
+                    if (_routeLegs[i].isWalkFallback)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 4),
+                        child: Text('🚶',
+                            style: TextStyle(fontSize: 11)),
+                      ),
                     Padding(
                       padding: const EdgeInsets.only(right: 6),
                       child: Text(
                         '${_routeLegs[i].totalDistance.toStringAsFixed(1)}km',
-                        style: TextStyle(fontSize: 10, color: c.textFaint),
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: _routeLegs[i].isWalkFallback
+                                ? const Color(0xFF3B82F6)
+                                : c.textFaint),
                       ),
                     ),
+                  ],
                   if (!_isNavigating)
                     GestureDetector(
                       onTap: () => _removeStop(i),
@@ -1261,6 +1299,68 @@ class _MapScreenState extends State<MapScreen> {
               ],
             ),
           ),
+          // Walk fallback warnings
+          if (!isMultiModal && _routeLegs.any((l) => l.isWalkFallback)) ...[
+            const SizedBox(height: 8),
+            if (_routeLegs.any((l) => l.isWalkFallback && l.totalDistance > 3))
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withAlpha(25),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFF59E0B).withAlpha(80)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('⚠️', style: TextStyle(fontSize: 14)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Long walk detected',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFFB45309))),
+                          const SizedBox(height: 2),
+                          ..._routeLegs
+                              .where((l) => l.isWalkFallback && l.totalDistance > 3)
+                              .map((l) => Text(
+                                    '${l.totalDistance.toStringAsFixed(2)} km walk — no road route in this area',
+                                    style: const TextStyle(
+                                        fontSize: 11, color: Color(0xFF92400E)),
+                                  )),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withAlpha(20),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF3B82F6).withAlpha(60)),
+                ),
+                child: Row(
+                  children: [
+                    const Text('🚶', style: TextStyle(fontSize: 14)),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'One or more legs use a walking path — no road route available in that area.',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF1D4ED8)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+
           // Multi-modal leg detail
           if (isMultiModal) ...[
             const SizedBox(height: 8),

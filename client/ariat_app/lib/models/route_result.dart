@@ -1,9 +1,34 @@
+class WalkTail {
+  final List<double> from;
+  final List<double> to;
+  final double distanceKm;
+  final int walkMinutes;
+
+  WalkTail({
+    required this.from,
+    required this.to,
+    required this.distanceKm,
+    required this.walkMinutes,
+  });
+
+  factory WalkTail.fromJson(Map<String, dynamic> json) {
+    return WalkTail(
+      from: (json['from'] as List).map((v) => (v as num).toDouble()).toList(),
+      to: (json['to'] as List).map((v) => (v as num).toDouble()).toList(),
+      distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0,
+      walkMinutes: (json['walkMinutes'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 class RouteResult {
   final List<RoutePoint> path;
   final double totalDistance;
   final int estimatedTime;
   final List<RouteStep> steps;
   final List<List<double>>? routeGeometry;
+  final bool isWalkFallback;
+  final WalkTail? walkTail;
 
   RouteResult({
     required this.path,
@@ -11,6 +36,8 @@ class RouteResult {
     required this.estimatedTime,
     required this.steps,
     this.routeGeometry,
+    this.isWalkFallback = false,
+    this.walkTail,
   });
 
   factory RouteResult.fromJson(Map<String, dynamic> json) {
@@ -22,6 +49,8 @@ class RouteResult {
       routeGeometry: (json['routeGeometry'] as List?)
           ?.map((c) => [(c[0] as num).toDouble(), (c[1] as num).toDouble()])
           .toList(),
+      isWalkFallback: json['isWalkFallback'] as bool? ?? false,
+      walkTail: json['walkTail'] != null ? WalkTail.fromJson(json['walkTail'] as Map<String, dynamic>) : null,
     );
   }
 }

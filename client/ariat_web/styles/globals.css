@@ -763,6 +763,18 @@ html.light {
   background: #1d4ed8;
 }
 
+/* ===== Walk route polyline animation ===== */
+
+@keyframes walk-dash {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+.walk-route-polyline {
+  animation: walk-dash 0.8s linear infinite;
+}
+
 /* ===== Custom Scrollbar (dark mode) ===== */
 
 ::-webkit-scrollbar {
