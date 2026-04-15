@@ -339,7 +339,8 @@ export default function TransitPage() {
   const openAddRoute = () => {
     setEditingRoute(null);
     setRouteForm({ ...emptyRoute });
-    setRouteModal(true);
+    // Open map overlay directly — save happens via "Save Route" in the overlay header
+    setRouteEditorOpen(true);
   };
 
   const openEditRoute = (r: TransitRoute) => {
@@ -355,17 +356,19 @@ export default function TransitPage() {
       description: r.description ?? "",
       is_active: r.is_active,
     });
-    setRouteModal(true);
+    // Open map overlay directly
+    setRouteEditorOpen(true);
   };
 
   const handleSaveRoute = async () => {
-    if (
-      !routeForm.fare_config_id ||
-      !routeForm.route_name ||
-      !routeForm.transport_type
-    ) {
-      toast.error("Fare config, route name, and transport type are required");
-
+    if (!routeForm.route_name.trim()) {
+      toast.error("Route name is required");
+      setRouteEditorOpen(true); // re-open so user can fill name
+      return;
+    }
+    if (!routeForm.fare_config_id || !routeForm.transport_type) {
+      toast.error("Fare config is required");
+      setRouteEditorOpen(true); // re-open so user can select fare config
       return;
     }
     try {
@@ -380,6 +383,7 @@ export default function TransitPage() {
         toast.success("Route created");
       }
       setRouteModal(false);
+      setEditingRoute(null);
       fetchRoutes();
     } catch (e: any) {
       toast.error(
@@ -986,45 +990,92 @@ export default function TransitPage() {
           className="fixed inset-0 z-[9999] flex flex-col"
           style={{ background: "rgba(2,6,23,0.97)" }}
         >
+          {/* Header with inline form fields */}
           <div
-            className="flex items-center justify-between px-6 py-3 border-b"
+            className="flex items-center gap-4 px-6 py-3 border-b flex-wrap"
             style={{ borderColor: "var(--border)" }}
           >
-            <div>
-              <h2
-                className="text-base font-semibold"
-                style={{ color: "var(--text-strong)" }}
-              >
-                Route Builder — {routeForm.route_name || "Unnamed Route"}
-              </h2>
-              <p
-                className="text-xs mt-0.5"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Click roads to add/remove them.{" "}
-                {routeForm.pickup_mode === "stops_only"
-                  ? "Click stops/terminals to toggle them on the route."
-                  : "Passengers can board anywhere on selected roads."}
-                &nbsp;One-way roads are respected.
-              </p>
+            {/* Route name */}
+            <Input
+              classNames={{ inputWrapper: "h-9 min-h-9 bg-white/8 border-white/20" }}
+              placeholder="Route name *"
+              size="sm"
+              style={{ width: 180 }}
+              value={routeForm.route_name}
+              onValueChange={(v) => setRouteForm((p) => ({ ...p, route_name: v }))}
+            />
+
+            {/* Fare config */}
+            <Select
+              classNames={{ trigger: "h-9 min-h-9 bg-white/8 border-white/20" }}
+              placeholder="Fare config *"
+              selectedKeys={routeForm.fare_config_id ? [routeForm.fare_config_id] : []}
+              size="sm"
+              style={{ width: 180 }}
+              onSelectionChange={(keys) => {
+                const id = String(Array.from(keys)[0] ?? "");
+                const fc = fareConfigs.find((f) => f.id === id);
+
+                setRouteForm((p) => ({
+                  ...p,
+                  fare_config_id: id,
+                  transport_type: fc?.transport_type ?? p.transport_type,
+                }));
+              }}
+            >
+              {fareConfigs.map((fc) => (
+                <SelectItem key={fc.id}>{fc.display_name}</SelectItem>
+              ))}
+            </Select>
+
+            {/* Color picker */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs" style={{ color: "var(--text-muted)" }}>Color</label>
+              <input
+                style={{ width: 32, height: 32, borderRadius: 6, border: "none", cursor: "pointer", padding: 2 }}
+                type="color"
+                value={routeForm.color}
+                onChange={(e) => setRouteForm((p) => ({ ...p, color: e.target.value }))}
+              />
             </div>
+
+            {/* Road/stop count badge */}
+            <span className="text-xs ml-1" style={{ color: "var(--text-muted)" }}>
+              {routeForm.road_ids.length} road{routeForm.road_ids.length !== 1 ? "s" : ""}
+              {" · "}
+              {routeForm.stop_ids.length} stop{routeForm.stop_ids.length !== 1 ? "s" : ""}
+            </span>
+
+            {/* Hint */}
+            <span className="text-xs hidden lg:block ml-auto" style={{ color: "var(--text-faint)" }}>
+              Click roads to select · Ctrl+Z to undo
+            </span>
+
+            {/* Actions */}
             <div className="flex gap-2">
               <Button
                 size="sm"
                 variant="flat"
-                onClick={() => setRouteEditorOpen(false)}
+                onClick={() => {
+                  setRouteEditorOpen(false);
+                  setEditingRoute(null);
+                }}
               >
                 Cancel
               </Button>
               <Button
                 color="primary"
                 size="sm"
-                onClick={() => setRouteEditorOpen(false)}
+                onClick={async () => {
+                  setRouteEditorOpen(false);
+                  await handleSaveRoute();
+                }}
               >
-                Done
+                {editingRoute ? "Update Route" : "Save Route"}
               </Button>
             </div>
           </div>
+
           <div className="flex-1 overflow-hidden">
             <MapManager
               geojsonData={intersectionsGeojson}
