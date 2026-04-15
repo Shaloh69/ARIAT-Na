@@ -363,12 +363,15 @@ export default function TransitPage() {
   const handleSaveRoute = async () => {
     if (!routeForm.route_name.trim()) {
       toast.error("Route name is required");
-      setRouteEditorOpen(true); // re-open so user can fill name
+      setRouteEditorOpen(true);
+
       return;
     }
+
     if (!routeForm.fare_config_id || !routeForm.transport_type) {
       toast.error("Fare config is required");
-      setRouteEditorOpen(true); // re-open so user can select fare config
+      setRouteEditorOpen(true);
+
       return;
     }
     try {
@@ -1030,8 +1033,9 @@ export default function TransitPage() {
 
             {/* Color picker */}
             <div className="flex items-center gap-2">
-              <label className="text-xs" style={{ color: "var(--text-muted)" }}>Color</label>
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>Color</span>
               <input
+                aria-label="Route color"
                 style={{ width: 32, height: 32, borderRadius: 6, border: "none", cursor: "pointer", padding: 2 }}
                 type="color"
                 value={routeForm.color}

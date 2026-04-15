@@ -1241,13 +1241,18 @@ export default function MapManager({
   const undoLastPoint = () => {
     if (mode === "transit_route") {
       const entry = transitUndoStackRef.current.pop();
+
       if (entry !== undefined) {
         if (entry.kind === "road") onTransitRoadsChange?.(entry.ids);
         else onTransitStopsChange?.(entry.ids);
-        toast.info(`${entry.kind === "road" ? "Road" : "Stop"} selection undone`);
+        toast.info(
+          `${entry.kind === "road" ? "Road" : "Stop"} selection undone`,
+        );
       }
+
       return;
     }
+
     if (mode !== "add_road" || roadPoints.length === 0) return;
     const lastIdx = roadPoints.length - 1;
 
@@ -3055,6 +3060,7 @@ export default function MapManager({
                 : null;
 
             if (!geo || geo.length < 2) return null;
+
             return (
               <Polyline
                 key={`walk-${idx}`}
