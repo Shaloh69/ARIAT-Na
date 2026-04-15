@@ -176,7 +176,7 @@ export default function KioskLayout({
                 Available on iOS &amp; Android.
               </p>
               <p style={{ opacity: 0.35, fontSize: "0.72rem" }}>
-                © 2026 AIRAT-NA · Thesis Project · Cebu Technological University
+                © 2026 AIRAT-NA · Thesis Project · University of Cebu Lapu-Lapu and Mandaue
               </p>
             </div>
           )}
