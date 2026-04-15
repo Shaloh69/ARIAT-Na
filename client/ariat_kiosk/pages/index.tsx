@@ -7,7 +7,7 @@ import { Card, CardBody } from "@heroui/card";
 import { Chip } from "@heroui/chip";
 import { Skeleton } from "@heroui/skeleton";
 
-import KioskLayout, { FOOTER_H } from "@/components/KioskLayout";
+import KioskLayout, { FOOTER_H, TOPBAR_H } from "@/components/KioskLayout";
 import QRHandoffModal from "@/components/QRHandoffModal";
 import { API_BASE_URL, API_ENDPOINTS } from "@/lib/constants";
 import { toast } from "@/lib/toast";
@@ -184,7 +184,7 @@ const KioskHome: NextPage = () => {
       ═══════════════════════════════════════════════════════════════ */}
       <section
         className="home-hero"
-        style={{ height: `calc(100vh - 68px - ${FOOTER_H}px)` }}
+        style={{ height: `calc(100vh - ${TOPBAR_H}px - ${FOOTER_H}px)` }}
       >
         {/* Background image */}
         {heroImages[heroImageIdx] && (
@@ -200,7 +200,7 @@ const KioskHome: NextPage = () => {
         <div className="home-hero-content">
           {/* Left — text & CTAs */}
           <div className="home-hero-left">
-            <Chip className="mb-4" color="primary" size="md" variant="flat">
+            <Chip className="mb-3" color="primary" size="sm" variant="flat">
               🇵🇭 Cebu, Philippines
             </Chip>
             <h1 className="home-hero-title">
@@ -262,7 +262,7 @@ const KioskHome: NextPage = () => {
         </div>
       </section>
 
-      <div className="home-body px-10 pb-16 space-y-14 max-w-[1600px] mx-auto">
+      <div className="home-body px-6 pb-10 space-y-8 max-w-[1400px] mx-auto">
         {/* ═══════════════════════════════════════════════════════════════
             REGIONS
         ═══════════════════════════════════════════════════════════════ */}
@@ -272,13 +272,13 @@ const KioskHome: NextPage = () => {
             title="Explore by Region"
           />
           {loadingClusters ? (
-            <div className="grid grid-cols-5 gap-5">
+            <div className="grid grid-cols-5 gap-3">
               {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="rounded-3xl h-36" />
+                <Skeleton key={i} className="rounded-2xl h-24" />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-5 gap-5">
+            <div className="grid grid-cols-5 gap-3">
               {clusters.map((cluster) => {
                 const { color, icon } = clusterMeta(cluster.name);
 
@@ -286,18 +286,18 @@ const KioskHome: NextPage = () => {
                   <Card
                     key={cluster.id}
                     isPressable
-                    className="region-card rounded-3xl transition-all active:scale-95"
+                    className="region-card rounded-2xl transition-all active:scale-95"
                     style={{
                       background: color + "15",
                       borderColor: color + "45",
                     }}
                     onPress={() => openClusterQR(cluster)}
                   >
-                    <CardBody className="flex flex-col items-center justify-center gap-3 h-36 text-center px-4">
-                      <span className="text-4xl">{icon}</span>
+                    <CardBody className="flex flex-col items-center justify-center gap-2 h-24 text-center px-3">
+                      <span className="text-2xl">{icon}</span>
                       <div>
                         <p
-                          className="text-base font-bold leading-tight"
+                          className="text-sm font-bold leading-tight"
                           style={{ color }}
                         >
                           {cluster.name}
@@ -335,22 +335,22 @@ const KioskHome: NextPage = () => {
             title="Featured Destinations"
           />
           {loadingDests ? (
-            <div className="grid grid-cols-4 gap-5">
+            <div className="grid grid-cols-4 gap-3">
               {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="rounded-3xl h-72" />
+                <Skeleton key={i} className="rounded-2xl h-52" />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-4 gap-5">
+            <div className="grid grid-cols-4 gap-3">
               {featuredDests.slice(0, 8).map((dest) => (
                 <Card
                   key={dest.id}
                   isPressable
-                  className="dest-card rounded-3xl overflow-hidden transition-all active:scale-[0.97]"
+                  className="dest-card rounded-2xl overflow-hidden transition-all active:scale-[0.97]"
                   style={{ borderColor: "var(--border)" }}
                   onPress={() => openDestQR(dest)}
                 >
-                  <div className="relative h-44">
+                  <div className="relative h-32">
                     {dest.images?.[0] ? (
                       <img
                         alt={dest.name}
@@ -374,7 +374,7 @@ const KioskHome: NextPage = () => {
                       </div>
                     )}
                   </div>
-                  <CardBody className="gap-1.5 px-4 py-4">
+                  <CardBody className="gap-1 px-3 py-3">
                     <p className="dest-card-name">{dest.name}</p>
                     <p className="dest-card-location">
                       📍 {dest.municipality ?? dest.category_name ?? "Cebu"}
@@ -386,9 +386,9 @@ const KioskHome: NextPage = () => {
                         </p>
                       )}
                     <Button
-                      className="mt-3 w-full h-11 text-base"
+                      className="mt-2 w-full h-8 text-sm"
                       color="primary"
-                      size="md"
+                      size="sm"
                       variant="flat"
                       onPress={() => openDestQR(dest)}
                     >
@@ -411,22 +411,22 @@ const KioskHome: NextPage = () => {
               title="Curated Guides"
             />
             {loadingGuides ? (
-              <div className="grid grid-cols-3 gap-5">
+              <div className="grid grid-cols-3 gap-3">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="rounded-3xl h-56" />
+                  <Skeleton key={i} className="rounded-2xl h-40" />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-5">
+              <div className="grid grid-cols-3 gap-3">
                 {guides.map((guide) => (
                   <Card
                     key={guide.id}
                     isPressable
-                    className="rounded-3xl overflow-hidden transition-all active:scale-[0.97]"
+                    className="rounded-2xl overflow-hidden transition-all active:scale-[0.97]"
                     style={{ borderColor: "var(--border)" }}
                     onPress={() => openGuideQR(guide)}
                   >
-                    <div className="relative h-36">
+                    <div className="relative h-24">
                       {guide.cover_image ? (
                         <img
                           alt={guide.title}
@@ -443,11 +443,11 @@ const KioskHome: NextPage = () => {
                       )}
                       <div className="dest-card-gradient" />
                     </div>
-                    <CardBody className="gap-2 px-4 py-4">
+                    <CardBody className="gap-1.5 px-3 py-3">
                       <p className="dest-card-name line-clamp-2">
                         {guide.title}
                       </p>
-                      <div className="flex gap-2 flex-wrap">
+                      <div className="flex gap-1.5 flex-wrap">
                         {guide.duration_days && (
                           <Chip color="default" size="sm" variant="flat">
                             {guide.duration_days} day
@@ -461,9 +461,9 @@ const KioskHome: NextPage = () => {
                         )}
                       </div>
                       <Button
-                        className="mt-2 w-full h-11 text-base"
+                        className="mt-1.5 w-full h-8 text-sm"
                         color="primary"
-                        size="md"
+                        size="sm"
                         variant="flat"
                         onPress={() => openGuideQR(guide)}
                       >
@@ -505,7 +505,7 @@ function SectionHeader({
   title: string;
 }) {
   return (
-    <div className="flex items-end justify-between mb-6">
+    <div className="flex items-end justify-between mb-4">
       <div>
         <h2 className="section-title">{title}</h2>
         {subtitle && <p className="section-sub">{subtitle}</p>}

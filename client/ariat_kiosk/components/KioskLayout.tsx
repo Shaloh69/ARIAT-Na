@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export const FOOTER_H = 44; // px — collapsed footer height (exported for hero sizing)
+export const FOOTER_H = 36; // px — collapsed footer height (exported for hero sizing)
+export const TOPBAR_H = 52; // px — top bar height (exported for hero sizing)
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { Chip } from "@heroui/chip";
@@ -102,8 +103,8 @@ export default function KioskLayout({
         <div className="bg-noise" />
 
         {/* ── Top bar ─────────────────────────────────────────────────── */}
-        <header className="glass-topbar sticky top-0 z-50 flex items-center justify-between px-10 py-0 h-[68px]">
-          <div className="flex items-center gap-4">
+        <header className="glass-topbar sticky top-0 z-50 flex items-center justify-between px-6 py-0 h-[52px]">
+          <div className="flex items-center gap-3">
             {/* Logo */}
             <div className="flex items-center gap-2">
               <div className="kiosk-logo-mark" />
@@ -114,9 +115,9 @@ export default function KioskLayout({
             </Chip>
           </div>
 
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-3">
             {/* Nav links */}
-            <nav className="flex items-center gap-1">
+            <nav className="flex items-center gap-0.5">
               <NavLink
                 active={router.pathname === "/"}
                 label="Home"
@@ -147,7 +148,7 @@ export default function KioskLayout({
         {/* ── Footer ──────────────────────────────────────────────────── */}
         <footer
           className="kiosk-footer"
-          style={{ height: footerOpen ? 110 : FOOTER_H }}
+          style={{ height: footerOpen ? 84 : FOOTER_H }}
         >
           {/* Collapsed bar (always visible) */}
           <div className="kiosk-footer-bar">

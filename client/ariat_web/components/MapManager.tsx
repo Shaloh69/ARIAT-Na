@@ -652,8 +652,8 @@ export default function MapManager({
   const [isCancelRoadModalOpen, setIsCancelRoadModalOpen] = useState(false);
   // Ref holds the latest undoLastPoint so the keydown handler stays stable
   const undoRef = useRef<() => void>(() => {});
-  // Undo history for transit road selection (stack of previous road_id arrays)
-  const transitUndoStackRef = useRef<string[][]>([]);
+  // Undo history for transit selection — unified stack for both roads and stops
+  const transitUndoStackRef = useRef<Array<{ kind: "road" | "stop"; ids: string[] }>>([]);
   // Flags for auto-snap: set when a road-context intersection create is in flight
   const pendingRoadSnapRef = useRef(false);
   const roadSnapIndexRef = useRef(-1);
@@ -1227,18 +1227,24 @@ export default function MapManager({
     }
   };
 
-  // Wrapper that records previous selection before forwarding to parent (enables Ctrl+Z)
+  // Wrappers that record previous selection before forwarding to parent (enables Ctrl+Z)
   const handleTransitRoadsChange = (newIds: string[]) => {
-    transitUndoStackRef.current.push([...transitSelectedRoadIds]);
+    transitUndoStackRef.current.push({ kind: "road", ids: [...transitSelectedRoadIds] });
     onTransitRoadsChange?.(newIds);
+  };
+
+  const handleTransitStopsChange = (newIds: string[]) => {
+    transitUndoStackRef.current.push({ kind: "stop", ids: [...transitSelectedStopIds] });
+    onTransitStopsChange?.(newIds);
   };
 
   const undoLastPoint = () => {
     if (mode === "transit_route") {
-      const prev = transitUndoStackRef.current.pop();
-      if (prev !== undefined) {
-        onTransitRoadsChange?.(prev);
-        toast.info("Road selection undone");
+      const entry = transitUndoStackRef.current.pop();
+      if (entry !== undefined) {
+        if (entry.kind === "road") onTransitRoadsChange?.(entry.ids);
+        else onTransitStopsChange?.(entry.ids);
+        toast.info(`${entry.kind === "road" ? "Road" : "Stop"} selection undone`);
       }
       return;
     }
@@ -1345,6 +1351,10 @@ export default function MapManager({
       setSnappedIndices(new Set());
       setAutoCreateIntersection(false);
       pendingRoadSnapRef.current = false;
+    }
+    // Clear transit undo history when leaving transit mode
+    if (newMode !== "transit_route") {
+      transitUndoStackRef.current = [];
     }
     setMode(newMode);
   };
@@ -2633,7 +2643,7 @@ export default function MapManager({
                       } else {
                         cur.add(marker.id);
                       }
-                      onTransitStopsChange(Array.from(cur));
+                      handleTransitStopsChange(Array.from(cur));
                     } else if (mode !== "view") {
                       L.DomEvent.stopPropagation(e);
                     }
