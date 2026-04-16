@@ -43,6 +43,9 @@ dependencies:
   # QR Scanner (kiosk claim flow)
   mobile_scanner: ^6.0.0
 
+  # Deep links — intercepts airatna:// URLs when app is opened from a QR scan
+  app_links: ^6.4.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

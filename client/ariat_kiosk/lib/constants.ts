@@ -9,6 +9,13 @@ export const API_BASE_URL =
 export const DOWNLOAD_PAGE_URL =
   process.env.NEXT_PUBLIC_DOWNLOAD_URL || "http://localhost:3000/download";
 
+/**
+ * Smart open page — tries airatna:// deep link first, falls back to download.
+ * QR codes for itineraries point here instead of directly to airatna://.
+ */
+export const OPEN_PAGE_URL =
+  process.env.NEXT_PUBLIC_OPEN_URL || "http://localhost:3000/open";
+
 export const API_ENDPOINTS = {
   DESTINATIONS: "/destinations",
   DESTINATIONS_FEATURED: "/destinations/featured",

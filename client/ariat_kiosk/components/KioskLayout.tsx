@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export const FOOTER_H = 36; // px — collapsed footer height (exported for hero sizing)
-export const TOPBAR_H = 52; // px — top bar height (exported for hero sizing)
+export const FOOTER_H = 28; // px — collapsed footer height (exported for hero sizing)
+export const TOPBAR_H = 44; // px — top bar height (exported for hero sizing)
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { Chip } from "@heroui/chip";
@@ -103,19 +103,16 @@ export default function KioskLayout({
         <div className="bg-noise" />
 
         {/* ── Top bar ─────────────────────────────────────────────────── */}
-        <header className="glass-topbar sticky top-0 z-50 flex items-center justify-between px-6 py-0 h-[52px]">
-          <div className="flex items-center gap-3">
+        <header className="glass-topbar sticky top-0 z-50 flex items-center justify-between px-4 py-0 h-[44px]">
+          <div className="flex items-center gap-2">
             {/* Logo */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <div className="kiosk-logo-mark" />
               <span className="kiosk-logo-text">AIRAT-NA</span>
             </div>
-            <Chip color="primary" size="sm" variant="flat">
-              Kiosk Mode
-            </Chip>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {/* Nav links */}
             <nav className="flex items-center gap-0.5">
               <NavLink
@@ -148,7 +145,7 @@ export default function KioskLayout({
         {/* ── Footer ──────────────────────────────────────────────────── */}
         <footer
           className="kiosk-footer"
-          style={{ height: footerOpen ? 84 : FOOTER_H }}
+          style={{ height: footerOpen ? 68 : FOOTER_H }}
         >
           {/* Collapsed bar (always visible) */}
           <div className="kiosk-footer-bar">

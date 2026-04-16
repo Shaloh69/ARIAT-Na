@@ -47,8 +47,8 @@
 
 html {
   background: #080818;
-  /* Tablet-scale: 14px base makes all rem values ~87.5% of desktop size */
-  font-size: 14px;
+  /* Small-tablet scale: 12px base (~75% of default 16px) */
+  font-size: 12px;
 }
 
 html.light {
@@ -342,21 +342,21 @@ html.light ::-webkit-scrollbar-thumb:hover {
 ══════════════════════════════════════════════════════════════ */
 
 .kiosk-logo-mark {
-  width: 22px; height: 22px;
-  border-radius: 6px;
+  width: 18px; height: 18px;
+  border-radius: 5px;
   background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
-  box-shadow: 0 2px 8px rgba(225,29,72,0.45);
+  box-shadow: 0 2px 6px rgba(225,29,72,0.45);
 }
 
 .kiosk-logo-text {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 900;
   letter-spacing: -0.03em;
   color: var(--red-500);
 }
 
 .kiosk-clock {
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
@@ -364,9 +364,9 @@ html.light ::-webkit-scrollbar-thumb:hover {
 }
 
 .kiosk-nav-link {
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-size: 0.82rem;
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--text-muted);
   background: transparent;
@@ -390,8 +390,8 @@ html.light ::-webkit-scrollbar-thumb:hover {
 .home-hero {
   position: relative;
   width: 100%;
-  /* height set inline via JS: calc(100vh - 68px - 44px) */
-  min-height: 360px;
+  /* compact banner on small tablet — JS height overridden to fixed 220px */
+  min-height: 180px;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -421,64 +421,72 @@ html.light ::-webkit-scrollbar-thumb:hover {
   position: relative;
   z-index: 10;
   width: 100%;
-  max-width: 1600px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 0 2.5rem;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 3rem;
-  align-items: center;
+  padding: 0 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
 }
 
 .home-hero-left {
-  max-width: 640px;
+  max-width: 100%;
 }
 
 .home-hero-title {
-  font-size: clamp(2.2rem, 4.5vw, 3.5rem);
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
   font-weight: 900;
   line-height: 1.0;
   letter-spacing: -0.04em;
   color: #ffffff;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.35rem;
   text-shadow: 0 4px 20px rgba(0,0,0,0.35);
 }
 
 .home-hero-sub {
-  font-size: 0.9rem;
+  font-size: 0.78rem;
   color: rgba(255,255,255,0.78);
-  line-height: 1.6;
-  margin-bottom: 1.25rem;
-  max-width: 440px;
+  line-height: 1.5;
+  margin-bottom: 0.75rem;
+  max-width: 500px;
 }
 
 .home-hero-btns {
   display: flex;
-  gap: 0.6rem;
+  gap: 0.4rem;
   flex-wrap: wrap;
 }
 
 .home-cta-primary {
-  height: 42px !important;
-  padding: 0 1.25rem !important;
-  font-size: 0.88rem !important;
+  height: 34px !important;
+  padding: 0 0.9rem !important;
+  font-size: 0.78rem !important;
   font-weight: 700 !important;
-  border-radius: 12px !important;
-  box-shadow: 0 6px 18px rgba(225,29,72,0.45) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 14px rgba(225,29,72,0.45) !important;
+}
+
+.home-cta-plan {
+  height: 34px !important;
+  padding: 0 0.9rem !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  border-radius: 10px !important;
 }
 
 .home-cta-secondary {
-  height: 42px !important;
-  padding: 0 1.25rem !important;
-  font-size: 0.88rem !important;
+  height: 34px !important;
+  padding: 0 0.9rem !important;
+  font-size: 0.78rem !important;
   font-weight: 600 !important;
-  border-radius: 12px !important;
+  border-radius: 10px !important;
   border-color: rgba(255,255,255,0.35) !important;
   color: rgba(255,255,255,0.9) !important;
 }
 
 .home-hero-right {
-  padding-right: 0.5rem;
+  display: none; /* hide stat rotator on small tablet */
 }
 
 /* ── 3D Stat Rotator ─────────────────────────────────────── */
@@ -491,19 +499,18 @@ html.light ::-webkit-scrollbar-thumb:hover {
 }
 
 .stat-rotator-face {
-  width: 150px;
-  height: 120px;
+  width: 110px;
+  height: 90px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   background: rgba(255,255,255,0.07);
   border: 1.5px solid rgba(255,255,255,0.14);
-  border-radius: 18px;
+  border-radius: 14px;
   backdrop-filter: blur(20px);
   box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
-  /* Cube flip-in from top: starts rotated backward (top face), animates to front */
   animation: cubeFlipIn 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
   transform-origin: center top;
 }
@@ -522,9 +529,9 @@ html.light ::-webkit-scrollbar-thumb:hover {
   }
 }
 
-.stat-r-icon  { font-size: 1.9rem; line-height: 1; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3)); }
-.stat-r-value { font-size: 1.65rem; font-weight: 900; color: #fff; line-height: 1; letter-spacing: -0.03em; }
-.stat-r-label { font-size: 0.65rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600; }
+.stat-r-icon  { font-size: 1.4rem; line-height: 1; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3)); }
+.stat-r-value { font-size: 1.25rem; font-weight: 900; color: #fff; line-height: 1; letter-spacing: -0.03em; }
+.stat-r-label { font-size: 0.6rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; }
 
 .stat-rotator-dots { display: flex; gap: 6px; align-items: center; }
 .stat-rotator-dot {
@@ -538,22 +545,22 @@ html.light ::-webkit-scrollbar-thumb:hover {
    HOME PAGE — BODY
 ══════════════════════════════════════════════════════════════ */
 
-.home-body { padding-top: 1.5rem; }
+.home-body { padding-top: 1rem; }
 
 /* Section headings */
 .section-title {
-  font-size: 1.35rem;
+  font-size: 1.1rem;
   font-weight: 800;
   color: var(--text-strong);
   letter-spacing: -0.02em;
 }
 .section-sub {
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
-  margin-top: 0.2rem;
+  margin-top: 0.15rem;
 }
 .section-action {
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--red-500);
   background: none;
@@ -593,20 +600,20 @@ html.light ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(to top, rgba(2,6,23,0.7) 0%, transparent 100%);
 }
 .dest-card-name {
-  font-size: 0.875rem;
+  font-size: 0.78rem;
   font-weight: 700;
   color: var(--text-strong);
-  line-height: 1.3;
+  line-height: 1.25;
 }
 .dest-card-location {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .dest-card-fee {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: var(--text-faint);
 }
 
@@ -621,10 +628,10 @@ html.light .dest-card-gradient {
 .filter-chip {
   display: inline-flex;
   align-items: center;
-  height: 36px;
-  padding: 0 1rem;
+  height: 28px;
+  padding: 0 0.75rem;
   border-radius: 100px;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-weight: 600;
   background: transparent;
   border: 1.5px solid var(--border);
@@ -641,9 +648,9 @@ html.light .dest-card-gradient {
 }
 
 .explore-cat-chip {
-  height: 38px !important;
-  padding: 0 1rem !important;
-  font-size: 0.85rem !important;
+  height: 28px !important;
+  padding: 0 0.75rem !important;
+  font-size: 0.75rem !important;
   cursor: pointer;
 }
 
@@ -653,8 +660,8 @@ html.light .dest-card-gradient {
 
 .map-page {
   display: grid;
-  grid-template-columns: 1fr 380px;
-  height: calc(100vh - 68px);
+  grid-template-columns: 1fr 280px;
+  height: calc(100vh - 44px); /* matches TOPBAR_H */
   overflow: hidden;
 }
 
@@ -728,19 +735,19 @@ html.light .map-sidebar {
 }
 
 .map-selected-img {
-  height: 160px;
+  height: 110px;
   overflow: hidden;
 }
 
 .map-selected-name {
-  font-size: 1.1rem;
+  font-size: 0.88rem;
   font-weight: 700;
   color: var(--text-strong);
   line-height: 1.3;
 }
 
 .map-selected-location {
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
@@ -755,10 +762,10 @@ html.light .map-sidebar {
 .map-list-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 10px 12px;
-  border-radius: 12px;
+  padding: 7px 10px;
+  border-radius: 10px;
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
@@ -773,8 +780,8 @@ html.light .map-sidebar {
 }
 
 .map-list-thumb {
-  width: 48px; height: 48px;
-  border-radius: 10px;
+  width: 36px; height: 36px;
+  border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
   background: rgba(255,255,255,0.06);
@@ -786,7 +793,7 @@ html.light .map-sidebar {
 
 .map-list-info { flex: 1; min-width: 0; }
 .map-list-name {
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--text-strong);
   white-space: nowrap;
@@ -794,7 +801,7 @@ html.light .map-sidebar {
   text-overflow: ellipsis;
 }
 .map-list-location {
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   color: var(--text-muted);
   margin-top: 2px;
   white-space: nowrap;

@@ -89,7 +89,11 @@
       "Bash(echo \"KIOSK_BUILD:$?\")",
       "Bash(echo \"WEB_BUILD:$?\")",
       "Bash(echo \"SERVER:$?\")",
-      "Bash(echo \"KIOSK:$?\")"
+      "Bash(echo \"KIOSK:$?\")",
+      "Bash(\"/d/Projects-Shem/Flutter/flutter/bin/flutter\" analyze *)",
+      "Bash(\"/d/Projects-Shem/Flutter/flutter/bin/flutter\" build *)",
+      "WebFetch(domain:pub.dev)",
+      "Bash(wait)"
     ],
     "additionalDirectories": [
       "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\client\\ariat_web\\pages\\admin",

@@ -1,3 +1,4 @@
+import 'package:app_links/app_links.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 import 'services/auth_service.dart';
@@ -10,6 +11,7 @@ import 'services/theme_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/app_shell.dart';
+import 'screens/kiosk/kiosk_claim_screen.dart';
 import 'widgets/loading_screen.dart';
 
 void main() async {
@@ -24,6 +26,9 @@ class AriatNaApp extends StatefulWidget {
   State<AriatNaApp> createState() => _AriatNaAppState();
 }
 
+// Global navigator key so deep link handler can push routes without context
+final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
 class _AriatNaAppState extends State<AriatNaApp> {
   late final AuthService _authService;
   late final CacheService _cacheService;
@@ -31,6 +36,7 @@ class _AriatNaAppState extends State<AriatNaApp> {
   late final LocationService _locationService;
   late final ApiService _apiService;
   final ThemeService _themeService = ThemeService();
+  final _appLinks = AppLinks();
 
   @override
   void initState() {
@@ -50,6 +56,34 @@ class _AriatNaAppState extends State<AriatNaApp> {
         _apiService.baseUrl = saved;
       }
     });
+
+    _initDeepLinks();
+  }
+
+  /// Listen for incoming airatna:// deep links and navigate to the right screen.
+  void _initDeepLinks() {
+    // App already running — foreground link
+    _appLinks.uriLinkStream.listen(_handleDeepLink);
+    // Cold-start — app was opened via the link
+    _appLinks.getInitialLink().then((uri) {
+      if (uri != null) _handleDeepLink(uri);
+    });
+  }
+
+  void _handleDeepLink(Uri uri) {
+    if (uri.scheme != 'airatna') return;
+
+    // airatna://kiosk/TOKEN  →  KioskClaimScreen
+    if (uri.host == 'kiosk') {
+      final token = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+      if (token != null && token.isNotEmpty) {
+        _navigatorKey.currentState?.push(
+          FluentPageRoute(
+            builder: (_) => KioskClaimScreen(token: token),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -79,6 +113,7 @@ class _AriatNaAppState extends State<AriatNaApp> {
 
           return FluentApp(
             title: 'AIRAT-NA',
+            navigatorKey: _navigatorKey,
             theme: themeService.isDark ? buildAppTheme() : buildLightTheme(),
             debugShowCheckedModeBanner: false,
             home: auth.isLoading

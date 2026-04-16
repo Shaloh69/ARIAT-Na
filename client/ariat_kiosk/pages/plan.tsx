@@ -7,8 +7,9 @@ import { Chip } from "@heroui/chip";
 import { Skeleton } from "@heroui/skeleton";
 
 import KioskLayout from "@/components/KioskLayout";
+import KioskAuthModal, { type KioskAuthUser } from "@/components/KioskAuthModal";
 import QRHandoffModal from "@/components/QRHandoffModal";
-import { API_BASE_URL, API_ENDPOINTS } from "@/lib/constants";
+import { API_BASE_URL, API_ENDPOINTS, OPEN_PAGE_URL } from "@/lib/constants";
 import { toast } from "@/lib/toast";
 
 // Leaflet requires window — dynamic import with no SSR
@@ -123,6 +124,11 @@ const KioskPlanPage: NextPage = () => {
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<GeneratedResult | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
+
+  // ── Auth state — kiosk registers/logs in before QR is shown ───────
+  const [kioskUser, setKioskUser] = useState<KioskAuthUser | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [claiming, setClaiming] = useState(false);
 
   // Fetch all destinations + categories for pick mode
   useEffect(() => {
@@ -252,6 +258,62 @@ const KioskPlanPage: NextPage = () => {
     setHoursPerDay(8);
     setTransportMode("private_car");
     setResult(null);
+    setKioskUser(null);
+  };
+
+  /**
+   * Called when "Start Journey — Scan QR" is pressed.
+   * Opens the auth modal if the user hasn't registered/logged in yet.
+   * After auth, auto-claims the session so the itinerary is saved to their account.
+   */
+  const handleStartJourney = () => {
+    if (!result) return;
+    if (!kioskUser) {
+      setAuthModalOpen(true);
+    } else {
+      setQrOpen(true);
+    }
+  };
+
+  /**
+   * Called after KioskAuthModal succeeds.
+   * Claims the kiosk session (saves itinerary to the user's account), then shows QR.
+   */
+  const handleAuthSuccess = async (user: KioskAuthUser) => {
+    setKioskUser(user);
+    setAuthModalOpen(false);
+
+    if (!result) return;
+
+    setClaiming(true);
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/kiosk/claim/${result.token}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user.token}`,
+          },
+          body: JSON.stringify({}),
+        },
+      );
+      const json = (await res.json()) as { success: boolean; message?: string };
+      if (!json.success) {
+        // Already claimed by this user is fine — still show QR
+        if (!json.message?.includes("already been claimed")) {
+          toast.error(json.message ?? "Could not save itinerary");
+        }
+      } else {
+        toast.success(`Saved to ${user.name}'s account!`);
+      }
+    } catch {
+      // Non-fatal — QR still works even if claim fails
+      toast.error("Could not save to account — QR still works");
+    } finally {
+      setClaiming(false);
+      setQrOpen(true);
+    }
   };
 
   const clusterMeta = (name: string): { color: string; icon: string } => {
@@ -641,12 +703,22 @@ const KioskPlanPage: NextPage = () => {
                   </div>
                 </div>
                 <div className="plan-result-cta">
-                  <Button className="plan-start-btn" color="primary" size="lg" onPress={() => setQrOpen(true)}>
+                  <Button
+                    className="plan-start-btn"
+                    color="primary"
+                    isLoading={claiming}
+                    size="lg"
+                    onPress={handleStartJourney}
+                  >
                     🚀 Start Journey — Scan QR
                   </Button>
                   <Button className="mt-3" size="md" variant="flat" onPress={resetAll}>Plan Another Trip</Button>
                 </div>
-                <p className="plan-result-note">Scan the QR code with your phone to open this itinerary — no account needed.</p>
+                <p className="plan-result-note">
+                  {kioskUser
+                    ? `Saved to ${kioskUser.name}'s account — scan QR to open in the app`
+                    : "Register first so your itinerary is waiting in the app after install"}
+                </p>
               </div>
             ) : null}
           </div>
@@ -684,13 +756,23 @@ const KioskPlanPage: NextPage = () => {
 
       {result && (
         <QRHandoffModal
-          deepLink={result.deep_link}
+          deepLink={`${OPEN_PAGE_URL}?token=${result.token}`}
           isOpen={qrOpen}
-          subtitle={`${result.days} day${result.days > 1 ? "s" : ""} · ${result.total_stops} stops · Scan to open in the app — no account needed`}
+          subtitle={
+            kioskUser
+              ? `${result.days} day${result.days > 1 ? "s" : ""} · ${result.total_stops} stops · Saved to ${kioskUser.name}'s account`
+              : `${result.days} day${result.days > 1 ? "s" : ""} · ${result.total_stops} stops`
+          }
           title={result.title}
           onClose={() => setQrOpen(false)}
         />
       )}
+
+      <KioskAuthModal
+        isOpen={authModalOpen}
+        onAuth={(user) => void handleAuthSuccess(user)}
+        onClose={() => setAuthModalOpen(false)}
+      />
     </KioskLayout>
   );
 };
