@@ -7,14 +7,15 @@ export const API_BASE_URL =
  * so it can detect when the QR was scanned.
  */
 export const DOWNLOAD_PAGE_URL =
-  process.env.NEXT_PUBLIC_DOWNLOAD_URL || "http://localhost:3000/download";
+  process.env.NEXT_PUBLIC_DOWNLOAD_URL ||
+  "https://airat-na-web.onrender.com/download";
 
 /**
  * Smart open page — tries airatna:// deep link first, falls back to download.
  * QR codes for itineraries point here instead of directly to airatna://.
  */
 export const OPEN_PAGE_URL =
-  process.env.NEXT_PUBLIC_OPEN_URL || "http://localhost:3000/open";
+  process.env.NEXT_PUBLIC_OPEN_URL || "https://airat-na-web.onrender.com/open";
 
 export const API_ENDPOINTS = {
   DESTINATIONS: "/destinations",
