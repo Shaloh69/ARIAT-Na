@@ -96,7 +96,8 @@
       "Bash(wait)",
       "Read(//c/Projects/Thesis/2026/BlueWatt/**)",
       "Read(//d/Projects-Shem/Thesis/2026/BlueWatt/**)",
-      "Bash(\"D:/Projects-Shem/Flutter/flutter/bin/flutter\" build *)"
+      "Bash(\"D:/Projects-Shem/Flutter/flutter/bin/flutter\" build *)",
+      "Bash(/d/Projects-Shem/Flutter/flutter/bin/flutter build *)"
     ],
     "additionalDirectories": [
       "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\client\\ariat_web\\pages\\admin",

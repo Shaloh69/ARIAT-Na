@@ -215,7 +215,7 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
                                     borderRadius: BorderRadius.circular(12))),
                               ),
                               onPressed: () => Navigator.of(context).push(
-                                FluentPageRoute(builder: (_) => const TripSetupScreen()),
+                                FluentPageRoute(builder: (_) => TripSetupScreen(preselected: destination)),
                               ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,

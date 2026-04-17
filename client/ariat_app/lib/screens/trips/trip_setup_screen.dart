@@ -11,15 +11,17 @@ import '../../widgets/toast_overlay.dart';
 
 /// Multi-step trip planning wizard.
 /// Returns a [TripSetupParams] when the user completes all steps.
+/// Pass [preselected] to skip the cluster step and anchor the trip to a destination.
 class TripSetupScreen extends StatefulWidget {
-  const TripSetupScreen({super.key});
+  final Destination? preselected;
+  const TripSetupScreen({super.key, this.preselected});
 
   @override
   State<TripSetupScreen> createState() => _TripSetupScreenState();
 }
 
 class _TripSetupScreenState extends State<TripSetupScreen> {
-  int _step = 0; // 0=Area 1=Preferences 2=Duration
+  late int _step; // 0=Area 1=Preferences 2=Duration (skipped to 1 when preselected)
   bool _loadingClusters = true;
   List<Cluster> _clusters = [];
 
@@ -37,6 +39,12 @@ class _TripSetupScreenState extends State<TripSetupScreen> {
   @override
   void initState() {
     super.initState();
+    // Skip cluster step when a specific destination is pre-selected
+    _step = widget.preselected != null ? 1 : 0;
+    // Pre-select the cluster matching the destination (if known)
+    if (widget.preselected?.clusterId != null) {
+      _clusterIds = [widget.preselected!.clusterId!];
+    }
     _loadClusters();
   }
 
@@ -80,6 +88,7 @@ class _TripSetupScreenState extends State<TripSetupScreen> {
         maxStopsPerDay: _maxStops,
         interests: List.from(_interests),
         optimizeFor: 'time',
+        pinnedDestinationIds: widget.preselected?.id != null ? [widget.preselected!.id] : const [],
       ),
     );
   }
@@ -124,8 +133,12 @@ class _TripSetupScreenState extends State<TripSetupScreen> {
                           ['Choose Area', 'Preferences', 'Duration & Budget'][_step],
                           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: c.textStrong),
                         ),
-                        Text('Step ${_step + 1} of 3',
-                            style: TextStyle(fontSize: 12, color: c.textMuted)),
+                        Text(
+                          widget.preselected != null
+                              ? 'Step $_step of 2'
+                              : 'Step ${_step + 1} of 3',
+                          style: TextStyle(fontSize: 12, color: c.textMuted),
+                        ),
                       ],
                     ),
                   ),
@@ -136,18 +149,22 @@ class _TripSetupScreenState extends State<TripSetupScreen> {
             // Progress bar
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-              child: Row(
-                children: List.generate(3, (i) => Expanded(
-                  child: Container(
-                    height: 4,
-                    margin: EdgeInsets.only(right: i < 2 ? 4 : 0),
-                    decoration: BoxDecoration(
-                      color: i <= _step ? AppColors.red500 : c.surfaceElevated,
-                      borderRadius: BorderRadius.circular(2),
+              child: Builder(builder: (context) {
+                final total = widget.preselected != null ? 2 : 3;
+                final filled = widget.preselected != null ? _step : _step + 1;
+                return Row(
+                  children: List.generate(total, (i) => Expanded(
+                    child: Container(
+                      height: 4,
+                      margin: EdgeInsets.only(right: i < total - 1 ? 4 : 0),
+                      decoration: BoxDecoration(
+                        color: i < filled ? AppColors.red500 : c.surfaceElevated,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                  ),
-                )),
-              ),
+                  )),
+                );
+              }),
             ),
 
             const SizedBox(height: 16),
