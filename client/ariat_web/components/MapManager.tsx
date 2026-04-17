@@ -1038,14 +1038,20 @@ export default function MapManager({
 
     try {
       const legs: RouteResult[] = [];
-      const waypoints: [number, number][] = [
+      const rawWaypoints: [number, number][] = [
         routeStart,
         ...stops.map((s) => s.position),
       ];
 
-      for (let i = 0; i < waypoints.length - 1; i++) {
-        const from = waypoints[i];
-        const to = waypoints[i + 1];
+      // Track the snapped road position from the previous leg's geometry.
+      // After leg N is computed, its last routeGeometry point is already on the
+      // road network — using it as the start of leg N+1 prevents the next leg
+      // from snapping through water/buildings to reach the road.
+      let snappedFrom: [number, number] = rawWaypoints[0];
+
+      for (let i = 0; i < rawWaypoints.length - 1; i++) {
+        const from = snappedFrom;
+        const to = rawWaypoints[i + 1];
         const result = await onCalculateRoute(
           from[0],
           from[1],
@@ -1065,6 +1071,15 @@ export default function MapManager({
 
           return;
         }
+
+        // Use the last on-road point of this leg as the start of the next leg
+        const geo = result.routeGeometry;
+        if (geo && geo.length >= 2) {
+          snappedFrom = geo[geo.length - 1] as [number, number];
+        } else {
+          snappedFrom = rawWaypoints[i + 1];
+        }
+
         legs.push(result);
       }
 
