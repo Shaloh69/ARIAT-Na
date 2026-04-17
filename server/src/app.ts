@@ -475,6 +475,25 @@ const ensureAdminTeamMigration = async (): Promise<void> => {
   }
 };
 
+const ensureEntrancePointType = async (): Promise<void> => {
+  try {
+    const [rows]: any = await pool.execute(
+      `SELECT COLUMN_TYPE FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'intersections' AND COLUMN_NAME = 'point_type'`,
+    );
+    if (rows.length > 0 && !String(rows[0].COLUMN_TYPE).includes("entrance")) {
+      await pool.execute(
+        `ALTER TABLE intersections MODIFY COLUMN point_type
+         ENUM('tourist_spot','bus_terminal','bus_stop','pier','intersection','entrance')
+         DEFAULT 'intersection'`,
+      );
+      logger.info("[STARTUP] Added 'entrance' to intersections.point_type ENUM");
+    }
+  } catch (error) {
+    logger.error("[STARTUP] ensureEntrancePointType failed:", error);
+  }
+};
+
 const startServer = async (): Promise<void> => {
   try {
     // Test database connection
@@ -485,6 +504,9 @@ const startServer = async (): Promise<void> => {
 
     // Auto-apply admin team migration (presence + chat)
     await ensureAdminTeamMigration();
+
+    // Ensure intersections.point_type ENUM includes 'entrance'
+    await ensureEntrancePointType();
 
     // Ensure default admin user exists
     await ensureAdminExists();
