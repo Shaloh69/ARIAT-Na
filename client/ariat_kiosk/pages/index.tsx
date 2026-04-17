@@ -7,7 +7,7 @@ import { Card, CardBody } from "@heroui/card";
 import { Chip } from "@heroui/chip";
 import { Skeleton } from "@heroui/skeleton";
 
-import KioskLayout, { FOOTER_H, TOPBAR_H } from "@/components/KioskLayout";
+import KioskLayout from "@/components/KioskLayout";
 import QRHandoffModal from "@/components/QRHandoffModal";
 import { API_BASE_URL, API_ENDPOINTS } from "@/lib/constants";
 import { toast } from "@/lib/toast";
@@ -182,10 +182,7 @@ const KioskHome: NextPage = () => {
       {/* ═══════════════════════════════════════════════════════════════
           HERO SECTION
       ═══════════════════════════════════════════════════════════════ */}
-      <section
-        className="home-hero"
-        style={{ height: 220 }}
-      >
+      <section className="home-hero" style={{ height: 220 }}>
         {/* Background image */}
         {heroImages[heroImageIdx] && (
           <img

@@ -542,7 +542,6 @@ const KioskPlanPage: NextPage = () => {
                   onClick={() => setFilterCategory(cat.name)}
                 >
                   {cat.icon_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       alt=""
                       className="picker-cat-icon"
