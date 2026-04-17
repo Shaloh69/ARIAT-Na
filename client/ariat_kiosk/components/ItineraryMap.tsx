@@ -47,17 +47,20 @@ interface ItineraryMapProps {
 
 function getAllStops(itinerary: ItineraryData, days: number): ItineraryStop[] {
   if (days > 1 && itinerary.days) {
-    return itinerary.days.flatMap(
-      (d) => d.itinerary?.stops ?? d.stops ?? [],
-    );
+    return itinerary.days.flatMap((d) => d.itinerary?.stops ?? d.stops ?? []);
   }
+
   return itinerary.stops ?? [];
 }
 
-function getLegsGeometry(itinerary: ItineraryData, days: number): Array<[number, number][]> {
+function getLegsGeometry(
+  itinerary: ItineraryData,
+  days: number,
+): Array<[number, number][]> {
   if (days > 1 && itinerary.days) {
     return itinerary.days.flatMap((d) => {
       const stops = d.itinerary?.stops ?? d.stops ?? [];
+
       return stops.map((s) => s.route_geometry ?? []);
     });
   }
@@ -65,21 +68,24 @@ function getLegsGeometry(itinerary: ItineraryData, days: number): Array<[number,
   if (itinerary.legs) {
     return itinerary.legs.map((l) => l.routeGeometry ?? []);
   }
+
   return (itinerary.stops ?? []).map((s) => s.route_geometry ?? []);
 }
 
 // Day colour palette
 const DAY_COLORS = [
-  "#e11d48", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6",
-  "#06b6d4", "#ec4899",
+  "#e11d48",
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#8b5cf6",
+  "#06b6d4",
+  "#ec4899",
 ];
-
-function stopColor(globalIdx: number, dayIdx: number): string {
-  return DAY_COLORS[dayIdx % DAY_COLORS.length];
-}
 
 function numberPin(label: string, color: string, isActive = false): L.DivIcon {
   const size = isActive ? 36 : 30;
+
   return L.divIcon({
     className: "",
     html: `
@@ -116,7 +122,7 @@ export default function ItineraryMap({
 
     const map = L.map(containerRef.current, {
       zoomControl: true,
-      scrollWheelZoom: false,  // kiosk — disable scroll zoom to avoid accidental zoom
+      scrollWheelZoom: false, // kiosk — disable scroll zoom to avoid accidental zoom
       doubleClickZoom: true,
       dragging: true,
     });
@@ -134,14 +140,16 @@ export default function ItineraryMap({
       map.remove();
       mapRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Re-render when itinerary changes
   useEffect(() => {
     if (!mapRef.current) return;
     const map = mapRef.current;
-    map.eachLayer((l) => { if (!(l instanceof L.TileLayer)) map.removeLayer(l); });
+
+    map.eachLayer((l) => {
+      if (!(l instanceof L.TileLayer)) map.removeLayer(l);
+    });
     renderItinerary(map, itinerary, days);
   }, [itinerary, days]);
 
@@ -169,24 +177,26 @@ function renderItinerary(map: L.Map, itinerary: ItineraryData, days: number) {
   if (allStops.length === 0) return;
 
   const bounds: L.LatLngTuple[] = [];
-  let globalIdx = 0;
 
   // Iterate by day so colours are consistent
   if (days > 1 && itinerary.days) {
     let stopOffset = 0;
+
     itinerary.days.forEach((d, dayIdx) => {
       const stops = d.itinerary?.stops ?? d.stops ?? [];
       const color = DAY_COLORS[dayIdx % DAY_COLORS.length];
       const routePts: L.LatLngTuple[] = [];
 
-      stops.forEach((stop, i) => {
+      stops.forEach((stop) => {
         const lat = stop.destination.latitude;
         const lon = stop.destination.longitude;
+
         bounds.push([lat, lon]);
         routePts.push([lat, lon]);
 
         // Leg polyline from geometry or straight line
         const geom = legGeoms[stopOffset] ?? [];
+
         if (geom.length >= 2) {
           L.polyline(geom as L.LatLngTuple[], {
             color,
@@ -195,8 +205,12 @@ function renderItinerary(map: L.Map, itinerary: ItineraryData, days: number) {
           }).addTo(map);
         } else if (stopOffset > 0) {
           const prev = allStops[stopOffset - 1];
+
           L.polyline(
-            [[prev.destination.latitude, prev.destination.longitude], [lat, lon]],
+            [
+              [prev.destination.latitude, prev.destination.longitude],
+              [lat, lon],
+            ],
             { color, weight: 3, opacity: 0.55, dashArray: "8 6" },
           ).addTo(map);
         }
@@ -218,12 +232,15 @@ function renderItinerary(map: L.Map, itinerary: ItineraryData, days: number) {
   } else {
     // Single day
     const color = DAY_COLORS[0];
+
     allStops.forEach((stop, i) => {
       const lat = stop.destination.latitude;
       const lon = stop.destination.longitude;
+
       bounds.push([lat, lon]);
 
       const geom = legGeoms[i] ?? [];
+
       if (geom.length >= 2) {
         L.polyline(geom as L.LatLngTuple[], {
           color,
@@ -232,8 +249,12 @@ function renderItinerary(map: L.Map, itinerary: ItineraryData, days: number) {
         }).addTo(map);
       } else if (i > 0) {
         const prev = allStops[i - 1];
+
         L.polyline(
-          [[prev.destination.latitude, prev.destination.longitude], [lat, lon]],
+          [
+            [prev.destination.latitude, prev.destination.longitude],
+            [lat, lon],
+          ],
           { color, weight: 3, opacity: 0.55, dashArray: "8 6" },
         ).addTo(map);
       }
