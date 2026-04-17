@@ -201,8 +201,9 @@ class _MapScreenState extends State<MapScreen> {
 
       if (useMultiModal) {
         final mmLegs = <MultiModalRoute>[];
+        LatLng mmSnappedFrom = waypoints[0];
         for (int i = 0; i < waypoints.length - 1; i++) {
-          final from = waypoints[i];
+          final from = mmSnappedFrom;
           final to = waypoints[i + 1];
           final res = await api.post('/routes/calculate-multimodal', body: {
             'start_lat': from.latitude,
@@ -214,7 +215,15 @@ class _MapScreenState extends State<MapScreen> {
           }, auth: true);
 
           if (res['success'] == true && res['data'] != null) {
-            mmLegs.add(MultiModalRoute.fromJson(res['data'] as Map<String, dynamic>));
+            final mm = MultiModalRoute.fromJson(res['data'] as Map<String, dynamic>);
+            mmLegs.add(mm);
+            final allGeo = mm.legs.expand((l) => l.geometry).toList();
+            if (allGeo.isNotEmpty) {
+              final last = allGeo.last;
+              mmSnappedFrom = LatLng(last[0], last[1]);
+            } else {
+              mmSnappedFrom = waypoints[i + 1];
+            }
           } else {
             final fromName = i == 0 ? 'Start' : stops[i - 1].name;
             final toName = stops[i].name;
@@ -240,8 +249,9 @@ class _MapScreenState extends State<MapScreen> {
         }
       } else {
         final legs = <RouteResult>[];
+        LatLng snappedFrom = waypoints[0];
         for (int i = 0; i < waypoints.length - 1; i++) {
-          final from = waypoints[i];
+          final from = snappedFrom;
           final to = waypoints[i + 1];
           final res = await api.post('/routes/calculate-gps', body: {
             'start_lat': from.latitude,
@@ -252,7 +262,14 @@ class _MapScreenState extends State<MapScreen> {
           }, auth: true);
 
           if (res['success'] == true && res['data'] != null) {
-            legs.add(RouteResult.fromJson(res['data']));
+            final leg = RouteResult.fromJson(res['data']);
+            legs.add(leg);
+            final geo = leg.routeGeometry;
+            if (geo != null && geo.length >= 2) {
+              snappedFrom = LatLng(geo.last[0], geo.last[1]);
+            } else {
+              snappedFrom = waypoints[i + 1];
+            }
           } else {
             final fromName = i == 0 ? 'Start' : stops[i - 1].name;
             final toName = stops[i].name;
