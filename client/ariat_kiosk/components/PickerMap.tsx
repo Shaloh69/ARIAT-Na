@@ -74,7 +74,11 @@ function createPin(isSelected: boolean, order: number): L.DivIcon {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function PickerMap({ destinations, selectedIds, onToggle }: PickerMapProps) {
+export default function PickerMap({
+  destinations,
+  selectedIds,
+  onToggle,
+}: PickerMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
@@ -82,8 +86,13 @@ export default function PickerMap({ destinations, selectedIds, onToggle }: Picke
   // Keep latest callbacks in refs so marker event handlers stay fresh
   const selectedIdsRef = useRef(selectedIds);
   const onToggleRef = useRef(onToggle);
-  useEffect(() => { selectedIdsRef.current = selectedIds; }, [selectedIds]);
-  useEffect(() => { onToggleRef.current = onToggle; }, [onToggle]);
+
+  useEffect(() => {
+    selectedIdsRef.current = selectedIds;
+  }, [selectedIds]);
+  useEffect(() => {
+    onToggleRef.current = onToggle;
+  }, [onToggle]);
 
   // ── Init map once ─────────────────────────────────────────────────
   useEffect(() => {
@@ -102,7 +111,8 @@ export default function PickerMap({ destinations, selectedIds, onToggle }: Picke
     L.tileLayer(
       "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
       {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+        attribution:
+          '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
         maxZoom: 19,
         subdomains: "abcd",
       },
@@ -115,12 +125,12 @@ export default function PickerMap({ destinations, selectedIds, onToggle }: Picke
       mapRef.current = null;
       markersRef.current.clear();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Sync markers when destinations list changes ───────────────────
   useEffect(() => {
     const map = mapRef.current;
+
     if (!map) return;
 
     const existing = markersRef.current;
@@ -128,7 +138,10 @@ export default function PickerMap({ destinations, selectedIds, onToggle }: Picke
 
     // Remove stale markers
     existing.forEach((marker, id) => {
-      if (!nextIds.has(id)) { marker.remove(); existing.delete(id); }
+      if (!nextIds.has(id)) {
+        marker.remove();
+        existing.delete(id);
+      }
     });
 
     // Add new markers
@@ -161,10 +174,16 @@ export default function PickerMap({ destinations, selectedIds, onToggle }: Picke
         const pts = destinations
           .filter((d) => d.latitude && d.longitude)
           .map((d): L.LatLngTuple => [d.latitude, d.longitude]);
-        if (pts.length > 1) map.fitBounds(L.latLngBounds(pts), { padding: [80, 80], maxZoom: 13 });
-      } catch { /* noop */ }
+
+        if (pts.length > 1)
+          map.fitBounds(L.latLngBounds(pts), {
+            padding: [80, 80],
+            maxZoom: 13,
+          });
+      } catch {
+        /* noop */
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [destinations]);
 
   // ── Update icons + flyTo when selection changes ───────────────────
@@ -174,6 +193,7 @@ export default function PickerMap({ destinations, selectedIds, onToggle }: Picke
     markersRef.current.forEach((marker, id) => {
       const isSel = selectedIds.includes(id);
       const order = selectedIds.indexOf(id) + 1;
+
       marker.setIcon(createPin(isSel, order));
       marker.setZIndexOffset(isSel ? 1000 : 0);
     });
@@ -182,16 +202,23 @@ export default function PickerMap({ destinations, selectedIds, onToggle }: Picke
     if (selectedIds.length > 0 && map) {
       const lastId = selectedIds[selectedIds.length - 1];
       const dest = destinations.find((d) => d.id === lastId);
+
       if (dest?.latitude && dest?.longitude) {
         const currentZoom = map.getZoom();
+
         if (currentZoom >= 13) {
-          map.panTo([dest.latitude, dest.longitude], { animate: true, duration: 0.4 });
+          map.panTo([dest.latitude, dest.longitude], {
+            animate: true,
+            duration: 0.4,
+          });
         } else {
-          map.flyTo([dest.latitude, dest.longitude], 13, { animate: true, duration: 0.7 });
+          map.flyTo([dest.latitude, dest.longitude], 13, {
+            animate: true,
+            duration: 0.7,
+          });
         }
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds]);
 
   return (

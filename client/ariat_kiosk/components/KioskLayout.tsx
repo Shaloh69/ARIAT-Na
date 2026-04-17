@@ -1,15 +1,14 @@
 import type { ReactNode } from "react";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-
-export const FOOTER_H = 28; // px — collapsed footer height (exported for hero sizing)
-export const TOPBAR_H = 44; // px — top bar height (exported for hero sizing)
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { Chip } from "@heroui/chip";
 
 import AttractScreen from "@/components/AttractScreen";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
+
+export const FOOTER_H = 28; // px — collapsed footer height (exported for hero sizing)
+export const TOPBAR_H = 44; // px — top bar height (exported for hero sizing)
 
 interface KioskLayoutProps {
   children: ReactNode;
@@ -150,9 +149,13 @@ export default function KioskLayout({
           {/* Collapsed bar (always visible) */}
           <div className="kiosk-footer-bar">
             <span className="kiosk-footer-brand">
-              <span style={{ color: "var(--red-500)", fontWeight: 800 }}>AIRAT-NA</span>
+              <span style={{ color: "var(--red-500)", fontWeight: 800 }}>
+                AIRAT-NA
+              </span>
               <span style={{ opacity: 0.45, margin: "0 8px" }}>·</span>
-              <span style={{ opacity: 0.5, fontSize: "0.78rem" }}>AI-Assisted Tourism</span>
+              <span style={{ opacity: 0.5, fontSize: "0.78rem" }}>
+                AI-Assisted Tourism
+              </span>
             </span>
             <span className="kiosk-footer-loc">📍 Cebu, Philippines</span>
             <button
@@ -169,11 +172,12 @@ export default function KioskLayout({
           {footerOpen && (
             <div className="kiosk-footer-expanded">
               <p style={{ opacity: 0.55, fontSize: "0.78rem" }}>
-                Scan any destination card to continue exploring on the AIRAT-NA mobile app.
-                Available on iOS &amp; Android.
+                Scan any destination card to continue exploring on the AIRAT-NA
+                mobile app. Available on iOS &amp; Android.
               </p>
               <p style={{ opacity: 0.35, fontSize: "0.72rem" }}>
-                © 2026 AIRAT-NA · Thesis Project · University of Cebu Lapu-Lapu and Mandaue
+                © 2026 AIRAT-NA · Thesis Project · University of Cebu Lapu-Lapu
+                and Mandaue
               </p>
             </div>
           )}
