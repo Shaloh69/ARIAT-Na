@@ -312,15 +312,54 @@ class _KioskClaimScreenState extends State<KioskClaimScreen> {
           // Claimed state
           if (isClaimed)
             GlassCard(
-              padding: const EdgeInsets.all(16),
-              child: Row(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(FluentIcons.check_mark, size: 20, color: AppColors.green),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'This itinerary has already been claimed.',
-                      style: TextStyle(color: c.text, fontSize: 13),
+                  Row(
+                    children: [
+                      Icon(FluentIcons.check_mark, size: 20, color: AppColors.green),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Itinerary saved to your account!',
+                        style: TextStyle(color: AppColors.green, fontSize: 14, fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Log in on the app with the account you created at the kiosk — your trip will appear in the Trips tab.',
+                    style: TextStyle(color: c.textMuted, fontSize: 13),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: Button(
+                      onPressed: () => Navigator.push(
+                        context,
+                        FluentPageRoute(builder: (_) => const LoginScreen()),
+                      ),
+                      style: ButtonStyle(
+                        shape: WidgetStateProperty.all(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 12)),
+                      ),
+                      child: Text(
+                        auth.isAuthenticated ? '✓ Already logged in — check Trips tab' : 'Log In to See Your Trip',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _startWithoutAccount,
+                      style: ButtonStyle(
+                        backgroundColor: WidgetStateProperty.all(AppColors.red500),
+                        shape: WidgetStateProperty.all(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 12)),
+                      ),
+                      child: const Text('🚀 Start Trip Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                     ),
                   ),
                 ],

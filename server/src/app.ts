@@ -84,6 +84,12 @@ app.use((req, res, next) => {
 // ROUTES
 // =====================================================
 
+// Root + favicon — silence browser/probe 404s
+app.get("/", (req, res) => {
+  res.json({ success: true, message: "ARIAT-NA API", version: "1.0" });
+});
+app.get("/favicon.ico", (req, res) => res.status(204).end());
+
 // Health check endpoint
 app.get("/health", (req, res) => {
   res.json({

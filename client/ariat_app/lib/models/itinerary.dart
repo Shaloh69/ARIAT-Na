@@ -38,11 +38,11 @@ class ItineraryStop {
       ),
       score: (json['score'] as num?)?.toDouble() ?? 0,
       reason: json['reason'] ?? '',
-      visitDuration: json['visit_duration'] ?? json['planned_duration'] ?? 60,
+      visitDuration: (json['visit_duration'] as num?)?.toInt() ?? (json['planned_duration'] as num?)?.toInt() ?? 60,
       legDistance: (json['leg_distance'] as num?)?.toDouble() ?? 0,
-      legTravelTime: json['leg_travel_time'] ?? 0,
-      cumulativeTime: json['cumulative_time'] ?? 0,
-      dayNumber: json['day_number'] ?? 1,
+      legTravelTime: (json['leg_travel_time'] as num?)?.toInt() ?? 0,
+      cumulativeTime: (json['cumulative_time'] as num?)?.toInt() ?? 0,
+      dayNumber: (json['day_number'] as num?)?.toInt() ?? 1,
       legFare: (json['leg_fare'] as num?)?.toDouble() ?? 0,
       multiModalLegs: rawLegs
           ?.map((l) => TransportLeg.fromJson(l as Map<String, dynamic>))
@@ -95,9 +95,9 @@ class DayItinerary {
         });
       }).toList(),
       totalDistance: (itin['totalDistance'] as num?)?.toDouble() ?? 0,
-      estimatedTravelTime: itin['estimatedTravelTime'] ?? 0,
-      estimatedVisitTime: itin['estimatedVisitTime'] ?? 0,
-      estimatedTotalTime: itin['estimatedTotalTime'] ?? 0,
+      estimatedTravelTime: (itin['estimatedTravelTime'] as num?)?.toInt() ?? 0,
+      estimatedVisitTime: (itin['estimatedVisitTime'] as num?)?.toInt() ?? 0,
+      estimatedTotalTime: (itin['estimatedTotalTime'] as num?)?.toInt() ?? 0,
       estimatedCost: (itin['estimatedCost'] as num?)?.toDouble() ?? 0,
       clusterName: json['clusterName'] ?? json['cluster_name'],
     );
@@ -130,12 +130,12 @@ class MultiDayItinerary {
     final parsed = rawDays.map((d) => DayItinerary.fromJson(d as Map<String, dynamic>)).toList();
     return MultiDayItinerary(
       days: parsed,
-      totalDays: json['totalDays'] ?? parsed.length,
-      totalStops: json['totalStops'] ?? parsed.fold<int>(0, (s, d) => s + d.stops.length),
+      totalDays: (json['totalDays'] as num?)?.toInt() ?? parsed.length,
+      totalStops: (json['totalStops'] as num?)?.toInt() ?? parsed.fold<int>(0, (s, d) => s + d.stops.length),
       totalDistance: (json['totalDistance'] as num?)?.toDouble() ?? 0,
-      estimatedTravelTime: json['estimatedTravelTime'] ?? 0,
-      estimatedVisitTime: json['estimatedVisitTime'] ?? 0,
-      estimatedTotalTime: json['estimatedTotalTime'] ?? 0,
+      estimatedTravelTime: (json['estimatedTravelTime'] as num?)?.toInt() ?? 0,
+      estimatedVisitTime: (json['estimatedVisitTime'] as num?)?.toInt() ?? 0,
+      estimatedTotalTime: (json['estimatedTotalTime'] as num?)?.toInt() ?? 0,
       estimatedCost: (json['estimatedCost'] as num?)?.toDouble() ?? 0,
     );
   }
@@ -199,15 +199,15 @@ class SavedItinerary {
       id: json['id'] ?? '',
       title: json['title'] ?? '',
       description: json['description'],
-      days: json['days'] ?? 1,
+      days: (json['days'] as num?)?.toInt() ?? 1,
       clusterIds: clusterIds,
       tripType: json['trip_type'],
       transportMode: json['transport_mode'],
       groupType: json['group_type'],
       totalDistance: (json['total_distance'] as num?)?.toDouble(),
-      estimatedTime: json['estimated_time'],
+      estimatedTime: (json['estimated_time'] as num?)?.toInt(),
       estimatedCost: (json['estimated_cost'] as num?)?.toDouble(),
-      stopCount: json['stop_count'] ?? 0,
+      stopCount: (json['stop_count'] as num?)?.toInt() ?? 0,
       startDate: json['start_date'],
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
