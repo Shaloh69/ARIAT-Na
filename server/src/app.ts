@@ -500,6 +500,65 @@ const ensureEntrancePointType = async (): Promise<void> => {
   }
 };
 
+const ensureUserFeatureMigrations = async (): Promise<void> => {
+  try {
+    // --- destination_reviews table ---
+    const [rvTables]: any = await pool.execute(
+      "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'destination_reviews'",
+    );
+    if (rvTables.length === 0) {
+      await pool.execute(`
+        CREATE TABLE destination_reviews (
+          id VARCHAR(36) PRIMARY KEY,
+          destination_id VARCHAR(36) NOT NULL,
+          user_id VARCHAR(36) NOT NULL,
+          rating TINYINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+          comment TEXT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_user_dest (user_id, destination_id),
+          INDEX idx_destination_id (destination_id),
+          FOREIGN KEY (destination_id) REFERENCES destinations(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      logger.info("[STARTUP] Created destination_reviews table");
+    }
+
+    // --- destinations.review_count column ---
+    const [rvCols]: any = await pool.execute(
+      "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'destinations' AND COLUMN_NAME = 'review_count'",
+    );
+    if (rvCols.length === 0) {
+      await pool.execute("ALTER TABLE destinations ADD COLUMN review_count INT DEFAULT 0 AFTER average_rating");
+      logger.info("[STARTUP] Added destinations.review_count");
+    }
+
+    // --- password_resets table ---
+    const [prTables]: any = await pool.execute(
+      "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'password_resets'",
+    );
+    if (prTables.length === 0) {
+      await pool.execute(`
+        CREATE TABLE password_resets (
+          id VARCHAR(36) PRIMARY KEY,
+          user_id VARCHAR(36) NOT NULL,
+          code VARCHAR(6) NOT NULL,
+          used BOOLEAN DEFAULT FALSE,
+          expires_at TIMESTAMP NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_user_id (user_id),
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      logger.info("[STARTUP] Created password_resets table");
+    }
+
+    logger.info("[STARTUP] User feature migration check complete.");
+  } catch (error) {
+    logger.error("[STARTUP] User feature migration failed:", error);
+  }
+};
+
 const startServer = async (): Promise<void> => {
   try {
     // Test database connection
@@ -510,6 +569,9 @@ const startServer = async (): Promise<void> => {
 
     // Auto-apply admin team migration (presence + chat)
     await ensureAdminTeamMigration();
+
+    // User-facing feature migrations (reviews, password resets)
+    await ensureUserFeatureMigrations();
 
     // Ensure intersections.point_type ENUM includes 'entrance'
     await ensureEntrancePointType();

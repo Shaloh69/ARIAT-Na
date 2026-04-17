@@ -270,6 +270,40 @@ class _TripOverviewScreenState extends State<TripOverviewScreen> {
               ),
             ),
 
+            // Start Journey button
+            if (days.isNotEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(context).push(
+                        FluentPageRoute(
+                          builder: (_) => DayDetailScreen(day: days[0], allDays: days),
+                        ),
+                      ),
+                      style: ButtonStyle(
+                        backgroundColor: WidgetStateProperty.all(AppColors.green),
+                        shape: WidgetStateProperty.all(
+                            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        padding: WidgetStateProperty.all(
+                            const EdgeInsets.symmetric(vertical: 13)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(FluentIcons.location, size: 16, color: Colors.white),
+                          SizedBox(width: 8),
+                          Text('Start Journey',
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                  ).animate().fadeIn(delay: 150.ms, duration: 400.ms),
+                ),
+              ),
+
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),

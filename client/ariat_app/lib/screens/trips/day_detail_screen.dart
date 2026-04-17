@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart'
     show
@@ -8,14 +9,18 @@ import 'package:flutter/material.dart'
         Scaffold;
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../../models/destination.dart';
 import '../../models/itinerary.dart';
+import '../../models/route_result.dart';
 import '../../services/api_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/location_service.dart';
+import '../../services/navigation_ws_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/toast_overlay.dart';
 import 'nearby_recommendations_sheet.dart';
 
 class DayDetailScreen extends StatefulWidget {
@@ -31,6 +36,7 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
   late int _currentIndex;
   late Map<int, List<ItineraryStop>> _dayStops;
 
+  // Arrival / recs
   int _activeStopIdx = -1;
   bool _showArrivedBanner = false;
   String _arrivedName = '';
@@ -38,13 +44,38 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
   StreamSubscription<String>? _arrivalSub;
   bool _loadingRecs = false;
 
+  // Road geometry loading
+  bool _routeLoading = false;
+
+  // On-device navigation state
+  LocationService? _locationService;
+  LatLng? _snappedPosition;     // user dot snapped onto road
+  bool _isOffRoute = false;
+  bool _rerouting = false;
+  int _offRouteCount = 0;
+  DateTime? _lastRerouteTime;
+  DateTime? _lastHandledPositionTime;
+  String? _currentInstruction;  // current turn-by-turn step text
+
+  // WebSocket + TTS
+  StreamSubscription<NavRouteUpdate>? _wsSub;
+  StreamSubscription<NavProgressUpdate>? _progressSub;
+  late final FlutterTts _tts;
+  String? _navSessionId;
+  int _etaMinutes = 0;
+  Timer? _wsLocationTimer;
+
   final MapController _mapController = MapController();
   final DraggableScrollableController _sheetController = DraggableScrollableController();
-  bool _sheetExpanded = false; // tracks whether sheet is tall (≥0.55)
+  bool _sheetExpanded = false;
 
-  static const double _sheetMinExtent  = 0.13;
-  static const double _sheetSnapLow    = 0.38;
-  static const double _sheetSnapHigh   = 0.62;
+  static const double _sheetMinExtent = 0.13;
+  static const double _sheetSnapLow   = 0.38;
+  static const double _sheetSnapHigh  = 0.62;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Lifecycle
+  // ─────────────────────────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -55,21 +86,355 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
       for (final d in widget.allDays.isNotEmpty ? widget.allDays : [widget.day])
         d.dayNumber: List<ItineraryStop>.from(d.stops),
     };
+    _tts = FlutterTts();
+    _tts.setLanguage('en-US');
+    _tts.setSpeechRate(0.9);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initTracking();
       _fitMapToStops();
+      _fetchRoadGeometry();   // draws actual roads on map
+      _initNavWs();
     });
   }
 
   @override
   void dispose() {
+    _locationService?.removeListener(_handleLocationUpdate);
     _arrivalSub?.cancel();
     _bannerTimer?.cancel();
+    _wsSub?.cancel();
+    _progressSub?.cancel();
+    _wsLocationTimer?.cancel();
+    _tts.stop();
+    if (mounted) context.read<NavigationWsService>().endNavigation();
     _sheetController.dispose();
     super.dispose();
   }
 
-  // ── Tracking ────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  // TTS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  Future<void> _speak(String text) async {
+    await _tts.stop();
+    await _tts.speak(text);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Road geometry — fetch real roads for every leg
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  Future<void> _fetchRoadGeometry() async {
+    if (!mounted) return;
+    final stops = _currentDayStops;
+    if (stops.isEmpty) return;
+
+    final loc  = context.read<LocationService>();
+    final api  = context.read<ApiService>();
+    final pos  = loc.currentPosition;
+
+    setState(() => _routeLoading = true);
+
+    try {
+      // Chain from user position → stop[0] → stop[1] → …
+      LatLng from = pos != null
+          ? LatLng(pos.latitude, pos.longitude)
+          : LatLng(stops.first.destination.latitude, stops.first.destination.longitude);
+
+      final dayNum  = _day.dayNumber;
+      final updated = List<ItineraryStop>.from(_dayStops[dayNum] ?? stops);
+
+      for (int i = 0; i < stops.length; i++) {
+        final to = LatLng(stops[i].destination.latitude, stops[i].destination.longitude);
+        try {
+          final res = await api.post('/routes/calculate-gps', body: {
+            'start_lat': from.latitude,
+            'start_lon': from.longitude,
+            'end_lat':   to.latitude,
+            'end_lon':   to.longitude,
+            'optimize_for': 'distance',
+          }, auth: true);
+
+          if (!mounted) return;
+
+          if (res['success'] == true && res['data'] != null) {
+            final leg = RouteResult.fromJson(res['data'] as Map<String, dynamic>);
+            final geo = leg.routeGeometry;
+            if (geo != null && geo.length >= 2) {
+              updated[i] = ItineraryStop(
+                destination: stops[i].destination,
+                visitDuration: stops[i].visitDuration,
+                cumulativeTime: stops[i].cumulativeTime,
+                dayNumber: stops[i].dayNumber,
+                legDistance: leg.totalDistance,
+                legTravelTime: leg.estimatedTime,
+                routeGeometry: geo,
+              );
+              // Use the road-snapped last point as start of next leg
+              from = LatLng(geo.last[0], geo.last[1]);
+
+              // Update current instruction for the first (active) leg
+              if (i == (_activeStopIdx < 0 ? 0 : _activeStopIdx + 1) &&
+                  leg.steps.isNotEmpty) {
+                setState(() => _currentInstruction = leg.steps.first.instruction);
+              }
+            } else {
+              from = to;
+            }
+          } else {
+            from = to;
+          }
+        } catch (_) {
+          from = to; // non-fatal: just use straight line for this leg
+        }
+
+        if (mounted) setState(() => _dayStops[dayNum] = List.from(updated));
+      }
+    } finally {
+      if (mounted) setState(() => _routeLoading = false);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Location listener — camera follow + off-route detection + auto-reroute
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  void _handleLocationUpdate() {
+    final ls = _locationService;
+    if (ls == null || !mounted) return;
+
+    final pos = ls.currentPosition;
+    if (pos == null) return;
+
+    final userLatLng = LatLng(pos.latitude, pos.longitude);
+
+    // ── Camera: follow user + rotate map to heading ──────────────────────────
+    final display = _snappedPosition ?? userLatLng;
+    try {
+      _mapController.moveAndRotate(display, _mapController.camera.zoom, -ls.heading);
+    } catch (_) {}
+
+    // ── Snapping + off-route: only process new GPS positions ─────────────────
+    final posTime = ls.lastPositionUpdate;
+    if (posTime == null || posTime == _lastHandledPositionTime) return;
+    _lastHandledPositionTime = posTime;
+
+    final polyline = _flatRoutePolyline();
+    if (polyline.length < 2) {
+      setState(() => _snappedPosition = userLatLng);
+      return;
+    }
+
+    final snapped = _snapToPolyline(userLatLng, polyline);
+    final distOff  = _distMeters(userLatLng, snapped);
+    setState(() => _snappedPosition = snapped);
+
+    if (distOff > 60) {
+      _offRouteCount++;
+      if (_offRouteCount >= 2 && !_rerouting) {
+        final now = DateTime.now();
+        final canReroute = _lastRerouteTime == null ||
+            now.difference(_lastRerouteTime!).inSeconds >= 15;
+        if (canReroute) {
+          _lastRerouteTime = now;
+          _offRouteCount   = 0;
+          setState(() { _isOffRoute = true; _rerouting = true; });
+          AppToast.warning(context, 'Off route — recalculating…');
+          _rerouteFromHere(userLatLng).whenComplete(() {
+            if (mounted) setState(() => _rerouting = false);
+          });
+        }
+      }
+    } else {
+      _offRouteCount = 0;
+      if (_isOffRoute) setState(() => _isOffRoute = false);
+    }
+
+    // ── Send location to WebSocket server ────────────────────────────────────
+    if (_navSessionId != null) {
+      context.read<NavigationWsService>().sendLocationUpdate(
+        latitude: pos.latitude, longitude: pos.longitude,
+        heading: pos.heading, speed: pos.speed,
+      );
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Reroute from current position to remaining stops
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  Future<void> _rerouteFromHere(LatLng userLatLng) async {
+    if (!mounted) return;
+    _speak('Rerouting.');
+
+    final api     = context.read<ApiService>();
+    final dayNum  = _day.dayNumber;
+    final stops   = _currentDayStops;
+    // Reroute only remaining (unvisited) stops
+    final firstRemaining = (_activeStopIdx + 1).clamp(0, stops.length);
+    if (firstRemaining >= stops.length) return;
+
+    final updated = List<ItineraryStop>.from(stops);
+    LatLng from = userLatLng;
+
+    for (int i = firstRemaining; i < stops.length; i++) {
+      final to = LatLng(stops[i].destination.latitude, stops[i].destination.longitude);
+      try {
+        final res = await api.post('/routes/calculate-gps', body: {
+          'start_lat': from.latitude,
+          'start_lon': from.longitude,
+          'end_lat':   to.latitude,
+          'end_lon':   to.longitude,
+          'optimize_for': 'distance',
+        }, auth: true);
+
+        if (!mounted) return;
+
+        if (res['success'] == true && res['data'] != null) {
+          final leg = RouteResult.fromJson(res['data'] as Map<String, dynamic>);
+          final geo = leg.routeGeometry;
+          if (geo != null && geo.length >= 2) {
+            updated[i] = ItineraryStop(
+              destination: stops[i].destination,
+              visitDuration: stops[i].visitDuration,
+              cumulativeTime: stops[i].cumulativeTime,
+              dayNumber: stops[i].dayNumber,
+              legDistance: leg.totalDistance,
+              legTravelTime: leg.estimatedTime,
+              routeGeometry: geo,
+            );
+            from = LatLng(geo.last[0], geo.last[1]);
+            if (i == firstRemaining && leg.steps.isNotEmpty) {
+              setState(() => _currentInstruction = leg.steps.first.instruction);
+            }
+          } else {
+            from = to;
+          }
+        } else {
+          from = to;
+        }
+      } catch (_) {
+        from = to;
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _dayStops[dayNum] = updated;
+        _isOffRoute = false;
+      });
+      _speak('Route updated. Continue to ${stops[firstRemaining].destination.name}.');
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Route geometry helpers
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /// Concatenates all stop leg geometries into one flat polyline.
+  List<LatLng> _flatRoutePolyline() {
+    final stops = _currentDayStops;
+    final pts = <LatLng>[];
+    for (final s in stops) {
+      if (s.routeGeometry != null) {
+        pts.addAll(s.routeGeometry!.map((c) => LatLng(c[0], c[1])));
+      }
+    }
+    return pts;
+  }
+
+  LatLng _snapToPolyline(LatLng point, List<LatLng> polyline) {
+    if (polyline.length < 2) return point;
+    var minDist = double.infinity;
+    var snapped = polyline.first;
+    for (int i = 0; i < polyline.length - 1; i++) {
+      final candidate = _nearestOnSegment(point, polyline[i], polyline[i + 1]);
+      final d = _distMeters(point, candidate);
+      if (d < minDist) { minDist = d; snapped = candidate; }
+    }
+    return snapped;
+  }
+
+  LatLng _nearestOnSegment(LatLng p, LatLng a, LatLng b) {
+    final dx = b.latitude  - a.latitude;
+    final dy = b.longitude - a.longitude;
+    if (dx == 0 && dy == 0) return a;
+    final t = ((p.latitude  - a.latitude)  * dx +
+               (p.longitude - a.longitude) * dy) / (dx * dx + dy * dy);
+    final tc = t.clamp(0.0, 1.0);
+    return LatLng(a.latitude + tc * dx, a.longitude + tc * dy);
+  }
+
+  double _distMeters(LatLng a, LatLng b) {
+    const R = 6371000.0;
+    final dLat = (b.latitude  - a.latitude)  * pi / 180;
+    final dLon = (b.longitude - a.longitude) * pi / 180;
+    final sl = sin(dLat / 2), sln = sin(dLon / 2);
+    final x  = sl * sl + cos(a.latitude * pi / 180) * cos(b.latitude * pi / 180) * sln * sln;
+    return R * 2 * atan2(sqrt(x), sqrt(1 - x));
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // WebSocket navigation
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  void _initNavWs() {
+    if (!mounted) return;
+    final nav = context.read<NavigationWsService>();
+    nav.connect();
+
+    _navSessionId = Random().nextInt(0x7fffffff).toRadixString(16) +
+        Random().nextInt(0x7fffffff).toRadixString(16);
+
+    final stops = _currentDayStops;
+    nav.announceItinerary(
+      title: _day.clusterName ?? 'Day ${_day.dayNumber} Trip',
+      stopCount: stops.length,
+    );
+
+    if (stops.isNotEmpty) {
+      final dest = stops.last.destination;
+      nav.startNavigation(
+        sessionId: _navSessionId!,
+        route: {'path': [], 'roads': [], 'steps': []},
+        destLat: dest.latitude,
+        destLon: dest.longitude,
+      );
+      _speak('Navigation started. Day ${_day.dayNumber}, ${stops.length} stops.');
+    }
+
+    // Server-side reroute update (backup to on-device detection)
+    _wsSub = nav.routeUpdates.listen((update) {
+      if (!mounted || !_rerouting) return; // only apply if on-device hasn't already handled it
+      setState(() {
+        if (_activeStopIdx >= 0 && _activeStopIdx < _currentDayStops.length) {
+          final dayNum = _day.dayNumber;
+          final list   = List<ItineraryStop>.from(_dayStops[dayNum] ?? []);
+          final idx    = _activeStopIdx;
+          list[idx] = ItineraryStop(
+            destination: list[idx].destination,
+            visitDuration: list[idx].visitDuration,
+            cumulativeTime: list[idx].cumulativeTime,
+            dayNumber: list[idx].dayNumber,
+            legDistance: update.totalDistance,
+            routeGeometry: update.path,
+          );
+          _dayStops[dayNum] = list;
+        }
+      });
+    });
+
+    // ETA from server progress events
+    _progressSub = nav.progressUpdates.listen((p) {
+      if (!mounted) return;
+      final eta = (p.distanceToNext / 40.0 * 60).round();
+      if (eta != _etaMinutes) setState(() => _etaMinutes = eta);
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Arrival tracking
+  // ─────────────────────────────────────────────────────────────────────────────
 
   void _initTracking() {
     if (!mounted) return;
@@ -80,6 +445,10 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
           s.destination.latitude, s.destination.longitude);
     }
     _arrivalSub = loc.arrivedStream.listen(_onArrived);
+
+    // Register location listener for camera follow + off-route detection
+    _locationService = loc;
+    loc.addListener(_handleLocationUpdate);
   }
 
   void _onArrived(String destId) {
@@ -87,15 +456,18 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
     final idx = stops.indexWhere((s) => s.destination.id == destId);
     if (idx < 0) return;
     setState(() {
-      _activeStopIdx = idx;
-      _arrivedName = stops[idx].destination.name;
-      _showArrivedBanner = true;
+      _activeStopIdx       = idx;
+      _arrivedName         = stops[idx].destination.name;
+      _showArrivedBanner   = true;
+      _etaMinutes          = 0;
+      _currentInstruction  = null;
+      _isOffRoute          = false;
     });
     _bannerTimer?.cancel();
     _bannerTimer = Timer(const Duration(seconds: 5),
         () { if (mounted) setState(() => _showArrivedBanner = false); });
+    _speak("You've arrived at ${stops[idx].destination.name}.");
     _fetchNearbyRecs(stops[idx]);
-    // Pan map to arrived stop
     _animateTo(LatLng(stops[idx].destination.latitude, stops[idx].destination.longitude));
   }
 
@@ -120,7 +492,7 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
         }
       }
     } catch (_) {
-      // Non-critical — silently ignore
+      // non-critical
     } finally {
       if (mounted) setState(() => _loadingRecs = false);
     }
@@ -134,7 +506,7 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
 
   void _insertDestination(Destination dest) {
     final dayNum = _day.dayNumber;
-    final stops = List<ItineraryStop>.from(_dayStops[dayNum] ?? []);
+    final stops  = List<ItineraryStop>.from(_dayStops[dayNum] ?? []);
     final insertAt = (_activeStopIdx >= 0 ? _activeStopIdx + 1 : stops.length)
         .clamp(0, stops.length);
     stops.insert(insertAt, ItineraryStop(
@@ -153,7 +525,9 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
     });
   }
 
-  // ── Map helpers ──────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Map helpers
+  // ─────────────────────────────────────────────────────────────────────────────
 
   void _fitMapToStops() {
     final stops = _currentDayStops;
@@ -177,10 +551,12 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
   }
 
   void _animateTo(LatLng pos) {
-    try { _mapController.move(pos, 14); } catch (_) {}
+    try { _mapController.move(pos, 15); } catch (_) {}
   }
 
-  // ── Derived getters ──────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Derived getters
+  // ─────────────────────────────────────────────────────────────────────────────
 
   List<ItineraryStop> get _currentDayStops => _dayStops[_day.dayNumber] ?? [];
 
@@ -218,7 +594,9 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
     final userPos = loc.currentPosition;
     final multiDay = widget.allDays.length > 1;
 
-    // Build polyline layers — use stored geometry if available, else straight line
+    // Build polyline layers — color-coded by status
+    // completed legs = green, active next leg = bright red, future = muted
+    final nextLegIdx = _activeStopIdx + 1;
     final polylines = <Polyline>[];
     for (int i = 0; i < stops.length; i++) {
       final stop = stops[i];
@@ -234,14 +612,21 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
       } else {
         continue;
       }
-      final isActive = i <= _activeStopIdx;
-      polylines.add(Polyline(
-        points: pts,
-        strokeWidth: isActive ? 5 : 3,
-        color: isActive
-            ? AppColors.green.withAlpha(200)
-            : AppColors.red500.withAlpha(140),
-      ));
+      final isDone   = _activeStopIdx >= 0 && i <= _activeStopIdx;
+      final isNext   = i == nextLegIdx;
+      final Color color;
+      final double width;
+      if (isDone) {
+        color = AppColors.green.withAlpha(180);
+        width = 4;
+      } else if (isNext) {
+        color = _isOffRoute ? AppColors.amber : AppColors.red500;
+        width = 5;
+      } else {
+        color = AppColors.red500.withAlpha(80);
+        width = 3;
+      }
+      polylines.add(Polyline(points: pts, strokeWidth: width, color: color));
     }
 
     // Markers
@@ -266,10 +651,12 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
       ));
     }
 
-    // User location marker
-    if (userPos != null) {
+    // User location marker — prefer road-snapped position
+    final displayPos = _snappedPosition ??
+        (userPos != null ? LatLng(userPos.latitude, userPos.longitude) : null);
+    if (displayPos != null) {
       markers.add(Marker(
-        point: LatLng(userPos.latitude, userPos.longitude),
+        point: displayPos,
         width: 20, height: 20,
         child: _UserDot(),
       ));
@@ -431,6 +818,106 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
                 .fadeIn(duration: 250.ms),
             ),
 
+          // ── Rerouting banner ───────────────────────────────────────────────
+          if (_rerouting)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 70,
+              left: 16, right: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withAlpha(200),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.amber.withAlpha(120)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(width: 14, height: 14, child: ProgressRing(strokeWidth: 2, activeColor: AppColors.amber)),
+                    const SizedBox(width: 10),
+                    const Text('Recalculating route…',
+                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ).animate().fadeIn(duration: 200.ms),
+            ),
+
+          // ── Off-route chip ─────────────────────────────────────────────────
+          if (_isOffRoute && !_rerouting)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 70,
+              left: 16, right: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.amber.withAlpha(220),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(FluentIcons.warning, size: 14, color: Colors.white),
+                    const SizedBox(width: 8),
+                    const Text('Off route', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ).animate().fadeIn(duration: 200.ms),
+            ),
+
+          // ── Route loading indicator ────────────────────────────────────────
+          if (_routeLoading)
+            Positioned(
+              bottom: MediaQuery.of(context).size.height * _sheetSnapLow + 12,
+              left: 0, right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withAlpha(180),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(width: 12, height: 12, child: ProgressRing(strokeWidth: 2, activeColor: AppColors.red400)),
+                      const SizedBox(width: 8),
+                      const Text('Loading road data…',
+                          style: TextStyle(color: Colors.white, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ).animate().fadeIn(duration: 300.ms),
+            ),
+
+          // ── Current instruction chip ───────────────────────────────────────
+          if (_currentInstruction != null && !_rerouting && !_showArrivedBanner)
+            Positioned(
+              bottom: MediaQuery.of(context).size.height * _sheetSnapLow + 12,
+              left: 16, right: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withAlpha(200),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.red500.withAlpha(100)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(FluentIcons.map_directions, size: 16, color: Colors.white),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _currentInstruction!,
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(duration: 250.ms),
+            ),
+
           // ── Draggable bottom sheet ─────────────────────────────────────────
           DraggableScrollableSheet(
             controller: _sheetController,
@@ -467,7 +954,7 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
                               duration: const Duration(milliseconds: 300),
                               curve: Curves.easeInOut);
                         },
-                        child: _SheetHandle(day: day, c: c),
+                        child: _SheetHandle(day: day, c: c, etaMinutes: _etaMinutes),
                       ),
                       // Stop list
                       Expanded(
@@ -616,7 +1103,8 @@ class _StopPin extends StatelessWidget {
 class _SheetHandle extends StatelessWidget {
   final DayItinerary day;
   final AppColorScheme c;
-  const _SheetHandle({required this.day, required this.c});
+  final int etaMinutes;
+  const _SheetHandle({required this.day, required this.c, this.etaMinutes = 0});
 
   String _fmtMin(int m) {
     if (m < 60) return '${m}m';
@@ -659,6 +1147,11 @@ class _SheetHandle extends StatelessWidget {
               const SizedBox(width: 10),
               _SumStat(icon: FluentIcons.money, label: '₱${day.estimatedCost.toStringAsFixed(0)}',
                   color: AppColors.amber, c: c),
+              if (etaMinutes > 0) ...[
+                const SizedBox(width: 10),
+                _SumStat(icon: FluentIcons.location_fill, label: 'ETA ${_fmtMin(etaMinutes)}',
+                    color: AppColors.red400, c: c),
+              ],
             ],
           ),
         ],

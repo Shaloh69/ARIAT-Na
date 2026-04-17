@@ -8,6 +8,7 @@ import 'services/connectivity_service.dart';
 import 'services/location_service.dart';
 import 'services/notification_service.dart';
 import 'services/theme_service.dart';
+import 'services/navigation_ws_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/app_shell.dart';
@@ -35,6 +36,7 @@ class _AriatNaAppState extends State<AriatNaApp> {
   late final ConnectivityService _connectivityService;
   late final LocationService _locationService;
   late final ApiService _apiService;
+  late final NavigationWsService _navWsService;
   final ThemeService _themeService = ThemeService();
   final _appLinks = AppLinks();
 
@@ -46,6 +48,7 @@ class _AriatNaAppState extends State<AriatNaApp> {
     _connectivityService = ConnectivityService();
     _locationService = LocationService();
     _apiService = ApiService(_authService, _cacheService, _connectivityService);
+    _navWsService = NavigationWsService(_authService);
 
     _authService.init().then((_) {
       // Only sync baseUrl if the user has explicitly saved a custom URL.
@@ -101,6 +104,7 @@ class _AriatNaAppState extends State<AriatNaApp> {
         ChangeNotifierProvider.value(value: _connectivityService),
         ChangeNotifierProvider.value(value: _locationService),
         ChangeNotifierProvider.value(value: _themeService),
+        ChangeNotifierProvider.value(value: _navWsService),
         Provider.value(value: _apiService),
         Provider.value(value: _cacheService),
       ],

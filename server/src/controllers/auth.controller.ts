@@ -186,11 +186,11 @@ export const updateCurrentUser = async (
     throw new AppError("User not authenticated", 401);
   }
 
-  const { full_name, phone_number } = req.body;
+  const { full_name, phone_number, profile_image_url } = req.body;
 
-  if (!full_name && phone_number === undefined) {
+  if (!full_name && phone_number === undefined && profile_image_url === undefined) {
     throw new AppError(
-      "At least one field (full_name or phone_number) is required",
+      "At least one field (full_name, phone_number, or profile_image_url) is required",
       400,
     );
   }
@@ -205,6 +205,10 @@ export const updateCurrentUser = async (
   if (phone_number !== undefined) {
     fields.push("phone_number = ?");
     values.push(phone_number);
+  }
+  if (profile_image_url !== undefined) {
+    fields.push("profile_image_url = ?");
+    values.push(profile_image_url);
   }
 
   values.push(req.user.id);
@@ -402,4 +406,100 @@ export const logoutAll = async (
     success: true,
     message: "Logged out from all devices",
   });
+};
+
+// =====================================================
+// PASSWORD RESET
+// =====================================================
+
+/**
+ * Request password reset — returns a 6-digit code stored in DB
+ * POST /api/v1/auth/user/forgot-password
+ */
+export const forgotPassword = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  const { email } = req.body;
+  if (!email) throw new AppError("Email is required", 400);
+
+  const [users]: any = await pool.execute(
+    "SELECT id FROM users WHERE email = ? AND is_active = TRUE",
+    [email],
+  );
+
+  // Always return success to avoid email enumeration
+  if (users.length === 0) {
+    res.json({ success: true, message: "If that email exists, a reset code has been sent." });
+    return;
+  }
+
+  const userId = users[0].id;
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+  // Invalidate previous codes for this user
+  await pool.execute(
+    "UPDATE password_resets SET used = TRUE WHERE user_id = ?",
+    [userId],
+  );
+
+  await pool.execute(
+    "INSERT INTO password_resets (id, user_id, code, expires_at) VALUES (?, ?, ?, ?)",
+    [uuidv4(), userId, code, expiresAt],
+  );
+
+  logger.info(`[PASSWORD_RESET] Code for ${email}: ${code}`);
+
+  // In production this would send an email — for now the code is logged and returned in dev
+  res.json({
+    success: true,
+    message: "Reset code sent.",
+    ...(process.env.NODE_ENV !== "production" ? { debug_code: code } : {}),
+  });
+};
+
+/**
+ * Reset password using code
+ * POST /api/v1/auth/user/reset-password
+ */
+export const resetPassword = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  const { email, code, new_password } = req.body;
+  if (!email || !code || !new_password) {
+    throw new AppError("email, code, and new_password are required", 400);
+  }
+  if (new_password.length < 8) {
+    throw new AppError("Password must be at least 8 characters", 400);
+  }
+
+  const [users]: any = await pool.execute(
+    "SELECT id FROM users WHERE email = ? AND is_active = TRUE",
+    [email],
+  );
+  if (users.length === 0) throw new AppError("Invalid request", 400);
+  const userId = users[0].id;
+
+  const [resets]: any = await pool.execute(
+    "SELECT id FROM password_resets WHERE user_id = ? AND code = ? AND used = FALSE AND expires_at > NOW()",
+    [userId, code],
+  );
+  if (resets.length === 0) throw new AppError("Invalid or expired reset code", 400);
+
+  const newHash = await hashPassword(new_password);
+  await pool.execute(
+    "UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?",
+    [newHash, userId],
+  );
+  await pool.execute(
+    "UPDATE password_resets SET used = TRUE WHERE id = ?",
+    [resets[0].id],
+  );
+
+  // Revoke all refresh tokens so old sessions are invalidated
+  await revokeAllUserTokens(userId, "user");
+
+  res.json({ success: true, message: "Password reset successfully. Please log in again." });
 };

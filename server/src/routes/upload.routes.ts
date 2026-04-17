@@ -13,7 +13,7 @@ import {
   validateFileType,
   validateFileSize,
 } from "../services/upload.service";
-import { authenticateAdmin } from "../middleware/auth.middleware";
+import { authenticateAdmin, authenticateUser } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -194,6 +194,39 @@ router.post(
         success: false,
         message: error.message || "Failed to upload video",
       });
+    }
+  },
+);
+
+/**
+ * @route   POST /api/v1/upload/profile-image
+ * @desc    Upload user profile photo
+ * @access  Private (User)
+ */
+router.post(
+  "/profile-image",
+  authenticateUser,
+  uploadSingleImage,
+  handleMulterError,
+  async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: "No file uploaded" });
+      }
+      if (!validateFileType(req.file.mimetype, UPLOAD_CONFIGS.IMAGE.allowedTypes)) {
+        return res.status(400).json({ success: false, message: "Invalid file type. Only images are allowed." });
+      }
+      if (!validateFileSize(req.file.size, UPLOAD_CONFIGS.IMAGE.maxSizeInMB)) {
+        return res.status(400).json({ success: false, message: `File too large. Maximum size is ${UPLOAD_CONFIGS.IMAGE.maxSizeInMB}MB` });
+      }
+      const result = await uploadFile(req.file.buffer, req.file.originalname, {
+        folder: "user-avatars",
+        contentType: req.file.mimetype,
+      });
+      return res.status(200).json({ success: true, message: "Profile image uploaded successfully", data: result });
+    } catch (error: any) {
+      console.error("Profile image upload error:", error);
+      return res.status(500).json({ success: false, message: error.message || "Failed to upload image" });
     }
   },
 );

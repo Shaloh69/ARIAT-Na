@@ -207,13 +207,14 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  Future<void> updateProfile({String? fullName, String? phone}) async {
+  Future<void> updateProfile({String? fullName, String? phone, String? profileImageUrl}) async {
     final response = await http.put(
       Uri.parse('$_baseUrl/auth/user/me'),
       headers: _authHeaders(),
       body: jsonEncode({
         if (fullName != null) 'full_name': fullName,
         if (phone != null) 'phone_number': phone,
+        if (profileImageUrl != null) 'profile_image_url': profileImageUrl,
       }),
     ).timeout(const Duration(seconds: 30));
     final body = jsonDecode(response.body);

@@ -11,6 +11,7 @@ import '../../widgets/glass_card.dart';
 import '../../widgets/toast_overlay.dart';
 import 'trip_setup_screen.dart';
 import 'trip_overview_screen.dart';
+import '../map/map_screen.dart';
 
 class TripsScreen extends StatefulWidget {
   const TripsScreen({super.key});
@@ -194,6 +195,44 @@ class _TripsScreenState extends State<TripsScreen> {
                   ],
                 ),
               ).animate().fadeIn(delay: 200.ms, duration: 500.ms).slideY(begin: 0.05, end: 0, duration: 500.ms),
+
+              const SizedBox(height: 16),
+
+              // Manual route planner card
+              GestureDetector(
+                onTap: () => Navigator.of(context).push(
+                  FluentPageRoute(builder: (_) => const MapScreen()),
+                ),
+                child: GlassCard(
+                  padding: const EdgeInsets.all(18),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 52, height: 52,
+                        decoration: BoxDecoration(
+                          color: AppColors.blue.withAlpha(25),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(FluentIcons.map_directions, size: 24, color: AppColors.blue),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Build Your Own Route',
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.textStrong)),
+                            const SizedBox(height: 3),
+                            Text('Pick stops on the map manually — no AI needed',
+                                style: TextStyle(fontSize: 12, color: c.textMuted)),
+                          ],
+                        ),
+                      ),
+                      Icon(FluentIcons.chevron_right, size: 14, color: c.textFaint),
+                    ],
+                  ),
+                ),
+              ).animate().fadeIn(delay: 280.ms, duration: 400.ms),
 
               const SizedBox(height: 24),
 

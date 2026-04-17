@@ -8,6 +8,7 @@ import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/toast_overlay.dart';
 import 'register_screen.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -144,7 +145,25 @@ class _LoginScreenState extends State<LoginScreen> {
                         )),
                         onSubmitted: (_) => _login(),
                       ),
-                      SizedBox(height: 24),
+                      SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: HyperlinkButton(
+                          onPressed: isOnline
+                              ? () => Navigator.of(context).push(
+                                    FluentPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                                  )
+                              : null,
+                          child: Text(
+                            'Forgot password?',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isOnline ? AppColors.red400 : c.textFaint,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 16),
 
                       SizedBox(
                         width: double.infinity,

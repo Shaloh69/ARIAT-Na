@@ -14,6 +14,7 @@ import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/toast_overlay.dart';
 import '../destinations/destination_detail_screen.dart';
+import '../explore/explore_screen.dart';
 import '../trips/trip_setup_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -436,17 +437,22 @@ class _ClusterChip extends StatelessWidget {
     final c = context.appColors;
     final color = _colors[cluster.regionType] ?? AppColors.red400;
     final icon = _icons[cluster.regionType] ?? FluentIcons.poi;
-    return GlassCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      borderRadius: 14,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(height: 6),
-          Text(cluster.name, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: c.text)),
-          Text('${cluster.destinationCount} spots', style: TextStyle(fontSize: 10, color: c.textFaint)),
-        ],
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(FluentPageRoute(
+        builder: (_) => ExploreScreen(initialClusterId: cluster.id, initialTab: 1),
+      )),
+      child: GlassCard(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        borderRadius: 14,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 6),
+            Text(cluster.name, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: c.text)),
+            Text('${cluster.destinationCount} spots', style: TextStyle(fontSize: 10, color: c.textFaint)),
+          ],
+        ),
       ),
     );
   }

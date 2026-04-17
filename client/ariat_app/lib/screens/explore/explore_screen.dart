@@ -12,19 +12,21 @@ import '../../widgets/toast_overlay.dart';
 import '../destinations/destination_detail_screen.dart';
 
 class ExploreScreen extends StatefulWidget {
-  const ExploreScreen({super.key});
+  final String? initialClusterId;
+  final int initialTab;
+  const ExploreScreen({super.key, this.initialClusterId, this.initialTab = 0});
   @override
   State<ExploreScreen> createState() => _ExploreScreenState();
 }
 
 class _ExploreScreenState extends State<ExploreScreen> {
-  int _tab = 0; // 0=Areas 1=Spots 2=Guides
+  late int _tab;
   bool _loading = true;
 
   List<Cluster> _clusters = [];
   List<Destination> _spots = [];
   List<CuratedGuide> _guides = [];
-  String? _selectedCluster;
+  late String? _selectedCluster;
   String? _selectedInterest;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -32,6 +34,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
   @override
   void initState() {
     super.initState();
+    _tab = widget.initialTab;
+    _selectedCluster = widget.initialClusterId;
     _searchController.addListener(() {
       setState(() => _searchQuery = _searchController.text);
     });
@@ -135,7 +139,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 child: IndexedStack(
                   index: _tab,
                   children: [
-                    _AreasTab(clusters: _clusters),
+                    _AreasTab(
+                      clusters: _clusters,
+                      onClusterTap: (id) => setState(() {
+                        _selectedCluster = id;
+                        _tab = 1;
+                      }),
+                    ),
                     _SpotsTab(
                       spots: _filteredSpots,
                       clusters: _clusters,
@@ -183,7 +193,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
 class _AreasTab extends StatelessWidget {
   final List<Cluster> clusters;
-  const _AreasTab({required this.clusters});
+  final ValueChanged<String> onClusterTap;
+  const _AreasTab({required this.clusters, required this.onClusterTap});
 
   @override
   Widget build(BuildContext context) {
@@ -199,7 +210,8 @@ class _AreasTab extends StatelessWidget {
       separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, i) {
         final cl = clusters[i];
-        return _ClusterCard(cluster: cl).animate().fadeIn(delay: (i * 60).ms, duration: 400.ms);
+        return _ClusterCard(cluster: cl, onTap: () => onClusterTap(cl.id))
+            .animate().fadeIn(delay: (i * 60).ms, duration: 400.ms);
       },
     );
   }
@@ -207,7 +219,8 @@ class _AreasTab extends StatelessWidget {
 
 class _ClusterCard extends StatelessWidget {
   final Cluster cluster;
-  const _ClusterCard({required this.cluster});
+  final VoidCallback? onTap;
+  const _ClusterCard({required this.cluster, this.onTap});
 
   static final _regionColors = {
     'metro': Color(0xFF3B82F6),
@@ -231,48 +244,55 @@ class _ClusterCard extends StatelessWidget {
     final color = _regionColors[cluster.regionType] ?? AppColors.red400;
     final icon = _regionIcons[cluster.regionType] ?? FluentIcons.poi;
 
-    return GlassCard(
-      padding: const EdgeInsets.all(18),
-      child: Row(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: color.withAlpha(25),
-              borderRadius: BorderRadius.circular(14),
+    return GestureDetector(
+      onTap: onTap,
+      child: GlassCard(
+        padding: const EdgeInsets.all(18),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: color.withAlpha(25),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: color, size: 24),
             ),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(cluster.name,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c.textStrong)),
-                if (cluster.description != null) ...[
-                  const SizedBox(height: 4),
-                  Text(cluster.description!,
-                      style: TextStyle(fontSize: 12, color: c.textMuted, height: 1.4),
-                      maxLines: 2, overflow: TextOverflow.ellipsis),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(cluster.name,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c.textStrong)),
+                  if (cluster.description != null) ...[
+                    const SizedBox(height: 4),
+                    Text(cluster.description!,
+                        style: TextStyle(fontSize: 12, color: c.textMuted, height: 1.4),
+                        maxLines: 2, overflow: TextOverflow.ellipsis),
+                  ],
+                  if (cluster.recommendedTripLength != null) ...[
+                    const SizedBox(height: 6),
+                    Row(children: [
+                      Icon(FluentIcons.clock, size: 11, color: color),
+                      const SizedBox(width: 4),
+                      Text(cluster.recommendedTripLength!,
+                          style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500)),
+                      const Spacer(),
+                      Text('${cluster.destinationCount} spots',
+                          style: TextStyle(fontSize: 11, color: c.textFaint)),
+                    ]),
+                  ],
                 ],
-                if (cluster.recommendedTripLength != null) ...[
-                  const SizedBox(height: 6),
-                  Row(children: [
-                    Icon(FluentIcons.clock, size: 11, color: color),
-                    const SizedBox(width: 4),
-                    Text(cluster.recommendedTripLength!,
-                        style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500)),
-                    const Spacer(),
-                    Text('${cluster.destinationCount} spots',
-                        style: TextStyle(fontSize: 11, color: c.textFaint)),
-                  ]),
-                ],
-              ],
+              ),
             ),
-          ),
-        ],
+            if (onTap != null) ...[
+              const SizedBox(width: 8),
+              Icon(FluentIcons.chevron_right, size: 14, color: c.textFaint),
+            ],
+          ],
+        ),
       ),
     );
   }

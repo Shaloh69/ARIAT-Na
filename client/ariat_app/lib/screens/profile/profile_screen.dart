@@ -1,6 +1,11 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/theme_service.dart';
@@ -19,6 +24,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _editing = false;
   bool _saving = false;
+  bool _uploadingPhoto = false;
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
 
@@ -35,6 +41,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _nameController.dispose();
     _phoneController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAndUploadPhoto() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (picked == null || !mounted) return;
+
+    setState(() => _uploadingPhoto = true);
+    try {
+      final api = context.read<ApiService>();
+      final auth = context.read<AuthService>();
+      final uri = Uri.parse('${api.baseUrl}/upload/profile-image');
+      final request = http.MultipartRequest('POST', uri)
+        ..headers['Authorization'] = 'Bearer ${auth.accessToken ?? ""}'
+        ..files.add(await http.MultipartFile.fromPath('file', picked.path));
+      final streamed = await request.send().timeout(const Duration(seconds: 60));
+      final body = jsonDecode(await streamed.stream.bytesToString()) as Map<String, dynamic>;
+      if (!mounted) return;
+      if (body['success'] == true) {
+        final imageUrl = (body['data'] as Map<String, dynamic>?)?['url'] as String?
+            ?? (body['data'] as Map<String, dynamic>?)?['publicUrl'] as String?;
+        if (imageUrl != null) {
+          await auth.updateProfile(profileImageUrl: imageUrl);
+          if (mounted) AppToast.success(context, 'Profile photo updated!');
+        }
+      } else {
+        AppToast.error(context, (body['message'] as String?) ?? 'Upload failed');
+      }
+    } catch (_) {
+      if (mounted) AppToast.error(context, 'Photo upload failed');
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
   }
 
   Future<void> _saveProfile() async {
@@ -80,21 +119,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              SizedBox(height: 16),
-              Container(
-                width: 90, height: 90,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [AppColors.red500, AppColors.purple],
-                    begin: Alignment.topLeft, end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [BoxShadow(color: AppColors.red500.withAlpha(60), blurRadius: 20, offset: Offset(0, 6))],
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: isOnline ? _pickAndUploadPhoto : null,
+                child: Stack(
+                  children: [
+                    Container(
+                      width: 90, height: 90,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [AppColors.red500, AppColors.purple],
+                          begin: Alignment.topLeft, end: Alignment.bottomRight,
+                        ),
+                        boxShadow: [BoxShadow(color: AppColors.red500.withAlpha(60), blurRadius: 20, offset: const Offset(0, 6))],
+                      ),
+                      child: _uploadingPhoto
+                          ? const Center(child: ProgressRing(strokeWidth: 3, activeColor: Colors.white))
+                          : user['profile_image_url'] != null
+                              ? ClipOval(
+                                  child: CachedNetworkImage(
+                                    imageUrl: user['profile_image_url'] as String,
+                                    width: 90, height: 90, fit: BoxFit.cover,
+                                    placeholder: (_, __) => Center(
+                                        child: Text(initials,
+                                            style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w700, color: Colors.white))),
+                                    errorWidget: (_, __, ___) => Center(
+                                        child: Text(initials,
+                                            style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w700, color: Colors.white))),
+                                  ),
+                                )
+                              : Center(
+                                  child: Text(initials,
+                                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w700, color: Colors.white)),
+                                ),
+                    ),
+                    if (isOnline && !_uploadingPhoto)
+                      Positioned(
+                        bottom: 0, right: 0,
+                        child: Container(
+                          width: 26, height: 26,
+                          decoration: BoxDecoration(
+                            color: AppColors.red500,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const Icon(FluentIcons.camera, size: 12, color: Colors.white),
+                        ),
+                      ),
+                  ],
                 ),
-                child: Center(
-                  child: Text(initials, style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700, color: Colors.white)),
-                ),
-              ).animate().fadeIn(duration: 500.ms).scale(begin: Offset(0.8, 0.8), end: Offset(1, 1), duration: 500.ms),
+              ).animate().fadeIn(duration: 500.ms).scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1), duration: 500.ms),
 
               SizedBox(height: 14),
               Text(name, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: c.textStrong))

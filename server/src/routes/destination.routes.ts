@@ -17,7 +17,10 @@ import {
   searchValidator,
 } from "../utils/validators";
 import { validate } from "../middleware/validation.middleware";
-import { authenticateAdmin, optionalAuth } from "../middleware/auth.middleware";
+import { authenticateAdmin, optionalAuth, authenticateUser } from "../middleware/auth.middleware";
+import {
+  rateDestination,
+} from "../controllers/destination.controller";
 import { asyncHandler } from "../middleware/error.middleware";
 
 const router = Router();
@@ -45,6 +48,9 @@ router.get(
   optionalAuth,
   asyncHandler(getDestinationById),
 );
+
+// User routes
+router.post("/:id/rate", authenticateUser, asyncHandler(rateDestination));
 
 // Admin only routes
 router.post(

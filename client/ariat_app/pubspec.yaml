@@ -46,6 +46,15 @@ dependencies:
   # Deep links — intercepts airatna:// URLs when app is opened from a QR scan
   app_links: ^6.4.0
 
+  # Real-time navigation WebSocket
+  socket_io_client: ^2.0.3+1
+
+  # Voice guidance (text-to-speech)
+  flutter_tts: ^4.2.0
+
+  # Profile photo picker
+  image_picker: ^1.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

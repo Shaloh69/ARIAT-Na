@@ -9,6 +9,8 @@ import {
   refreshAccessToken,
   logout,
   logoutAll,
+  forgotPassword,
+  resetPassword,
 } from "../controllers/auth.controller";
 import {
   registerValidator,
@@ -40,6 +42,9 @@ router.post("/user/login", loginValidator, validate, asyncHandler(loginUser));
 router.get("/user/me", authenticateUser, asyncHandler(getCurrentUser));
 
 router.put("/user/me", authenticateUser, asyncHandler(updateCurrentUser));
+
+router.post("/user/forgot-password", asyncHandler(forgotPassword));
+router.post("/user/reset-password", asyncHandler(resetPassword));
 
 // =====================================================
 // ADMIN AUTHENTICATION ROUTES (Web Console)

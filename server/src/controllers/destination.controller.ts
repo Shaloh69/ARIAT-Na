@@ -696,3 +696,51 @@ export const getPopularDestinations = async (
     data: destinations.map(formatDestination),
   });
 };
+
+/**
+ * Rate a destination (1–5 stars)
+ * POST /api/v1/destinations/:id/rate
+ */
+export const rateDestination = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  if (!req.user) throw new AppError("Unauthenticated", 401);
+
+  const { id } = req.params;
+  const { rating, comment } = req.body;
+  const stars = Number(rating);
+
+  if (!stars || stars < 1 || stars > 5) {
+    throw new AppError("Rating must be between 1 and 5", 400);
+  }
+
+  const [dest]: any = await pool.execute(
+    "SELECT id FROM destinations WHERE id = ?",
+    [id],
+  );
+  if (dest.length === 0) throw new AppError("Destination not found", 404);
+
+  const reviewId = uuidv4();
+  await pool.execute(
+    `INSERT INTO destination_reviews (id, destination_id, user_id, rating, comment)
+     VALUES (?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE rating = VALUES(rating), comment = VALUES(comment), updated_at = NOW()`,
+    [reviewId, id, req.user.id, stars, comment || null],
+  );
+
+  // Recompute average and count
+  const [agg]: any = await pool.execute(
+    "SELECT AVG(rating) AS avg_r, COUNT(*) AS cnt FROM destination_reviews WHERE destination_id = ?",
+    [id],
+  );
+  const avgRating = Math.round((agg[0].avg_r ?? 0) * 10) / 10;
+  const reviewCount = agg[0].cnt ?? 0;
+
+  await pool.execute(
+    "UPDATE destinations SET average_rating = ?, review_count = ?, updated_at = NOW() WHERE id = ?",
+    [avgRating, reviewCount, id],
+  );
+
+  res.json({ success: true, message: "Rating submitted", data: { average_rating: avgRating, review_count: reviewCount } });
+};

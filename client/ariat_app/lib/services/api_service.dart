@@ -39,8 +39,13 @@ class ApiService {
       try {
         final uri =
             Uri.parse('$baseUrl$path').replace(queryParameters: query);
-        final response = await http.get(uri, headers: _headers(auth: auth))
+        var response = await http.get(uri, headers: _headers(auth: auth))
             .timeout(const Duration(seconds: 60));
+        if (response.statusCode == 401 && auth) {
+          await _tryRefresh();
+          response = await http.get(uri, headers: _headers(auth: true))
+              .timeout(const Duration(seconds: 60));
+        }
         final body = _handleResponse(response);
 
         // Cache certain endpoints
@@ -57,39 +62,57 @@ class ApiService {
 
   Future<Map<String, dynamic>> post(String path,
       {Map<String, dynamic>? body, bool auth = false}) async {
-    if (!_connectivity.isOnline) {
-      throw ApiException('No internet connection. This action requires online access.', 0);
-    }
     final uri = Uri.parse('$baseUrl$path');
-    final response = await http.post(uri,
+    var response = await http.post(uri,
         headers: _headers(auth: auth),
         body: body != null ? jsonEncode(body) : null)
         .timeout(const Duration(seconds: 60));
+    if (response.statusCode == 401 && auth) {
+      await _tryRefresh();
+      response = await http.post(uri,
+          headers: _headers(auth: true),
+          body: body != null ? jsonEncode(body) : null)
+          .timeout(const Duration(seconds: 60));
+    }
     return _handleResponse(response);
   }
 
   Future<Map<String, dynamic>> put(String path,
       {Map<String, dynamic>? body, bool auth = false}) async {
-    if (!_connectivity.isOnline) {
-      throw ApiException('No internet connection. This action requires online access.', 0);
-    }
     final uri = Uri.parse('$baseUrl$path');
-    final response = await http.put(uri,
+    var response = await http.put(uri,
         headers: _headers(auth: auth),
         body: body != null ? jsonEncode(body) : null)
         .timeout(const Duration(seconds: 60));
+    if (response.statusCode == 401 && auth) {
+      await _tryRefresh();
+      response = await http.put(uri,
+          headers: _headers(auth: true),
+          body: body != null ? jsonEncode(body) : null)
+          .timeout(const Duration(seconds: 60));
+    }
     return _handleResponse(response);
   }
 
   Future<Map<String, dynamic>> delete(String path,
       {bool auth = false}) async {
-    if (!_connectivity.isOnline) {
-      throw ApiException('No internet connection. This action requires online access.', 0);
-    }
     final uri = Uri.parse('$baseUrl$path');
-    final response = await http.delete(uri, headers: _headers(auth: auth))
+    var response = await http.delete(uri, headers: _headers(auth: auth))
         .timeout(const Duration(seconds: 60));
+    if (response.statusCode == 401 && auth) {
+      await _tryRefresh();
+      response = await http.delete(uri, headers: _headers(auth: true))
+          .timeout(const Duration(seconds: 60));
+    }
     return _handleResponse(response);
+  }
+
+  Future<void> _tryRefresh() async {
+    try {
+      await _authService.refreshAccessToken();
+    } catch (_) {
+      // Refresh failed — next _handleResponse will throw 401 ApiException
+    }
   }
 
   Map<String, dynamic> _handleResponse(http.Response response) {

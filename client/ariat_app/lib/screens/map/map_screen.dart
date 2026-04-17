@@ -181,13 +181,6 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _calculateRoute(List<_RouteStop> stops) async {
     if (_routeStart == null || stops.isEmpty) return;
 
-    final isOnline = context.read<ConnectivityService>().isOnline;
-    if (!isOnline) {
-      setState(() => _routeError = 'Route calculation requires internet');
-      AppToast.warning(context, 'Route calculation needs internet connection');
-      return;
-    }
-
     setState(() {
       _routeLoading = true;
       _routeError = null;
@@ -485,12 +478,6 @@ class _MapScreenState extends State<MapScreen> {
   // ── AI itinerary ──────────────────────────────────────────────────────────
 
   Future<void> _generateAiItinerary() async {
-    final isOnline = context.read<ConnectivityService>().isOnline;
-    if (!isOnline) {
-      AppToast.warning(context, 'AI itinerary requires internet connection');
-      return;
-    }
-
     final params = await showItinerarySheet(context);
     if (params == null || !mounted) return;
 
