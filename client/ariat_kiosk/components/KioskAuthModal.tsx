@@ -50,8 +50,8 @@ export default function KioskAuthModal({ isOpen, onAuth, onClose }: KioskAuthMod
       setError("Name is required.");
       return;
     }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+    if (password.length < 8 || !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
+      setError("Password needs 8+ chars with uppercase, lowercase, and a number (e.g. Cebu2026).");
       return;
     }
 
@@ -74,16 +74,16 @@ export default function KioskAuthModal({ isOpen, onAuth, onClose }: KioskAuthMod
       const json = (await res.json()) as {
         success: boolean;
         message?: string;
-        data?: { access_token: string; user: { full_name: string; email: string } };
+        data?: { accessToken: string; user: { full_name: string; email: string } };
       };
 
-      if (!json.success || !json.data) {
+      if (!json.success || !json.data?.accessToken) {
         throw new Error(json.message ?? (tab === "register" ? "Registration failed" : "Login failed"));
       }
 
       reset();
       onAuth({
-        token: json.data.access_token,
+        token: json.data.accessToken,
         email: json.data.user.email,
         name: json.data.user.full_name,
       });
@@ -162,7 +162,7 @@ export default function KioskAuthModal({ isOpen, onAuth, onClose }: KioskAuthMod
 
           <Input
             label="Password"
-            placeholder="Min. 8 characters"
+            placeholder="e.g. Cebu2026 (upper, lower, number)"
             type="password"
             value={password}
             onValueChange={setPassword}
