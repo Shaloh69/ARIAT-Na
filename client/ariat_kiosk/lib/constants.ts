@@ -8,14 +8,15 @@ export const API_BASE_URL =
  */
 export const DOWNLOAD_PAGE_URL =
   process.env.NEXT_PUBLIC_DOWNLOAD_URL ||
-  "https://airat-na-web.onrender.com/download";
+  "https://ariat-na-admin.onrender.com/download";
 
 /**
  * Smart open page — tries airatna:// deep link first, falls back to download.
  * QR codes for itineraries point here instead of directly to airatna://.
  */
 export const OPEN_PAGE_URL =
-  process.env.NEXT_PUBLIC_OPEN_URL || "https://airat-na-web.onrender.com/open";
+  process.env.NEXT_PUBLIC_OPEN_URL ||
+  "https://ariat-na-admin.onrender.com/open";
 
 export const API_ENDPOINTS = {
   DESTINATIONS: "/destinations",
