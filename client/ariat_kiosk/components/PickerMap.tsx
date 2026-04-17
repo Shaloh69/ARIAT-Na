@@ -178,14 +178,17 @@ export default function PickerMap({ destinations, selectedIds, onToggle }: Picke
       marker.setZIndexOffset(isSel ? 1000 : 0);
     });
 
-    // Fly to most recently selected
+    // Navigate to most recently selected — pan if already zoomed in, fly if zoomed out
     if (selectedIds.length > 0 && map) {
       const lastId = selectedIds[selectedIds.length - 1];
       const dest = destinations.find((d) => d.id === lastId);
       if (dest?.latitude && dest?.longitude) {
-        map.flyTo([dest.latitude, dest.longitude], Math.max(map.getZoom(), 13), {
-          animate: true, duration: 0.7,
-        });
+        const currentZoom = map.getZoom();
+        if (currentZoom >= 13) {
+          map.panTo([dest.latitude, dest.longitude], { animate: true, duration: 0.4 });
+        } else {
+          map.flyTo([dest.latitude, dest.longitude], 13, { animate: true, duration: 0.7 });
+        }
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
