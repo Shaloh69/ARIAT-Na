@@ -14,8 +14,8 @@
 #   CORS_ORIGIN         https://airat-na-web.onrender.com
 #
 # REQUIRED env vars — set in Render Dashboard for airat-na-web:
-#   NEXT_PUBLIC_API_URL  https://airat-na-api.onrender.com/api/v1
-#   NEXT_PUBLIC_WS_URL   wss://airat-na-api.onrender.com
+#   NEXT_PUBLIC_API_URL  https://ariat-na-server-qhan.onrender.com/api/v1
+#   NEXT_PUBLIC_WS_URL   wss://ariat-na-server-qhan.onrender.com
 #
 # Optional: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
 #           RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS, MAX_FILE_SIZE
@@ -49,6 +49,6 @@ services:
         value: production
       # Set to your actual Render API service URL after first deploy:
       - key: NEXT_PUBLIC_API_URL
-        value: https://airat-na-api.onrender.com/api/v1
+        value: https://ariat-na-server-qhan.onrender.com/api/v1
       - key: NEXT_PUBLIC_WS_URL
-        value: wss://airat-na-api.onrender.com
+        value: wss://ariat-na-server-qhan.onrender.com

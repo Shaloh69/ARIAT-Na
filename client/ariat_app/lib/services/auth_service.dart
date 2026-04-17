@@ -13,7 +13,7 @@ class AuthService extends ChangeNotifier {
   // Non-sensitive keys — stored in SharedPreferences
   static const _userKey = 'user_data';
   static const _baseUrlKey = 'api_base_url';
-  static const String defaultBaseUrl = 'https://ariat-na-server.onrender.com/api/v1';
+  static const String defaultBaseUrl = 'https://ariat-na-server-qhan.onrender.com/api/v1';
 
   final CacheService _cache = CacheService();
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
