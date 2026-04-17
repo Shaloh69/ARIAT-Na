@@ -41,6 +41,7 @@ interface Destination {
 interface Category {
   id: string;
   name: string;
+  icon_url?: string;
 }
 
 interface GeneratedResult {
@@ -400,7 +401,7 @@ const KioskPlanPage: NextPage = () => {
             </div>
           </div>
 
-          {/* ── Top-right search + filter ── */}
+          {/* ── Top-right search + filter + list ── */}
           <div className="picker-fs-search-panel">
             <div className="picker-search-wrap">
               <span className="picker-search-icon">🔍</span>
@@ -427,8 +428,47 @@ const KioskPlanPage: NextPage = () => {
                   className={`picker-cat-chip ${filterCategory === cat.name ? "picker-cat-active" : ""}`}
                   type="button"
                   onClick={() => setFilterCategory(cat.name)}
-                >{cat.name}</button>
+                >
+                  {cat.icon_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img alt="" className="picker-cat-icon" src={cat.icon_url} />
+                  )}
+                  {cat.name}
+                </button>
               ))}
+            </div>
+
+            {/* Destination list */}
+            <div className="picker-dest-list">
+              {filtered.length === 0 ? (
+                <p className="picker-dest-empty">No destinations found</p>
+              ) : (
+                filtered.map((dest) => {
+                  const selIdx = selectedIds.indexOf(dest.id);
+                  const isSel = selIdx !== -1;
+                  return (
+                    <button
+                      key={dest.id}
+                      className={`picker-dest-item ${isSel ? "picker-dest-item-sel" : ""}`}
+                      type="button"
+                      onClick={() => toggleSelect(dest.id)}
+                    >
+                      {isSel ? (
+                        <span className="picker-dest-badge">{selIdx + 1}</span>
+                      ) : (
+                        <span className="picker-dest-dot" />
+                      )}
+                      <div className="picker-dest-info">
+                        <span className="picker-dest-name">{dest.name}</span>
+                        {(dest.municipality ?? dest.category_name) && (
+                          <span className="picker-dest-meta">{dest.municipality ?? dest.category_name}</span>
+                        )}
+                      </div>
+                      {isSel && <span className="picker-dest-check">✓</span>}
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
 
