@@ -21,7 +21,7 @@ class TripSetupScreen extends StatefulWidget {
 }
 
 class _TripSetupScreenState extends State<TripSetupScreen> {
-  late int _step; // 0=Area 1=Preferences 2=Duration (skipped to 1 when preselected)
+  late int _step; // 0=Area 1=Preferences 2=Duration (skipped to 2 when preselected)
   bool _loadingClusters = true;
   List<Cluster> _clusters = [];
 
@@ -39,8 +39,8 @@ class _TripSetupScreenState extends State<TripSetupScreen> {
   @override
   void initState() {
     super.initState();
-    // Skip cluster step when a specific destination is pre-selected
-    _step = widget.preselected != null ? 1 : 0;
+    // Skip to Duration & Budget when a specific destination is pre-selected
+    _step = widget.preselected != null ? 2 : 0;
     // Pre-select the cluster matching the destination (if known)
     if (widget.preselected?.clusterId != null) {
       _clusterIds = [widget.preselected!.clusterId!];
@@ -108,10 +108,11 @@ class _TripSetupScreenState extends State<TripSetupScreen> {
                 children: [
                   GestureDetector(
                     onTap: () {
-                      if (_step > 0) {
-                        setState(() => _step--);
-                      } else {
+                      // When preselected we start at step 2 — back goes straight to caller
+                      if (widget.preselected != null || _step == 0) {
                         Navigator.pop(context);
+                      } else {
+                        setState(() => _step--);
                       }
                     },
                     child: Container(
@@ -130,14 +131,17 @@ class _TripSetupScreenState extends State<TripSetupScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          ['Choose Area', 'Preferences', 'Duration & Budget'][_step],
+                          widget.preselected != null
+                              ? 'Duration & Budget'
+                              : ['Choose Area', 'Preferences', 'Duration & Budget'][_step],
                           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: c.textStrong),
                         ),
                         Text(
                           widget.preselected != null
-                              ? 'Step $_step of 2'
+                              ? 'Adding: ${widget.preselected!.name}'
                               : 'Step ${_step + 1} of 3',
                           style: TextStyle(fontSize: 12, color: c.textMuted),
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -150,8 +154,8 @@ class _TripSetupScreenState extends State<TripSetupScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
               child: Builder(builder: (context) {
-                final total = widget.preselected != null ? 2 : 3;
-                final filled = widget.preselected != null ? _step : _step + 1;
+                final total = widget.preselected != null ? 1 : 3;
+                final filled = widget.preselected != null ? 1 : _step + 1;
                 return Row(
                   children: List.generate(total, (i) => Expanded(
                     child: Container(

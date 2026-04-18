@@ -68,6 +68,7 @@ class _TripsScreenState extends State<TripsScreen> {
         await Navigator.of(context).push(FluentPageRoute(
           builder: (_) => TripOverviewScreen(
             multiDay: multiDay,
+            setupParams: params,
             metadata: TripMetadata(
               clusterIds: params.clusterIds,
               tripType: params.tripType,

@@ -65,6 +65,10 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
   int _etaMinutes = 0;
   Timer? _wsLocationTimer;
 
+  // Camera follow mode — disabled while user is pinching/panning
+  bool _followMode = false;
+  Timer? _followResumeTimer;
+
   final MapController _mapController = MapController();
   final DraggableScrollableController _sheetController = DraggableScrollableController();
   bool _sheetExpanded = false;
@@ -105,6 +109,7 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
     _wsSub?.cancel();
     _progressSub?.cancel();
     _wsLocationTimer?.cancel();
+    _followResumeTimer?.cancel();
     _tts.stop();
     if (mounted) context.read<NavigationWsService>().endNavigation();
     _sheetController.dispose();
@@ -208,11 +213,13 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
 
     final userLatLng = LatLng(pos.latitude, pos.longitude);
 
-    // ── Camera: follow user + rotate map to heading ──────────────────────────
-    final display = _snappedPosition ?? userLatLng;
-    try {
-      _mapController.moveAndRotate(display, _mapController.camera.zoom, -ls.heading);
-    } catch (_) {}
+    // ── Camera: follow user + rotate map to heading (only if follow mode on) ─
+    if (_followMode) {
+      final display = _snappedPosition ?? userLatLng;
+      try {
+        _mapController.moveAndRotate(display, _mapController.camera.zoom, -ls.heading);
+      } catch (_) {}
+    }
 
     // ── Snapping + off-route: only process new GPS positions ─────────────────
     final posTime = ls.lastPositionUpdate;
@@ -400,6 +407,7 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
         destLat: dest.latitude,
         destLon: dest.longitude,
       );
+      setState(() => _followMode = true);
       _speak('Navigation started. Day ${_day.dayNumber}, ${stops.length} stops.');
     }
 
@@ -436,9 +444,33 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
   // Arrival tracking
   // ─────────────────────────────────────────────────────────────────────────────
 
-  void _initTracking() {
+  Future<void> _initTracking() async {
     if (!mounted) return;
     final loc = context.read<LocationService>();
+
+    final granted = await loc.checkPermission();
+    if (!granted) {
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => ContentDialog(
+          title: const Text('Location Required'),
+          content: const Text(
+            'AIRAT-NA needs your location to show your position on the map, '
+            'detect arrivals, and auto-reroute if you go off track.\n\n'
+            'Please enable location permission in your device settings.',
+          ),
+          actions: [
+            Button(
+              child: const Text('Dismiss'),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     loc.startTracking();
     for (final s in _currentDayStops) {
       loc.monitorDestination(s.destination.id, s.destination.name,
@@ -449,6 +481,7 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
     // Register location listener for camera follow + off-route detection
     _locationService = loc;
     loc.addListener(_handleLocationUpdate);
+    setState(() => _followMode = true);
   }
 
   void _onArrived(String destId) {
@@ -530,6 +563,8 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
   // ─────────────────────────────────────────────────────────────────────────────
 
   void _fitMapToStops() {
+    // Exit follow mode so user can freely pan/zoom
+    if (_followMode) setState(() => _followMode = false);
     final stops = _currentDayStops;
     if (stops.isEmpty) return;
     try {
@@ -548,6 +583,26 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
         CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(72)),
       );
     } catch (_) {}
+  }
+
+  void _toggleFollow() {
+    setState(() => _followMode = !_followMode);
+    if (_followMode) {
+      // Snap camera to user immediately
+      final ls = _locationService;
+      if (ls != null) {
+        final pos = ls.currentPosition;
+        if (pos != null) {
+          try {
+            _mapController.moveAndRotate(
+              _snappedPosition ?? LatLng(pos.latitude, pos.longitude),
+              15,
+              -ls.heading,
+            );
+          } catch (_) {}
+        }
+      }
+    }
   }
 
   void _animateTo(LatLng pos) {
@@ -676,6 +731,23 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
               initialZoom: 12,
               maxZoom: 18,
               minZoom: 8,
+              onMapEvent: (event) {
+                // Pause follow mode when user starts a drag or pinch gesture
+                final src = event.source;
+                final isUserGesture = src == MapEventSource.dragStart ||
+                    src == MapEventSource.multiFingerGestureStart ||
+                    src == MapEventSource.scrollWheel;
+                if (isUserGesture) {
+                  if (_followMode) setState(() => _followMode = false);
+                  _followResumeTimer?.cancel();
+                  // Auto-resume follow after 5 s of inactivity
+                  _followResumeTimer = Timer(const Duration(seconds: 5), () {
+                    if (mounted && _locationService?.currentPosition != null) {
+                      setState(() => _followMode = true);
+                    }
+                  });
+                }
+              },
             ),
             children: [
               TileLayer(
@@ -742,10 +814,18 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      // Fit map
+                      // Fit map / follow toggle
                       _MapButton(
                         icon: FluentIcons.full_screen,
                         onTap: _fitMapToStops,
+                      ),
+                      const SizedBox(width: 8),
+                      _MapButton(
+                        icon: _followMode
+                            ? FluentIcons.location_fill
+                            : FluentIcons.location,
+                        onTap: _toggleFollow,
+                        active: _followMode,
                       ),
                       if (_loadingRecs) ...[
                         const SizedBox(width: 8),
@@ -1012,7 +1092,8 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
 class _MapButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  const _MapButton({required this.icon, required this.onTap});
+  final bool active;
+  const _MapButton({required this.icon, required this.onTap, this.active = false});
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -1020,9 +1101,9 @@ class _MapButton extends StatelessWidget {
     child: Container(
       width: 40, height: 40,
       decoration: BoxDecoration(
-        color: Colors.black.withAlpha(170),
+        color: active ? AppColors.red500.withAlpha(200) : Colors.black.withAlpha(170),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withAlpha(50)),
+        border: Border.all(color: active ? AppColors.red400 : Colors.white.withAlpha(50)),
       ),
       child: Icon(icon, size: 16, color: Colors.white),
     ),

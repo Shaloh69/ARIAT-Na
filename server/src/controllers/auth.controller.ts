@@ -503,3 +503,42 @@ export const resetPassword = async (
 
   res.json({ success: true, message: "Password reset successfully. Please log in again." });
 };
+
+/**
+ * Change password for authenticated user
+ * POST /api/v1/auth/user/change-password
+ */
+export const changePassword = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  if (!req.user) throw new AppError("Not authenticated", 401);
+
+  const { current_password, new_password } = req.body;
+  if (!current_password || !new_password) {
+    throw new AppError("current_password and new_password are required", 400);
+  }
+  if (new_password.length < 8) {
+    throw new AppError("New password must be at least 8 characters", 400);
+  }
+  if (current_password === new_password) {
+    throw new AppError("New password must differ from current password", 400);
+  }
+
+  const [users]: any = await pool.execute(
+    "SELECT password_hash FROM users WHERE id = ? AND is_active = TRUE",
+    [req.user.id],
+  );
+  if (users.length === 0) throw new AppError("User not found", 404);
+
+  const valid = await comparePassword(current_password, users[0].password_hash);
+  if (!valid) throw new AppError("Current password is incorrect", 401);
+
+  const newHash = await hashPassword(new_password);
+  await pool.execute(
+    "UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?",
+    [newHash, req.user.id],
+  );
+
+  res.json({ success: true, message: "Password changed successfully." });
+};

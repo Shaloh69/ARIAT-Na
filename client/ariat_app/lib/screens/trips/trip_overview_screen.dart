@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
 import '../../models/itinerary.dart';
+import '../../models/trip_params.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
@@ -33,8 +34,10 @@ class TripOverviewScreen extends StatefulWidget {
   final MultiDayItinerary? multiDay;
   final String? itineraryId;
   final TripMetadata? metadata;
+  /// Original params — required to enable the Regenerate button.
+  final TripSetupParams? setupParams;
 
-  const TripOverviewScreen({super.key, this.multiDay, this.itineraryId, this.metadata});
+  const TripOverviewScreen({super.key, this.multiDay, this.itineraryId, this.metadata, this.setupParams});
 
   @override
   State<TripOverviewScreen> createState() => _TripOverviewScreenState();
@@ -45,6 +48,7 @@ class _TripOverviewScreenState extends State<TripOverviewScreen> {
   SavedItinerary? _saved;
   bool _loading = true;
   bool _saving = false;
+  bool _regenerating = false;
   bool _isSaved = false;
 
   @override
@@ -75,6 +79,44 @@ class _TripOverviewScreenState extends State<TripOverviewScreen> {
       if (!mounted) return;
       setState(() => _loading = false);
       AppToast.error(context, 'Could not load itinerary');
+    }
+  }
+
+  Future<void> _regenerate() async {
+    final params = widget.setupParams;
+    if (params == null || !mounted) return;
+    setState(() { _regenerating = true; _isSaved = false; });
+    try {
+      final api = context.read<ApiService>();
+      final md = widget.metadata;
+      final body = params.toGenerateBody(
+        md?.startLat ?? 10.3157,
+        md?.startLon ?? 123.8854,
+      );
+      final res = await api.post('/ai/itinerary/generate', body: body, auth: true);
+      if (!mounted) return;
+      if (res['success'] == true) {
+        final data = res['data'] as Map<String, dynamic>;
+        final multiDay = data.containsKey('days') && data['days'] is List
+            ? MultiDayItinerary.fromJson(data)
+            : MultiDayItinerary(
+                days: [DayItinerary.fromJson({'dayNumber': 1, 'stops': data['stops'] ?? []})],
+                totalDays: 1,
+                totalStops: (data['stops'] as List?)?.length ?? 0,
+                totalDistance: (data['totalDistance'] as num?)?.toDouble() ?? 0,
+                estimatedTravelTime: data['estimatedTravelTime'] ?? 0,
+                estimatedVisitTime: data['estimatedVisitTime'] ?? 0,
+                estimatedTotalTime: data['estimatedTotalTime'] ?? 0,
+                estimatedCost: (data['estimatedCost'] as num?)?.toDouble() ?? 0,
+              );
+        setState(() => _multiDay = multiDay);
+      } else {
+        AppToast.error(context, res['message'] ?? 'Regeneration failed');
+      }
+    } catch (_) {
+      if (mounted) AppToast.error(context, 'Could not regenerate itinerary');
+    } finally {
+      if (mounted) setState(() => _regenerating = false);
     }
   }
 
@@ -223,8 +265,26 @@ class _TripOverviewScreenState extends State<TripOverviewScreen> {
                         child: Icon(FluentIcons.share, size: 16, color: c.textMuted),
                       ),
                     ),
+                    // Regenerate — only shown for freshly generated (not saved) trips
+                    if (widget.setupParams != null && !_isSaved) ...[
+                      const SizedBox(width: 8),
+                      _regenerating
+                          ? const SizedBox(width: 32, height: 32, child: ProgressRing(strokeWidth: 3))
+                          : GestureDetector(
+                              onTap: _regenerate,
+                              child: Container(
+                                width: 36, height: 36,
+                                decoration: BoxDecoration(
+                                  color: c.surfaceElevated,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: c.borderMedium),
+                                ),
+                                child: Icon(FluentIcons.refresh, size: 16, color: c.textMuted),
+                              ),
+                            ),
+                    ],
                     const SizedBox(width: 8),
-                    if (!_isSaved)
+                    if (!_isSaved && !_regenerating)
                       _saving
                           ? const SizedBox(width: 32, height: 32, child: ProgressRing(strokeWidth: 3))
                           : GestureDetector(

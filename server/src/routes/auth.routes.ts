@@ -11,6 +11,7 @@ import {
   logoutAll,
   forgotPassword,
   resetPassword,
+  changePassword,
 } from "../controllers/auth.controller";
 import {
   registerValidator,
@@ -45,6 +46,7 @@ router.put("/user/me", authenticateUser, asyncHandler(updateCurrentUser));
 
 router.post("/user/forgot-password", asyncHandler(forgotPassword));
 router.post("/user/reset-password", asyncHandler(resetPassword));
+router.post("/user/change-password", authenticateUser, asyncHandler(changePassword));
 
 // =====================================================
 // ADMIN AUTHENTICATION ROUTES (Web Console)

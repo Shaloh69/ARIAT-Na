@@ -296,11 +296,30 @@ class _MapScreenState extends State<MapScreen> {
 
   // ── Navigation control ────────────────────────────────────────────────────
 
-  void _startNavigation() {
+  Future<void> _startNavigation() async {
     final hasRoute = _routeLegs.isNotEmpty || _multiModalLegs.isNotEmpty;
     if (!hasRoute || _routeStops.isEmpty) return;
 
     final locationService = context.read<LocationService>();
+    final granted = await locationService.checkPermission();
+    if (!mounted) return;
+    if (!granted) {
+      await showDialog(
+        context: context,
+        builder: (ctx) => ContentDialog(
+          title: const Text('Location Required'),
+          content: const Text(
+            'Navigation needs your location to track your position and '
+            'reroute when you go off track.\n\n'
+            'Please enable location permission in your device settings.',
+          ),
+          actions: [
+            Button(child: const Text('Dismiss'), onPressed: () => Navigator.pop(ctx)),
+          ],
+        ),
+      );
+      return;
+    }
     locationService.startTracking();
     locationService.clearMonitoring();
 
@@ -793,11 +812,36 @@ class _MapScreenState extends State<MapScreen> {
           ],
         ),
 
+        // ── Back button (only when pushed as a route) ─────────────────────
+        if (Navigator.canPop(context))
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 10,
+            left: 14,
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      color: c.surfaceCard.withAlpha(220),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: c.borderLight),
+                    ),
+                    child: Icon(FluentIcons.chevron_left, size: 16, color: c.text),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
         // ── AI Plan button (hidden while navigating) ──────────────────────
         if (!_isNavigating)
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
-            left: 14,
+            left: Navigator.canPop(context) ? 62 : 14,
             child: GestureDetector(
               onTap: _aiGenerating ? null : _generateAiItinerary,
               child: ClipRRect(

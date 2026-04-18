@@ -309,6 +309,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Text('Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textStrong)),
                     SizedBox(height: 16),
+                    if (isOnline) ...[
+                      _actionTile('Change Password', FluentIcons.password_field, AppColors.blue, _changePassword),
+                      SizedBox(height: 10),
+                    ],
                     _actionTile('Sign Out', FluentIcons.sign_out, Color(0xFFDC2626), () async {
                       await auth.logout();
                       if (!context.mounted) return;
@@ -322,6 +326,81 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _changePassword() async {
+    final currentCtrl = TextEditingController();
+    final newCtrl     = TextEditingController();
+    final confirmCtrl = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => ContentDialog(
+        title: const Text('Change Password'),
+        content: StatefulBuilder(
+          builder: (ctx, setS) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Current Password', style: TextStyle(fontSize: 12, color: ctx.appColors.textMuted, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 6),
+              PasswordBox(controller: currentCtrl, placeholder: 'Current password'),
+              const SizedBox(height: 14),
+              Text('New Password', style: TextStyle(fontSize: 12, color: ctx.appColors.textMuted, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 6),
+              PasswordBox(controller: newCtrl, placeholder: 'Min. 8 characters'),
+              const SizedBox(height: 14),
+              Text('Confirm New Password', style: TextStyle(fontSize: 12, color: ctx.appColors.textMuted, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 6),
+              PasswordBox(controller: confirmCtrl, placeholder: 'Re-enter new password'),
+            ],
+          ),
+        ),
+        actions: [
+          Button(child: const Text('Cancel'), onPressed: () => Navigator.pop(ctx, false)),
+          FilledButton(
+            style: ButtonStyle(backgroundColor: WidgetStateProperty.all(AppColors.blue)),
+            child: const Text('Change'),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final current = currentCtrl.text;
+    final newPass  = newCtrl.text;
+    final confirm  = confirmCtrl.text;
+
+    if (current.isEmpty || newPass.isEmpty) {
+      AppToast.warning(context, 'Please fill in all fields');
+      return;
+    }
+    if (newPass.length < 8) {
+      AppToast.warning(context, 'New password must be at least 8 characters');
+      return;
+    }
+    if (newPass != confirm) {
+      AppToast.warning(context, 'Passwords do not match');
+      return;
+    }
+
+    try {
+      final api = context.read<ApiService>();
+      final res = await api.post('/auth/user/change-password', body: {
+        'current_password': current,
+        'new_password': newPass,
+      }, auth: true);
+      if (!mounted) return;
+      if (res['success'] == true) {
+        AppToast.success(context, 'Password changed!');
+      } else {
+        AppToast.error(context, res['message'] ?? 'Change failed');
+      }
+    } catch (e) {
+      if (mounted) AppToast.error(context, e.toString().replaceFirst('Exception: ', ''));
+    }
   }
 
   Widget _profileField(String label, String? value, {TextEditingController? controller, required IconData icon}) {

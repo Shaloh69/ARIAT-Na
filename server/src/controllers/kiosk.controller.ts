@@ -354,13 +354,13 @@ export const claimKioskSession = async (
   // Insert itinerary record
   await pool.execute(
     `INSERT INTO itineraries
-       (id, user_id, title, description, total_distance, estimated_time, estimated_cost, days, transport_mode, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)`,
+       (id, user_id, title, description, total_distance, estimated_time, estimated_cost, days, transport_mode, is_saved, is_completed)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, FALSE)`,
     [
       itineraryId,
       userId,
       itineraryTitle,
-      description ?? `Kiosk-generated ${numDays}-day itinerary`,
+      `Kiosk-generated ${numDays}-day itinerary`,
       numDays > 1
         ? (itinerary.days ?? []).reduce(
             (s: number, d: any) => s + (d.itinerary?.totalDistance ?? 0),
