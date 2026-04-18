@@ -58,6 +58,7 @@ class _MapScreenState extends State<MapScreen> {
   String _transportMode = 'private_car';
   List<MultiModalRoute> _multiModalLegs = [];
   bool _showRoutePanel = true;
+  bool _panelCollapsed = false; // true = peek bar, false = full panel
   bool _isNavigating = false;
   bool _isAiItinerary = false;
   bool _aiGenerating = false;
@@ -1479,20 +1480,42 @@ class _MapScreenState extends State<MapScreen> {
         if (_showRoutePanel && _arrivedDestination == null)
           Positioned(
             bottom: 0, left: 0, right: 0,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                child: Container(
-                  constraints: BoxConstraints(
-                      maxHeight: MediaQuery.of(context).size.height * 0.5),
-                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
-                  decoration: BoxDecoration(
-                    color: c.surfaceCard.withAlpha(230),
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                    border: Border(top: BorderSide(color: c.borderLight)),
+            child: GestureDetector(
+              onTap: _panelCollapsed
+                  ? () => setState(() => _panelCollapsed = false)
+                  : null,
+              onVerticalDragEnd: (d) {
+                // Swipe down → collapse, swipe up → expand
+                if (d.primaryVelocity != null) {
+                  if (d.primaryVelocity! > 300) {
+                    setState(() => _panelCollapsed = true);
+                  } else if (d.primaryVelocity! < -300) {
+                    setState(() => _panelCollapsed = false);
+                  }
+                }
+              },
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 280),
+                    curve: Curves.easeInOut,
+                    height: _panelCollapsed
+                        ? 52
+                        : (MediaQuery.of(context).size.height * 0.5),
+                    decoration: BoxDecoration(
+                      color: c.surfaceCard.withAlpha(230),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                      border: Border(top: BorderSide(color: c.borderLight)),
+                    ),
+                    child: _panelCollapsed
+                        ? _buildPanelPeek(c)
+                        : SingleChildScrollView(
+                            padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+                            child: _buildRoutePanel(),
+                          ),
                   ),
-                  child: SingleChildScrollView(child: _buildRoutePanel()),
                 ),
               ),
             ).animate().slideY(begin: 1, end: 0, duration: 300.ms, curve: Curves.easeOut),
@@ -1860,6 +1883,59 @@ class _MapScreenState extends State<MapScreen> {
 
   // ── Route panel widget ────────────────────────────────────────────────────
 
+  /// Compact peek bar shown when panel is collapsed — tap or swipe up to expand.
+  Widget _buildPanelPeek(AppColorScheme c) {
+    final stopCount = _routeStops.length;
+    final isMultiModal = _multiModalLegs.isNotEmpty;
+    final totalDist = isMultiModal
+        ? _multiModalLegs.fold<double>(0, (s, l) => s + l.totalDistance)
+        : _routeLegs.fold<double>(0, (s, l) => s + l.totalDistance);
+    final totalTime = isMultiModal
+        ? _multiModalLegs.fold<int>(0, (s, l) => s + l.totalDuration)
+        : _routeLegs.fold<int>(0, (s, l) => s + l.estimatedTime);
+    final hasRoute = totalDist > 0;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          // Drag handle pill
+          GestureDetector(
+            onTap: () => setState(() => _panelCollapsed = false),
+            child: Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: c.borderStrong,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Icon(FluentIcons.map_directions, size: 14, color: c.textMuted),
+          const SizedBox(width: 6),
+          Text(
+            '$stopCount stop${stopCount != 1 ? 's' : ''}',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text),
+          ),
+          if (hasRoute) ...[
+            const SizedBox(width: 10),
+            Text('·', style: TextStyle(color: c.textFaint)),
+            const SizedBox(width: 10),
+            Text(
+              '${totalDist.toStringAsFixed(1)} km  ·  ~$totalTime min',
+              style: TextStyle(fontSize: 12, color: c.textMuted),
+            ),
+          ],
+          const Spacer(),
+          GestureDetector(
+            onTap: () => setState(() => _panelCollapsed = false),
+            child: Icon(FluentIcons.chevron_up, size: 16, color: c.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRoutePanel() {
     final c = context.appColors;
     final isMultiModal = _multiModalLegs.isNotEmpty;
@@ -1879,11 +1955,15 @@ class _MapScreenState extends State<MapScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Center(
-          child: Container(
-            width: 36, height: 4,
-            decoration: BoxDecoration(
-                color: c.borderStrong, borderRadius: BorderRadius.circular(2)),
+        // Drag handle — tap to collapse
+        GestureDetector(
+          onTap: () => setState(() => _panelCollapsed = true),
+          child: Center(
+            child: Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                  color: c.borderStrong, borderRadius: BorderRadius.circular(2)),
+            ),
           ),
         ),
         const SizedBox(height: 12),
