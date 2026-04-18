@@ -86,6 +86,9 @@ class _MapScreenState extends State<MapScreen> {
   /// Subscription to LocationService.arrivedStream.
   StreamSubscription<String>? _arrivedSubscription;
 
+  // ── GPS timeout fallback ──────────────────────────────────────────────────
+  Timer? _gpsTimeoutTimer;
+
   // ── Turn-by-turn navigation (private car) ────────────────────────────────
   late final FlutterTts _tts;
   String? _currentInstruction;
@@ -151,15 +154,30 @@ class _MapScreenState extends State<MapScreen> {
       if (!mounted) return;
       _locationService = context.read<LocationService>();
       _locationService!.addListener(_handleLocationUpdate);
+      // Begin acquiring GPS immediately (don't wait for navigation start)
+      _locationService!.startTracking();
       // Set start immediately if GPS is already available
       final pos = _locationService!.currentPosition;
-      if (pos != null) _applyGpsStart(pos);
+      if (pos != null) {
+        _applyGpsStart(pos);
+      } else {
+        // Fallback: if GPS doesn't arrive within 8 s, use default Cebu center
+        _gpsTimeoutTimer = Timer(const Duration(seconds: 8), () {
+          if (!mounted || _routeStart != null) return;
+          setState(() => _routeStart = _defaultCenter);
+          try { _mapController.move(_defaultCenter, 12); } catch (_) {}
+          if (_routeStops.isNotEmpty) _calculateRoute(_routeStops);
+          if (mounted) AppToast.warning(context, 'GPS unavailable — using approximate location');
+        });
+      }
     });
   }
 
   /// Sets route start to the user's current GPS position and triggers
   /// route calculation if stops are already loaded.
   void _applyGpsStart(dynamic pos) {
+    _gpsTimeoutTimer?.cancel();
+    _gpsTimeoutTimer = null;
     final gps = LatLng(pos.latitude, pos.longitude);
     setState(() => _routeStart = gps);
     try { _mapController.move(gps, 14); } catch (_) {}
@@ -168,6 +186,7 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
+    _gpsTimeoutTimer?.cancel();
     _locationService?.removeListener(_handleLocationUpdate);
     _arrivedSubscription?.cancel();
     _tts.stop();
