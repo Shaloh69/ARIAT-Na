@@ -99,7 +99,9 @@
       "Bash(\"D:/Projects-Shem/Flutter/flutter/bin/flutter\" build *)",
       "Bash(/d/Projects-Shem/Flutter/flutter/bin/flutter build *)",
       "Read(//d/Projects-Shem/Flutter/flutter/**)",
-      "Bash(bin/flutter analyze *)"
+      "Bash(bin/flutter analyze *)",
+      "Bash(grep -v \"^\\\\s*//\")",
+      "Bash(grep -E \"\\\\.sql$\")"
     ],
     "additionalDirectories": [
       "C:\\Projects\\Thesis\\2026\\AIRAT-NA\\client\\ariat_web\\pages\\admin",

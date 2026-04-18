@@ -15,7 +15,7 @@ import '../../widgets/glass_card.dart';
 import '../../widgets/toast_overlay.dart';
 import '../destinations/destination_detail_screen.dart';
 import '../explore/explore_screen.dart';
-import '../trips/trip_setup_screen.dart';
+import '../map/map_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -191,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   icon: FluentIcons.calendar,
                                   color: AppColors.green,
                                   onTap: () => Navigator.of(context).push(
-                                    FluentPageRoute(builder: (_) => const TripSetupScreen()),
+                                    FluentPageRoute(builder: (_) => const MapScreen()),
                                   ),
                                 ),
                                 const SizedBox(width: 10),
@@ -200,7 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   icon: FluentIcons.globe,
                                   color: AppColors.blue,
                                   onTap: () => Navigator.of(context).push(
-                                    FluentPageRoute(builder: (_) => const TripSetupScreen()),
+                                    FluentPageRoute(builder: (_) => const MapScreen()),
                                   ),
                                 ),
                               ],

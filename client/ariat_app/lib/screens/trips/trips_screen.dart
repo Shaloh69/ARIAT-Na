@@ -10,7 +10,6 @@ import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/toast_overlay.dart';
 import 'trip_setup_screen.dart';
-import 'trip_overview_screen.dart';
 import '../map/map_screen.dart';
 
 class TripsScreen extends StatefulWidget {
@@ -65,18 +64,15 @@ class _TripsScreenState extends State<TripsScreen> {
           return;
         }
 
+        final destinations = multiDay.days
+            .expand((day) => day.stops)
+            .map((stop) => stop.destination)
+            .toList();
         await Navigator.of(context).push(FluentPageRoute(
-          builder: (_) => TripOverviewScreen(
-            multiDay: multiDay,
-            setupParams: params,
-            metadata: TripMetadata(
-              clusterIds: params.clusterIds,
-              tripType: params.tripType,
-              transportMode: params.transportMode,
-              groupType: params.groupType,
-              startLat: startLat,
-              startLon: startLon,
-            ),
+          builder: (_) => MapScreen(
+            initialDestinations: destinations,
+            initialTransportMode: params.transportMode,
+            isAiItinerary: true,
           ),
         ));
       } else {
@@ -117,8 +113,16 @@ class _TripsScreenState extends State<TripsScreen> {
           AppToast.warning(context, 'No destinations matched. Try a custom plan.');
           return;
         }
+        final destinations = multiDay.days
+            .expand((day) => day.stops)
+            .map((stop) => stop.destination)
+            .toList();
         await Navigator.of(context).push(FluentPageRoute(
-          builder: (_) => TripOverviewScreen(multiDay: multiDay),
+          builder: (_) => MapScreen(
+            initialDestinations: destinations,
+            initialTransportMode: p.transportMode,
+            isAiItinerary: true,
+          ),
         ));
       }
     } catch (_) {

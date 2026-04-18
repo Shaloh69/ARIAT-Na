@@ -388,7 +388,6 @@ export const claimKioskSession = async (
   type StopRow = {
     destination?: any;
     visit_duration?: number;
-    cumulative_time?: number;
     leg_distance?: number;
     leg_travel_time?: number;
   };
@@ -400,16 +399,16 @@ export const claimKioskSession = async (
     if (!stop.destination?.id) return;
     await pool.execute(
       `INSERT INTO itinerary_destinations
-         (id, itinerary_id, destination_id, visit_order, planned_duration, cumulative_time, day_number)
+         (id, itinerary_id, day_number, destination_id, visit_order, planned_duration, notes)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         uuidv4(),
         itineraryId,
+        dayNumber,
         stop.destination.id,
         visitOrder,
         stop.visit_duration ?? 60,
-        stop.cumulative_time ?? 0,
-        dayNumber,
+        null,
       ],
     );
   };

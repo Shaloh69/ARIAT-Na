@@ -8,7 +8,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/toast_overlay.dart';
-import '../trips/trip_setup_screen.dart';
+import '../map/map_screen.dart';
 
 class DestinationDetailScreen extends StatefulWidget {
   final Destination destination;
@@ -241,7 +241,7 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
                                     borderRadius: BorderRadius.circular(12))),
                               ),
                               onPressed: () => Navigator.of(context).push(
-                                FluentPageRoute(builder: (_) => TripSetupScreen(preselected: d)),
+                                FluentPageRoute(builder: (_) => MapScreen(destination: d)),
                               ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/api_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/location_service.dart';
+import '../trips/nearby_recommendations_sheet.dart';
 import '../../models/destination.dart';
 import '../../models/route_result.dart';
 import '../../models/transport_leg.dart';
@@ -23,10 +25,22 @@ double _parseDouble(dynamic v, [double fallback = 0.0]) {
 }
 
 class MapScreen extends StatefulWidget {
-  /// When provided, the map opens in route-planning mode with this destination
-  /// pre-loaded as the first stop (user can then set their start point).
+  /// Single destination pre-loaded as the first stop.
   final Destination? destination;
-  const MapScreen({super.key, this.destination});
+  /// Multiple destinations pre-loaded (e.g. from AI generation).
+  final List<Destination>? initialDestinations;
+  /// Transport mode to pre-select (e.g. from AI setup params).
+  final String? initialTransportMode;
+  /// Show save-itinerary button (true when loaded from AI generation).
+  final bool isAiItinerary;
+
+  const MapScreen({
+    super.key,
+    this.destination,
+    this.initialDestinations,
+    this.initialTransportMode,
+    this.isAiItinerary = false,
+  });
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
@@ -42,7 +56,7 @@ class _MapScreenState extends State<MapScreen> {
   String _optimizeFor = 'distance';
   String _transportMode = 'private_car';
   List<MultiModalRoute> _multiModalLegs = [];
-  bool _showRoutePanel = false;
+  bool _showRoutePanel = true;
   bool _isNavigating = false;
   bool _isAiItinerary = false;
   bool _aiGenerating = false;
@@ -63,6 +77,24 @@ class _MapScreenState extends State<MapScreen> {
   /// Used to skip expensive snapping math on compass-only updates
   DateTime? _lastHandledPositionTime;
 
+  // ── Arrival overlay ───────────────────────────────────────────────────────
+  /// Destination currently being shown in the arrival card (null = hidden).
+  Destination? _arrivedDestination;
+  /// Stop index of the arrived destination (for "Stop N of M" label).
+  int _arrivedStopIndex = 0;
+  /// Subscription to LocationService.arrivedStream.
+  StreamSubscription<String>? _arrivedSubscription;
+
+  // ── On-the-fly nearby recommendations ────────────────────────────────────
+  /// Pending recommendations ready to show (null = chip hidden).
+  NearbyRecommendations? _nearbyRecs;
+  /// True while the server call is in-flight.
+  bool _checkingRecs = false;
+  /// Last GPS position where a rec check was triggered.
+  LatLng? _lastRecCheckPos;
+  /// Time the last rec chip was dismissed — enforces 5-min cooldown.
+  DateTime? _lastRecDismissed;
+
   // Cebu Province bounding box
   static final _cebuBounds = LatLngBounds(
     const LatLng(9.3223413, 123.2352650),
@@ -74,9 +106,23 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _loadDestinations();
-    if (widget.destination != null) {
+
+    // Apply initial transport mode if provided
+    if (widget.initialTransportMode != null) {
+      _transportMode = widget.initialTransportMode!;
+    }
+    // Apply AI itinerary flag
+    _isAiItinerary = widget.isAiItinerary;
+
+    // Pre-populate stops from initialDestinations (multi) or destination (single)
+    if (widget.initialDestinations != null && widget.initialDestinations!.isNotEmpty) {
+      _routeStops = widget.initialDestinations!.map((d) => _RouteStop(
+        position: LatLng(d.latitude, d.longitude),
+        name: d.name,
+        destId: d.id,
+      )).toList();
+    } else if (widget.destination != null) {
       final dest = widget.destination!;
-      _showRoutePanel = true;
       _routeStops = [
         _RouteStop(
           position: LatLng(dest.latitude, dest.longitude),
@@ -85,17 +131,31 @@ class _MapScreenState extends State<MapScreen> {
         ),
       ];
     }
-    // Register location listener after the first frame (context is ready)
+
+    // Register location listener and set GPS start after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _locationService = context.read<LocationService>();
       _locationService!.addListener(_handleLocationUpdate);
+      // Set start immediately if GPS is already available
+      final pos = _locationService!.currentPosition;
+      if (pos != null) _applyGpsStart(pos);
     });
+  }
+
+  /// Sets route start to the user's current GPS position and triggers
+  /// route calculation if stops are already loaded.
+  void _applyGpsStart(dynamic pos) {
+    final gps = LatLng(pos.latitude, pos.longitude);
+    setState(() => _routeStart = gps);
+    try { _mapController.move(gps, 14); } catch (_) {}
+    if (_routeStops.isNotEmpty) _calculateRoute(_routeStops);
   }
 
   @override
   void dispose() {
     _locationService?.removeListener(_handleLocationUpdate);
+    _arrivedSubscription?.cancel();
     super.dispose();
   }
 
@@ -116,24 +176,10 @@ class _MapScreenState extends State<MapScreen> {
 
   void _onMapTap(LatLng point) {
     if (!_showRoutePanel) return;
-    if (_routeStart == null) {
-      setState(() {
-        _routeStart = point;
-        _routeStops = [];
-        _routeLegs = [];
-        _routeError = null;
-      });
-      AppToast.info(context, 'Start set. Add destinations to build itinerary.');
-    } else {
-      _addStop(_RouteStop(position: point, name: 'Stop ${_routeStops.length + 1}'));
-    }
+    _addStop(_RouteStop(position: point, name: 'Stop ${_routeStops.length + 1}'));
   }
 
   void _addDestinationStop(Destination dest) {
-    if (_routeStart == null) {
-      AppToast.warning(context, 'Tap the map to set a starting point first');
-      return;
-    }
     if (_routeStops.any((s) => s.destId == dest.id)) {
       AppToast.warning(context, '${dest.name} is already in the itinerary');
       return;
@@ -332,8 +378,13 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
 
+    // Subscribe to arrival events
+    await _arrivedSubscription?.cancel();
+    _arrivedSubscription = locationService.arrivedStream.listen(_onArrivedAtDestination);
+
     setState(() {
       _isNavigating = true;
+      _arrivedDestination = null;
       _snappedPosition = null;
       _isOffRoute = false;
       _rerouting = false;
@@ -341,13 +392,97 @@ class _MapScreenState extends State<MapScreen> {
       _lastRerouteTime = null;
       _lastHandledPositionTime = null;
     });
-    AppToast.success(context, 'Navigation started! You will be notified when you arrive.');
+    if (mounted) AppToast.success(context, 'Navigation started! You will be notified when you arrive.');
+  }
+
+  void _onArrivedAtDestination(String destId) {
+    if (!mounted) return;
+    final idx = _routeStops.indexWhere((s) => s.destId == destId);
+    if (idx == -1) return;
+    // Find full destination object from loaded list
+    final full = _destinations.firstWhere(
+      (d) => d.id == destId,
+      orElse: () => Destination(
+        id: destId,
+        name: _routeStops[idx].name,
+        latitude: _routeStops[idx].position.latitude,
+        longitude: _routeStops[idx].position.longitude,
+      ),
+    );
+    setState(() {
+      _arrivedDestination = full;
+      _arrivedStopIndex = idx;
+    });
+  }
+
+  /// Called when user taps "Next Stop" on the arrival card.
+  /// Drops completed stops, updates GPS start, and recalculates route.
+  void _advanceToNextStop() {
+    final nextIdx = _arrivedStopIndex + 1;
+    final remaining = _routeStops.sublist(nextIdx);
+    final pos = _locationService?.currentPosition;
+    setState(() {
+      _arrivedDestination = null;
+      _routeStops = remaining;
+      _routeLegs = [];
+      _multiModalLegs = [];
+      _routeError = null;
+      if (pos != null) _routeStart = LatLng(pos.latitude, pos.longitude);
+    });
+    if (remaining.isNotEmpty) _calculateRoute(remaining);
+  }
+
+  /// Checks for nearby recommended destinations while navigating.
+  /// Triggered automatically after moving 500 m; 5-min cooldown after dismissal.
+  Future<void> _checkNearbyRecs(LatLng pos) async {
+    if (_checkingRecs || !_isNavigating || !mounted) return;
+    // Cooldown: 5 minutes after last dismissal
+    if (_lastRecDismissed != null &&
+        DateTime.now().difference(_lastRecDismissed!).inMinutes < 5) {
+      return;
+    }
+    // Gate: only run if at least one destination in the loaded list is within
+    // 600 m and not already a planned stop.
+    final plannedIds = _routeStops.map((s) => s.destId).toSet();
+    final hasCandidate = _destinations.any((d) {
+      if (plannedIds.contains(d.id)) return false;
+      return _distMeters(pos, LatLng(d.latitude, d.longitude)) <= 600;
+    });
+    if (!hasCandidate) return;
+
+    setState(() => _checkingRecs = true);
+    try {
+      final api = context.read<ApiService>();
+      final res = await api.post('/ai/recommend/nearby', body: {
+        'lat': pos.latitude,
+        'lon': pos.longitude,
+        'visited_ids': plannedIds.whereType<String>().toList(),
+      }, auth: true);
+      if (!mounted) return;
+      if (res['success'] == true && res['data'] != null) {
+        final recs = NearbyRecommendations.fromJson(
+            Map<String, dynamic>.from(res['data'] as Map));
+        if (!recs.isEmpty) {
+          setState(() => _nearbyRecs = recs);
+        }
+      }
+    } catch (_) {
+      // Non-critical — silent fail
+    } finally {
+      if (mounted) setState(() => _checkingRecs = false);
+    }
   }
 
   void _stopNavigation() {
     context.read<LocationService>().stopTracking();
+    _arrivedSubscription?.cancel();
+    _arrivedSubscription = null;
     setState(() {
       _isNavigating = false;
+      _arrivedDestination = null;
+      _nearbyRecs = null;
+      _checkingRecs = false;
+      _lastRecCheckPos = null;
       _snappedPosition = null;
       _isOffRoute = false;
       _rerouting = false;
@@ -360,8 +495,8 @@ class _MapScreenState extends State<MapScreen> {
 
   void _clearRoute() {
     if (_isNavigating) _stopNavigation();
+    // Keep _routeStart as GPS — only clear stops and route geometry
     setState(() {
-      _routeStart = null;
       _routeStops = [];
       _routeLegs = [];
       _multiModalLegs = [];
@@ -375,7 +510,15 @@ class _MapScreenState extends State<MapScreen> {
   /// Fires on every LocationService notify (GPS + compass updates).
   void _handleLocationUpdate() {
     final ls = _locationService;
-    if (ls == null || !_isNavigating || !mounted) return;
+    if (ls == null || !mounted) return;
+
+    // Set GPS start on first available position
+    if (_routeStart == null) {
+      final pos = ls.currentPosition;
+      if (pos != null) _applyGpsStart(pos);
+    }
+
+    if (!_isNavigating) return;
 
     final pos = ls.currentPosition;
     if (pos == null) return;
@@ -436,6 +579,15 @@ class _MapScreenState extends State<MapScreen> {
       }
     } else {
       setState(() => _snappedPosition = userLatLng);
+    }
+
+    // ── On-the-fly nearby recs: trigger every 500 m of travel ────────────
+    if (_nearbyRecs == null && !_checkingRecs) {
+      final lastCheck = _lastRecCheckPos;
+      if (lastCheck == null || _distMeters(userLatLng, lastCheck) >= 500) {
+        _lastRecCheckPos = userLatLng;
+        _checkNearbyRecs(userLatLng);
+      }
     }
   }
 
@@ -1042,8 +1194,74 @@ class _MapScreenState extends State<MapScreen> {
             ).animate().slideY(begin: -0.3, end: 0, duration: 250.ms),
           ),
 
+        // ── Nearby-recs chip ──────────────────────────────────────────────
+        if (_isNavigating && (_nearbyRecs != null || _checkingRecs))
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 60,
+            left: 14, right: 14,
+            child: GestureDetector(
+              onTap: _nearbyRecs != null ? () async {
+                final recs = _nearbyRecs!;
+                setState(() => _nearbyRecs = null);
+                setState(() => _lastRecDismissed = DateTime.now());
+                await NearbyRecommendationsSheet.show(
+                  context, recs,
+                  (dest) {
+                    _addDestinationStop(dest);
+                    AppToast.success(context, '${dest.name} added to your route!');
+                  },
+                );
+              } : null,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.purple.withAlpha(220),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_checkingRecs)
+                          const SizedBox(
+                            width: 14, height: 14,
+                            child: ProgressRing(strokeWidth: 2),
+                          )
+                        else
+                          const Text('✨', style: TextStyle(fontSize: 14)),
+                        const SizedBox(width: 8),
+                        Text(
+                          _checkingRecs ? 'Checking nearby...' : 'Spots near you — tap to explore',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        if (_nearbyRecs != null) ...[
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => setState(() {
+                              _nearbyRecs = null;
+                              _lastRecDismissed = DateTime.now();
+                            }),
+                            child: const Icon(FluentIcons.chrome_close,
+                                size: 12, color: Colors.white),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ).animate().slideY(begin: -0.5, end: 0, duration: 300.ms),
+          ),
+
         // ── Route panel ───────────────────────────────────────────────────
-        if (_showRoutePanel)
+        if (_showRoutePanel && _arrivedDestination == null)
           Positioned(
             bottom: 0, left: 0, right: 0,
             child: ClipRRect(
@@ -1064,7 +1282,364 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ).animate().slideY(begin: 1, end: 0, duration: 300.ms, curve: Curves.easeOut),
           ),
+
+        // ── Arrival overlay ───────────────────────────────────────────────
+        if (_arrivedDestination != null)
+          _buildArrivalOverlay(_arrivedDestination!),
       ],
+    );
+  }
+
+  // ── Arrival overlay ───────────────────────────────────────────────────────
+
+  Widget _buildArrivalOverlay(Destination dest) {
+    final c = context.appColors;
+    final stopNum = _arrivedStopIndex + 1;
+    final totalStops = _routeStops.length;
+    final hasNext = _arrivedStopIndex < totalStops - 1;
+    final nextStop = hasNext ? _routeStops[_arrivedStopIndex + 1] : null;
+    final imageUrl = dest.images.isNotEmpty ? dest.images.first : null;
+
+    return Positioned(
+      bottom: 0, left: 0, right: 0,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.72,
+            ),
+            decoration: BoxDecoration(
+              color: c.surfaceCard.withAlpha(245),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              border: Border(top: BorderSide(color: AppColors.green.withAlpha(120), width: 1.5)),
+            ),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Drag handle
+                  Center(
+                    child: Container(
+                      width: 36, height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.green.withAlpha(120),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // "Stop N of M" badge
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.green,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'Stop $stopNum of $totalStops',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (dest.categoryName != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.blue.withAlpha(25),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            dest.categoryName!,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.blue,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // "Welcome to" header
+                  Text(
+                    'Welcome to',
+                    style: TextStyle(fontSize: 14, color: c.textMuted),
+                  ),
+                  Text(
+                    dest.name,
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: c.textStrong,
+                      height: 1.1,
+                    ),
+                  ),
+                  if (dest.municipality != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(FluentIcons.location, size: 12, color: c.textFaint),
+                        const SizedBox(width: 4),
+                        Text(dest.municipality!,
+                            style: TextStyle(fontSize: 12, color: c.textFaint)),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+
+                  // Cover photo
+                  if (imageUrl != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.network(
+                        imageUrl,
+                        height: 160,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                      ),
+                    ),
+                  if (imageUrl != null) const SizedBox(height: 14),
+
+                  // Stats row
+                  Row(
+                    children: [
+                      if (dest.rating > 0) ...[
+                        Icon(FluentIcons.favorite_star, size: 14, color: AppColors.amber),
+                        const SizedBox(width: 4),
+                        Text(
+                          dest.rating.toStringAsFixed(1),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: c.textStrong,
+                          ),
+                        ),
+                        Text(
+                          ' (${dest.reviewCount})',
+                          style: TextStyle(fontSize: 12, color: c.textFaint),
+                        ),
+                        const SizedBox(width: 16),
+                      ],
+                      if (dest.entranceFeeLocal > 0) ...[
+                        Icon(FluentIcons.money, size: 14, color: AppColors.green),
+                        const SizedBox(width: 4),
+                        Text(
+                          '₱${dest.entranceFeeLocal.toStringAsFixed(0)} entry',
+                          style: TextStyle(fontSize: 13, color: c.text),
+                        ),
+                        const SizedBox(width: 16),
+                      ],
+                      if (dest.averageVisitDuration > 0) ...[
+                        Icon(FluentIcons.clock, size: 14, color: c.textFaint),
+                        const SizedBox(width: 4),
+                        Text(
+                          '~${dest.averageVisitDuration} min visit',
+                          style: TextStyle(fontSize: 13, color: c.text),
+                        ),
+                      ],
+                    ],
+                  ),
+
+                  // Description
+                  if (dest.description != null && dest.description!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      dest.description!,
+                      style: TextStyle(fontSize: 13, color: c.textMuted, height: 1.5),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+
+                  // Tags
+                  if (dest.tags.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: dest.tags.take(6).map((tag) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: c.surfaceElevated,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: c.borderSubtle),
+                        ),
+                        child: Text(tag,
+                            style: TextStyle(fontSize: 11, color: c.textMuted)),
+                      )).toList(),
+                    ),
+                  ],
+
+                  // Best time / tips
+                  if (dest.bestTimeToVisit != null) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(FluentIcons.sunny, size: 14, color: AppColors.amber),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Best time: ${dest.bestTimeToVisit!}',
+                            style: TextStyle(fontSize: 12, color: c.textMuted),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+
+                  const SizedBox(height: 20),
+
+                  // Next stop preview
+                  if (hasNext && nextStop != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.blue.withAlpha(18),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.blue.withAlpha(50)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 28, height: 28,
+                            decoration: BoxDecoration(
+                              color: AppColors.blue,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${_arrivedStopIndex + 2}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Next stop',
+                                    style: TextStyle(fontSize: 10, color: AppColors.blue)),
+                                Text(nextStop.name,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: c.textStrong,
+                                    ),
+                                    overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // Action buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Button(
+                          onPressed: () => setState(() => _arrivedDestination = null),
+                          style: ButtonStyle(
+                            backgroundColor: WidgetStateProperty.all(c.surfaceElevated),
+                            shape: WidgetStateProperty.all(RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(color: c.borderMedium),
+                            )),
+                            padding: WidgetStateProperty.all(
+                                const EdgeInsets.symmetric(vertical: 13)),
+                          ),
+                          child: Text('Dismiss',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: c.text,
+                              )),
+                        ),
+                      ),
+                      if (hasNext) ...[
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: _advanceToNextStop,
+                            style: ButtonStyle(
+                              backgroundColor: WidgetStateProperty.all(AppColors.green),
+                              shape: WidgetStateProperty.all(RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12))),
+                              padding: WidgetStateProperty.all(
+                                  const EdgeInsets.symmetric(vertical: 13)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text('Next Stop',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    )),
+                                const SizedBox(width: 6),
+                                const Icon(FluentIcons.chevron_right,
+                                    size: 14, color: Colors.white),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ] else ...[
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: _stopNavigation,
+                            style: ButtonStyle(
+                              backgroundColor: WidgetStateProperty.all(AppColors.red500),
+                              shape: WidgetStateProperty.all(RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12))),
+                              padding: WidgetStateProperty.all(
+                                  const EdgeInsets.symmetric(vertical: 13)),
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text('Finish Trip',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    )),
+                                SizedBox(width: 6),
+                                Icon(FluentIcons.flag, size: 14, color: Colors.white),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ).animate().slideY(begin: 1, end: 0, duration: 350.ms, curve: Curves.easeOut),
     );
   }
 
@@ -1106,7 +1681,7 @@ class _MapScreenState extends State<MapScreen> {
                     fontWeight: FontWeight.w600,
                     color: c.textStrong)),
             const Spacer(),
-            if (_routeStart != null)
+            if (_routeStops.isNotEmpty)
               GestureDetector(
                 onTap: _clearRoute,
                 child: const Text('Clear',
@@ -1117,7 +1692,29 @@ class _MapScreenState extends State<MapScreen> {
               ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
+
+        // GPS start indicator
+        Row(
+          children: [
+            Container(
+              width: 8, height: 8,
+              decoration: BoxDecoration(
+                color: _routeStart != null ? AppColors.green : c.borderStrong,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _routeStart != null ? 'Starting from your GPS location' : 'Waiting for GPS...',
+              style: TextStyle(
+                fontSize: 12,
+                color: _routeStart != null ? AppColors.green : c.textFaint,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
 
         // Transport mode chips
         SingleChildScrollView(
@@ -1151,7 +1748,7 @@ class _MapScreenState extends State<MapScreen> {
         ],
 
         // Destination picker
-        if (_routeStart != null && _destinations.isNotEmpty) ...[
+        if (_destinations.isNotEmpty) ...[
           Text('Add to itinerary:', style: TextStyle(fontSize: 11, color: c.textFaint)),
           const SizedBox(height: 6),
           SizedBox(
@@ -1260,22 +1857,7 @@ class _MapScreenState extends State<MapScreen> {
         ],
 
         // Status / info area
-        if (_routeStart == null)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-                color: AppColors.blue.withAlpha(20),
-                borderRadius: BorderRadius.circular(10)),
-            child: Row(
-              children: [
-                Icon(FluentIcons.touch_pointer, size: 16, color: AppColors.blue),
-                const SizedBox(width: 8),
-                Text('Tap the map to set your start point',
-                    style: TextStyle(fontSize: 12, color: AppColors.blue)),
-              ],
-            ),
-          )
-        else if (_routeStops.isEmpty)
+        if (_routeStops.isEmpty)
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -1286,7 +1868,7 @@ class _MapScreenState extends State<MapScreen> {
                 Icon(FluentIcons.add, size: 16, color: AppColors.blue),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text('Tap map or pick a destination above',
+                  child: Text('Tap map or pick a destination above to add stops',
                       style: TextStyle(fontSize: 12, color: AppColors.blue)),
                 ),
               ],
