@@ -7,7 +7,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/toast_overlay.dart';
-import '../trips/trip_overview_screen.dart';
+import '../map/map_screen.dart';
 
 class SavedScreen extends StatefulWidget {
   const SavedScreen({super.key});
@@ -198,9 +198,19 @@ class _SavedScreenState extends State<SavedScreen> {
                     return _TripCard(
                       trip: trip,
                       onTap: () async {
-                        await Navigator.of(context).push(FluentPageRoute(
-                          builder: (_) => TripOverviewScreen(itineraryId: trip.id),
-                        ));
+                        final destinations = trip.daysData
+                            .expand((d) => d.stops)
+                            .map((s) => s.destination)
+                            .toList();
+                        if (destinations.isNotEmpty) {
+                          await Navigator.of(context).push(FluentPageRoute(
+                            builder: (_) => MapScreen(
+                              initialDestinations: destinations,
+                              initialTransportMode: trip.transportMode,
+                              isAiItinerary: true,
+                            ),
+                          ));
+                        }
                         _load();
                       },
                       onDelete: () => _delete(trip.id),

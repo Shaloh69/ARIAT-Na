@@ -9,7 +9,7 @@ import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/toast_overlay.dart';
 import '../auth/login_screen.dart';
-import '../trips/day_detail_screen.dart';
+import '../map/map_screen.dart';
 
 /// Shown after scanning a kiosk QR code.
 ///
@@ -74,29 +74,22 @@ class _KioskClaimScreenState extends State<KioskClaimScreen> {
 
   /// Start navigating with the itinerary immediately — no account needed.
   void _startWithoutAccount() {
-    if (_multiDay != null && _multiDay!.days.isNotEmpty) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        FluentPageRoute(
-          builder: (_) => DayDetailScreen(
-            day: _multiDay!.days.first,
-            allDays: _multiDay!.days,
-          ),
+    final transport = _preview?['transport_mode'] as String? ?? 'private_car';
+    final destinations = _multiDay != null
+        ? _multiDay!.days.expand((d) => d.stops).map((s) => s.destination).toList()
+        : _singleDay?.stops.map((s) => s.destination).toList() ?? [];
+    if (destinations.isEmpty) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      FluentPageRoute(
+        builder: (_) => MapScreen(
+          initialDestinations: destinations,
+          initialTransportMode: transport,
+          isAiItinerary: true,
         ),
-        (route) => route.isFirst,
-      );
-    } else if (_singleDay != null) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        FluentPageRoute(
-          builder: (_) => DayDetailScreen(
-            day: _singleDay!,
-            allDays: [_singleDay!],
-          ),
-        ),
-        (route) => route.isFirst,
-      );
-    }
+      ),
+      (route) => route.isFirst,
+    );
   }
 
   Future<void> _claim() async {
@@ -126,25 +119,19 @@ class _KioskClaimScreenState extends State<KioskClaimScreen> {
         await Future.delayed(const Duration(milliseconds: 600));
         if (!mounted) return;
 
-        // Navigate to the first day
-        if (_multiDay != null && _multiDay!.days.isNotEmpty) {
+        // Navigate to MapScreen with all stops loaded
+        final transport = _preview?['transport_mode'] as String? ?? 'private_car';
+        final destinations = _multiDay != null
+            ? _multiDay!.days.expand((d) => d.stops).map((s) => s.destination).toList()
+            : _singleDay?.stops.map((s) => s.destination).toList() ?? [];
+        if (destinations.isNotEmpty) {
           Navigator.pushAndRemoveUntil(
             context,
             FluentPageRoute(
-              builder: (_) => DayDetailScreen(
-                day: _multiDay!.days.first,
-                allDays: _multiDay!.days,
-              ),
-            ),
-            (route) => route.isFirst,
-          );
-        } else if (_singleDay != null) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            FluentPageRoute(
-              builder: (_) => DayDetailScreen(
-                day: _singleDay!,
-                allDays: [_singleDay!],
+              builder: (_) => MapScreen(
+                initialDestinations: destinations,
+                initialTransportMode: transport,
+                isAiItinerary: true,
               ),
             ),
             (route) => route.isFirst,

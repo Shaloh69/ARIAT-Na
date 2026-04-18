@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:latlong2/latlong.dart' hide Path; // dart:ui also exports Path — prefer the canvas one
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -85,6 +86,14 @@ class _MapScreenState extends State<MapScreen> {
   /// Subscription to LocationService.arrivedStream.
   StreamSubscription<String>? _arrivedSubscription;
 
+  // ── Turn-by-turn navigation (private car) ────────────────────────────────
+  late final FlutterTts _tts;
+  String? _currentInstruction;
+  String? _currentRoadName;
+  double _distanceToNextTurnKm = 0;
+  int _etaMinutes = 0;
+  int _currentStepIndex = -1;
+
   // ── On-the-fly nearby recommendations ────────────────────────────────────
   /// Pending recommendations ready to show (null = chip hidden).
   NearbyRecommendations? _nearbyRecs;
@@ -132,6 +141,11 @@ class _MapScreenState extends State<MapScreen> {
       ];
     }
 
+    // TTS
+    _tts = FlutterTts();
+    _tts.setLanguage('en-US');
+    _tts.setSpeechRate(0.9);
+
     // Register location listener and set GPS start after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -156,7 +170,13 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     _locationService?.removeListener(_handleLocationUpdate);
     _arrivedSubscription?.cancel();
+    _tts.stop();
     super.dispose();
+  }
+
+  Future<void> _speak(String text) async {
+    await _tts.stop();
+    await _tts.speak(text);
   }
 
   // ── Data loading ─────────────────────────────────────────────────────────
@@ -392,6 +412,9 @@ class _MapScreenState extends State<MapScreen> {
       _lastRerouteTime = null;
       _lastHandledPositionTime = null;
     });
+    _currentStepIndex = -1;
+    final stopCount = _routeStops.length;
+    _speak('Navigation started. $stopCount stop${stopCount == 1 ? '' : 's'} ahead.');
     if (mounted) AppToast.success(context, 'Navigation started! You will be notified when you arrive.');
   }
 
@@ -412,7 +435,10 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _arrivedDestination = full;
       _arrivedStopIndex = idx;
+      _currentInstruction = null;
+      _currentStepIndex = -1;
     });
+    _speak("You've arrived at ${full.name}.");
   }
 
   /// Called when user taps "Next Stop" on the arrival card.
@@ -477,6 +503,7 @@ class _MapScreenState extends State<MapScreen> {
     context.read<LocationService>().stopTracking();
     _arrivedSubscription?.cancel();
     _arrivedSubscription = null;
+    _tts.stop();
     setState(() {
       _isNavigating = false;
       _arrivedDestination = null;
@@ -487,6 +514,11 @@ class _MapScreenState extends State<MapScreen> {
       _isOffRoute = false;
       _rerouting = false;
       _offRouteCount = 0;
+      _currentInstruction = null;
+      _currentRoadName = null;
+      _distanceToNextTurnKm = 0;
+      _etaMinutes = 0;
+      _currentStepIndex = -1;
     });
     // Reset map to north-up
     try { _mapController.rotate(0); } catch (_) {}
@@ -565,10 +597,13 @@ class _MapScreenState extends State<MapScreen> {
               setState(() {
                 _rerouting = true;
                 _routeStart = userLatLng;
+                _currentStepIndex = -1;
               });
+              _speak('Off route. Recalculating.');
               AppToast.warning(context, 'Off route — recalculating...');
               _calculateRoute(_routeStops).whenComplete(() {
                 if (mounted) setState(() => _rerouting = false);
+                _speak('Route updated.');
               });
             }
           }
@@ -581,6 +616,9 @@ class _MapScreenState extends State<MapScreen> {
       setState(() => _snappedPosition = userLatLng);
     }
 
+    // ── Turn-by-turn step tracking (private car) ─────────────────────────
+    if (_routeLegs.isNotEmpty) _updateNavigationStep(userLatLng);
+
     // ── On-the-fly nearby recs: trigger every 500 m of travel ────────────
     if (_nearbyRecs == null && !_checkingRecs) {
       final lastCheck = _lastRecCheckPos;
@@ -589,6 +627,75 @@ class _MapScreenState extends State<MapScreen> {
         _checkNearbyRecs(userLatLng);
       }
     }
+  }
+
+  /// Finds which RouteStep the user is currently on and updates the HUD.
+  void _updateNavigationStep(LatLng userLatLng) {
+    final polyline = _flatRoutePolyline();
+    if (polyline.length < 2) return;
+
+    final allSteps = _routeLegs.expand((l) => l.steps).toList();
+    if (allSteps.isEmpty) return;
+
+    // Progress along flat polyline in km
+    double minDist = double.infinity;
+    int nearestIdx = 0;
+    for (int i = 0; i < polyline.length - 1; i++) {
+      final c = _nearestOnSegment(userLatLng, polyline[i], polyline[i + 1]);
+      final d = _distMeters(userLatLng, c);
+      if (d < minDist) { minDist = d; nearestIdx = i; }
+    }
+    double progress = 0;
+    for (int i = 0; i < nearestIdx; i++) {
+      progress += _distMeters(polyline[i], polyline[i + 1]);
+    }
+    progress += _distMeters(polyline[nearestIdx],
+        _nearestOnSegment(userLatLng, polyline[nearestIdx],
+            nearestIdx + 1 < polyline.length ? polyline[nearestIdx + 1] : polyline[nearestIdx]));
+    progress /= 1000; // → km
+
+    // Total remaining distance for ETA
+    double totalKm = 0;
+    for (int i = 0; i < polyline.length - 1; i++) {
+      totalKm += _distMeters(polyline[i], polyline[i + 1]);
+    }
+    totalKm /= 1000;
+    final remainingKm = (totalKm - progress).clamp(0.0, double.infinity);
+    final eta = (remainingKm / 40.0 * 60).round(); // 40 km/h avg car
+
+    // Find current step
+    double cumDist = 0;
+    for (int i = 0; i < allSteps.length; i++) {
+      cumDist += allSteps[i].distance;
+      if (progress <= cumDist) {
+        final distToTurn = (cumDist - progress).clamp(0.0, double.infinity);
+        final isNewStep = i != _currentStepIndex;
+        if (isNewStep) {
+          _currentStepIndex = i;
+          // Announce the upcoming maneuver
+          final distLabel = distToTurn < 0.1
+              ? 'now'
+              : distToTurn < 1
+                  ? 'in ${(distToTurn * 1000).round()} meters'
+                  : 'in ${distToTurn.toStringAsFixed(1)} kilometers';
+          _speak('${allSteps[i].instruction} $distLabel');
+        }
+        setState(() {
+          _currentInstruction = allSteps[i].instruction;
+          _currentRoadName = allSteps[i].roadName;
+          _distanceToNextTurnKm = distToTurn;
+          _etaMinutes = eta;
+        });
+        return;
+      }
+    }
+    // Past all steps — show last instruction
+    setState(() {
+      _currentInstruction = allSteps.last.instruction;
+      _currentRoadName = allSteps.last.roadName;
+      _distanceToNextTurnKm = 0;
+      _etaMinutes = eta;
+    });
   }
 
   // ── Route geometry helpers ────────────────────────────────────────────────
@@ -1186,6 +1293,95 @@ class _MapScreenState extends State<MapScreen> {
                         onTap: () => setState(() => _isOffRoute = false),
                         child: const Icon(FluentIcons.chrome_close,
                             color: Colors.white, size: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ).animate().slideY(begin: -0.3, end: 0, duration: 250.ms),
+          ),
+
+        // ── Turn-by-turn HUD (private car) ───────────────────────────────
+        if (_isNavigating && _routeLegs.isNotEmpty && _currentInstruction != null)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 58,
+            left: 14, right: 14,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                  decoration: BoxDecoration(
+                    color: c.surfaceCard.withAlpha(235),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: c.borderLight),
+                  ),
+                  child: Row(
+                    children: [
+                      // Turn icon
+                      Container(
+                        width: 38, height: 38,
+                        decoration: BoxDecoration(
+                          color: AppColors.blue.withAlpha(25),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(FluentIcons.map_directions, size: 20, color: AppColors.blue),
+                      ),
+                      const SizedBox(width: 12),
+                      // Instruction + road name
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _currentInstruction!,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: c.textStrong,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (_currentRoadName != null &&
+                                _currentRoadName!.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                _currentRoadName!,
+                                style: TextStyle(
+                                    fontSize: 11, color: c.textFaint),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      // Distance to turn + ETA
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_distanceToNextTurnKm > 0)
+                            Text(
+                              _distanceToNextTurnKm < 1
+                                  ? '${(_distanceToNextTurnKm * 1000).round()}m'
+                                  : '${_distanceToNextTurnKm.toStringAsFixed(1)}km',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.blue,
+                              ),
+                            ),
+                          if (_etaMinutes > 0)
+                            Text(
+                              '~$_etaMinutes min',
+                              style: TextStyle(
+                                  fontSize: 10, color: c.textFaint),
+                            ),
+                        ],
                       ),
                     ],
                   ),
