@@ -1080,7 +1080,7 @@ class _MapScreenState extends State<MapScreen> {
                 Marker(
                   point: _snappedPosition ?? LatLng(userPos.latitude, userPos.longitude),
                   width: 44, height: 44,
-                  rotate: false,
+                  rotate: true,
                   child: CustomPaint(
                     size: const Size(44, 44),
                     painter: _NavArrowPainter(),

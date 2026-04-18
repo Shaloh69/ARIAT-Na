@@ -559,6 +559,31 @@ const ensureUserFeatureMigrations = async (): Promise<void> => {
   }
 };
 
+const ensureKioskMigration = async (): Promise<void> => {
+  try {
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS kiosk_sessions (
+        id            VARCHAR(36)  NOT NULL PRIMARY KEY,
+        token         VARCHAR(16)  NOT NULL UNIQUE,
+        itinerary_data LONGTEXT    NOT NULL,
+        days          INT          NOT NULL DEFAULT 1,
+        transport_mode VARCHAR(50),
+        is_claimed    BOOLEAN      NOT NULL DEFAULT FALSE,
+        claimed_by    VARCHAR(36)  NULL,
+        claimed_at    TIMESTAMP    NULL,
+        expires_at    TIMESTAMP    NOT NULL,
+        created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_kiosk_token      (token),
+        INDEX idx_kiosk_expires_at (expires_at),
+        FOREIGN KEY (claimed_by) REFERENCES users(id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    logger.info("[STARTUP] kiosk_sessions table ready.");
+  } catch (error) {
+    logger.error("[STARTUP] Kiosk migration failed:", error);
+  }
+};
+
 const startServer = async (): Promise<void> => {
   try {
     // Test database connection
@@ -572,6 +597,9 @@ const startServer = async (): Promise<void> => {
 
     // User-facing feature migrations (reviews, password resets)
     await ensureUserFeatureMigrations();
+
+    // Kiosk sessions table
+    await ensureKioskMigration();
 
     // Ensure intersections.point_type ENUM includes 'entrance'
     await ensureEntrancePointType();

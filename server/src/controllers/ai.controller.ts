@@ -551,7 +551,30 @@ export const getSavedItineraryById = async (
 
   const days_data = Array.from(dayMap.entries())
     .sort((a, b) => a[0] - b[0])
-    .map(([dayNumber, stops]) => ({ dayNumber, stops }));
+    .map(([dayNumber, stops]) => ({
+      dayNumber,
+      stops: (stops as any[]).map((row) => ({
+        destination: {
+          id: row.destination_id,
+          name: row.name,
+          description: row.description,
+          latitude: row.latitude,
+          longitude: row.longitude,
+          address: row.address,
+          entrance_fee_local: row.entrance_fee_local,
+          average_visit_duration: row.average_visit_duration,
+          rating: row.rating,
+          images: row.images,
+          municipality: row.municipality,
+          budget_level: row.budget_level,
+          category_name: row.category_name,
+          cluster_name: row.cluster_name,
+          cluster_slug: row.cluster_slug,
+        },
+        visit_duration: row.planned_duration ?? 60,
+        day_number: row.day_number,
+      })),
+    }));
 
   res.json({
     success: true,

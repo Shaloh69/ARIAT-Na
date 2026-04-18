@@ -18,6 +18,7 @@ class SavedScreen extends StatefulWidget {
 class _SavedScreenState extends State<SavedScreen> {
   List<SavedItinerary> _trips = [];
   bool _loading = true;
+  String? _openingId; // ID of the trip currently being opened
   String _search = '';
   String? _filterType; // null = All
   final TextEditingController _searchCtrl = TextEditingController();
@@ -99,6 +100,40 @@ class _SavedScreenState extends State<SavedScreen> {
     } catch (_) {
       if (mounted) AppToast.error(context, 'Could not duplicate trip');
     }
+  }
+
+  Future<void> _openTrip(SavedItinerary trip) async {
+    if (_openingId != null) return;
+    setState(() => _openingId = trip.id);
+    final api = context.read<ApiService>();
+    final nav = Navigator.of(context);
+    try {
+      final res = await api.get('/ai/itinerary/${trip.id}', auth: true);
+      if (!mounted) return;
+      if (res['success'] == true) {
+        final full = SavedItinerary.fromJson(res['data'] as Map<String, dynamic>);
+        final destinations = full.daysData
+            .expand((d) => d.stops)
+            .map((s) => s.destination)
+            .toList();
+        if (destinations.isNotEmpty) {
+          await nav.push(FluentPageRoute(
+            builder: (_) => MapScreen(
+              initialDestinations: destinations,
+              initialTransportMode: trip.transportMode,
+              isAiItinerary: true,
+            ),
+          ));
+        }
+      } else {
+        if (mounted) AppToast.error(context, 'Could not load itinerary');
+      }
+    } catch (_) {
+      if (mounted) AppToast.error(context, 'Could not load itinerary');
+    } finally {
+      if (mounted) setState(() => _openingId = null);
+    }
+    _load();
   }
 
   @override
@@ -197,22 +232,7 @@ class _SavedScreenState extends State<SavedScreen> {
                     final trip = filtered[i];
                     return _TripCard(
                       trip: trip,
-                      onTap: () async {
-                        final destinations = trip.daysData
-                            .expand((d) => d.stops)
-                            .map((s) => s.destination)
-                            .toList();
-                        if (destinations.isNotEmpty) {
-                          await Navigator.of(context).push(FluentPageRoute(
-                            builder: (_) => MapScreen(
-                              initialDestinations: destinations,
-                              initialTransportMode: trip.transportMode,
-                              isAiItinerary: true,
-                            ),
-                          ));
-                        }
-                        _load();
-                      },
+                      onTap: () => _openTrip(trip),
                       onDelete: () => _delete(trip.id),
                       onDuplicate: () => _duplicate(trip),
                     ).animate().fadeIn(delay: (i * 60).ms, duration: 400.ms);
