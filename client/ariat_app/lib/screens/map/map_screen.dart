@@ -90,6 +90,12 @@ class _MapScreenState extends State<MapScreen> {
   // ── GPS timeout fallback ──────────────────────────────────────────────────
   Timer? _gpsTimeoutTimer;
 
+  // ── Commute navigation ────────────────────────────────────────────────────
+  String _transportCategory = 'private'; // 'private' | 'commute'
+  String _commuteSubMode = 'saver';       // 'saver' | 'grab_taxi'
+  List<TransportLeg> _commuteLegs = [];
+  int _currentLegIndex = 0;
+
   // ── Turn-by-turn navigation (private car) ────────────────────────────────
   late final FlutterTts _tts;
   String? _currentInstruction;
@@ -123,6 +129,10 @@ class _MapScreenState extends State<MapScreen> {
     // Apply initial transport mode if provided
     if (widget.initialTransportMode != null) {
       _transportMode = widget.initialTransportMode!;
+      // Any mode other than private_car defaults to commute category
+      if (widget.initialTransportMode != 'private_car') {
+        _transportCategory = 'commute';
+      }
     }
     // Apply AI itinerary flag
     _isAiItinerary = widget.isAiItinerary;
@@ -272,6 +282,11 @@ class _MapScreenState extends State<MapScreen> {
       _routeError = null;
     });
 
+    if (_transportCategory == 'commute') {
+      await _calculateCommuteRoute(stops);
+      return;
+    }
+
     final useMultiModal = _multiModalModes.contains(_transportMode);
 
     try {
@@ -377,6 +392,68 @@ class _MapScreenState extends State<MapScreen> {
         _routeLoading = false;
       });
       if (mounted) AppToast.error(context, 'Route calculation failed');
+    }
+  }
+
+  // ── Commute route calculation ─────────────────────────────────────────────
+
+  Future<void> _calculateCommuteRoute(List<_RouteStop> stops) async {
+    try {
+      final api = context.read<ApiService>();
+      final waypoints = [_routeStart!, ...stops.map((s) => s.position)];
+      final allLegs = <TransportLeg>[];
+
+      LatLng from = waypoints[0];
+      for (int i = 0; i < waypoints.length - 1; i++) {
+        final to = waypoints[i + 1];
+        final res = await api.post('/routes/calculate-commute', body: {
+          'start_lat': from.latitude,
+          'start_lon': from.longitude,
+          'end_lat': to.latitude,
+          'end_lon': to.longitude,
+          'sub_mode': _commuteSubMode,
+        }, auth: true);
+
+        if (res['success'] == true && res['data'] != null) {
+          final mm = MultiModalRoute.fromJson(res['data'] as Map<String, dynamic>);
+          allLegs.addAll(mm.legs);
+          final lastGeo = mm.legs.isNotEmpty ? mm.legs.last.geometry : null;
+          if (lastGeo != null && lastGeo.isNotEmpty) {
+            from = LatLng(lastGeo.last[0], lastGeo.last[1]);
+          } else {
+            from = waypoints[i + 1];
+          }
+        } else {
+          setState(() {
+            _routeError = 'No commute route found for leg ${i + 1}';
+            _routeLoading = false;
+          });
+          return;
+        }
+      }
+
+      final totalDist = allLegs.fold<double>(0, (s, l) => s + l.distance);
+      final totalTime = allLegs.fold<int>(0, (s, l) => s + l.duration);
+      final totalFare = allLegs.fold<double>(0, (s, l) => s + l.fare);
+
+      setState(() {
+        _commuteLegs = allLegs;
+        _currentLegIndex = 0;
+        _routeLegs = [];
+        _multiModalLegs = [];
+        _routeLoading = false;
+      });
+      if (mounted) {
+        final modeLabel = _commuteSubMode == 'grab_taxi' ? 'Grab/Taxi' : 'Saver';
+        AppToast.success(context,
+            '$modeLabel · ${totalDist.toStringAsFixed(2)} km · ~$totalTime min · ₱${totalFare.toStringAsFixed(0)}');
+      }
+    } catch (e) {
+      setState(() {
+        _routeError = e.toString().replaceFirst('Exception: ', '');
+        _routeLoading = false;
+      });
+      if (mounted) AppToast.error(context, 'Commute route calculation failed');
     }
   }
 
@@ -539,6 +616,7 @@ class _MapScreenState extends State<MapScreen> {
       _distanceToNextTurnKm = 0;
       _etaMinutes = 0;
       _currentStepIndex = -1;
+      _currentLegIndex = 0;
     });
     // Reset map to north-up
     try { _mapController.rotate(0); } catch (_) {}
@@ -552,6 +630,8 @@ class _MapScreenState extends State<MapScreen> {
       _routeStops = [];
       _routeLegs = [];
       _multiModalLegs = [];
+      _commuteLegs = [];
+      _currentLegIndex = 0;
       _routeError = null;
       _isAiItinerary = false;
     });
@@ -634,6 +714,19 @@ class _MapScreenState extends State<MapScreen> {
       }
     } else {
       setState(() => _snappedPosition = userLatLng);
+    }
+
+    // ── Commute leg auto-advance ──────────────────────────────────────────
+    if (_commuteLegs.isNotEmpty && _currentLegIndex < _commuteLegs.length) {
+      final leg = _commuteLegs[_currentLegIndex];
+      final toPoint = LatLng(leg.to.lat, leg.to.lon);
+      if (_distMeters(userLatLng, toPoint) < 50) {
+        if (_currentLegIndex < _commuteLegs.length - 1) {
+          final next = _commuteLegs[_currentLegIndex + 1];
+          setState(() => _currentLegIndex++);
+          _speak('${leg.to.name}. Next: ${next.instruction}');
+        }
+      }
     }
 
     // ── Turn-by-turn step tracking (private car) ─────────────────────────
@@ -722,6 +815,13 @@ class _MapScreenState extends State<MapScreen> {
 
   /// Concatenates all leg geometries into a single flat polyline.
   List<LatLng> _flatRoutePolyline() {
+    if (_commuteLegs.isNotEmpty) {
+      // For off-route detection, only use current leg's geometry
+      final leg = _currentLegIndex < _commuteLegs.length
+          ? _commuteLegs[_currentLegIndex]
+          : _commuteLegs.last;
+      return leg.geometry.map((c) => LatLng(c[0], c[1])).toList();
+    }
     if (_routeLegs.isNotEmpty) {
       return _routeLegs.expand(_routePolyline).toList();
     }
@@ -903,6 +1003,19 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  IconData _modeIcon(String mode) {
+    switch (mode) {
+      case 'walk':        return FluentIcons.location;
+      case 'bus':
+      case 'jeepney':     return FluentIcons.bus_solid;
+      case 'tricycle':
+      case 'habal_habal': return FluentIcons.cycling;
+      case 'ferry':       return FluentIcons.airplane;
+      case 'taxi':        return FluentIcons.taxi;
+      default:            return FluentIcons.car;
+    }
+  }
+
   List<LatLng> _routePolyline(RouteResult leg) {
     if (leg.routeGeometry != null && leg.routeGeometry!.length >= 2) {
       return leg.routeGeometry!.map((c) => LatLng(c[0], c[1])).toList();
@@ -1069,6 +1182,25 @@ class _MapScreenState extends State<MapScreen> {
                     points: pts,
                     strokeWidth: 5,
                     color: _modeColor(leg.mode).withAlpha(210),
+                  );
+                }).whereType<Polyline>().toList(),
+              ),
+
+            // Commute polylines: faint for all, bright for current leg
+            if (_commuteLegs.isNotEmpty)
+              PolylineLayer(
+                polylines: _commuteLegs.asMap().entries.map((e) {
+                  final idx = e.key;
+                  final leg = e.value;
+                  final pts = leg.geometry.map((c) => LatLng(c[0], c[1])).toList();
+                  if (pts.length < 2) return null;
+                  final isCurrent = idx == _currentLegIndex;
+                  return Polyline(
+                    points: pts,
+                    strokeWidth: isCurrent ? 5.5 : 2.5,
+                    color: isCurrent
+                        ? _modeColor(leg.mode).withAlpha(220)
+                        : _modeColor(leg.mode).withAlpha(80),
                   );
                 }).whereType<Polyline>().toList(),
               ),
@@ -1405,6 +1537,83 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     ],
                   ),
+                ),
+              ),
+            ).animate().slideY(begin: -0.3, end: 0, duration: 250.ms),
+          ),
+
+        // ── Commute leg HUD ───────────────────────────────────────────────
+        if (_isNavigating && _commuteLegs.isNotEmpty && _currentLegIndex < _commuteLegs.length)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 58,
+            left: 14, right: 14,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                  decoration: BoxDecoration(
+                    color: c.surfaceCard.withAlpha(235),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: c.borderLight),
+                  ),
+                  child: Builder(builder: (_) {
+                    final leg = _commuteLegs[_currentLegIndex];
+                    final toPoint = LatLng(leg.to.lat, leg.to.lon);
+                    final userLatLng = userPos != null ? LatLng(userPos.latitude, userPos.longitude) : null;
+                    final distM = userLatLng != null ? _distMeters(userLatLng, toPoint) : 0.0;
+                    final distLabel = distM < 1000
+                        ? '${distM.round()}m'
+                        : '${(distM / 1000).toStringAsFixed(1)}km';
+                    return Row(
+                      children: [
+                        Container(
+                          width: 38, height: 38,
+                          decoration: BoxDecoration(
+                            color: _modeColor(leg.mode).withAlpha(25),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(_modeIcon(leg.mode), size: 20, color: _modeColor(leg.mode)),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                leg.instruction,
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.textStrong),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text('To: ${leg.to.name}',
+                                  style: TextStyle(fontSize: 11, color: c.textFaint),
+                                  overflow: TextOverflow.ellipsis),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(distLabel,
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
+                                    color: _modeColor(leg.mode))),
+                            if (leg.fare > 0)
+                              Text('₱${leg.fare.toStringAsFixed(0)}',
+                                  style: TextStyle(fontSize: 11, color: AppColors.amber,
+                                      fontWeight: FontWeight.w600)),
+                            Text('${_currentLegIndex + 1}/${_commuteLegs.length}',
+                                style: TextStyle(fontSize: 10, color: c.textFaint)),
+                          ],
+                        ),
+                      ],
+                    );
+                  }),
                 ),
               ),
             ).animate().slideY(begin: -0.3, end: 0, duration: 250.ms),
@@ -2011,27 +2220,29 @@ class _MapScreenState extends State<MapScreen> {
         ),
         const SizedBox(height: 10),
 
-        // Transport mode chips
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
+        // Transport category selector — Private | Commute
+        Row(
+          children: [
+            Expanded(child: _categoryButton('private', 'Private', FluentIcons.car, c)),
+            const SizedBox(width: 8),
+            Expanded(child: _categoryButton('commute', 'Commute', FluentIcons.bus_solid, c)),
+          ],
+        ),
+        // Commute sub-mode row
+        if (_transportCategory == 'commute') ...[
+          const SizedBox(height: 8),
+          Row(
             children: [
-              _transportChip('private_car', 'Car', FluentIcons.car),
-              const SizedBox(width: 6),
-              _transportChip('bus_commute', 'Bus', FluentIcons.bus_solid),
-              const SizedBox(width: 6),
-              _transportChip('taxi', 'Taxi', FluentIcons.taxi),
-              const SizedBox(width: 6),
-              _transportChip('ferry', 'Ferry', FluentIcons.airplane),
-              const SizedBox(width: 6),
-              _transportChip('walk', 'Walk', FluentIcons.location),
+              Expanded(child: _subModeButton('saver', 'Saver', c)),
+              const SizedBox(width: 8),
+              Expanded(child: _subModeButton('grab_taxi', 'Grab / Taxi', c)),
             ],
           ),
-        ),
+        ],
         const SizedBox(height: 10),
 
-        // Optimize toggle (private car only)
-        if (_transportMode == 'private_car') ...[
+        // Optimize toggle (private only)
+        if (_transportCategory == 'private') ...[
           Row(
             children: [
               _optimizeChip('distance', 'Shortest'),
@@ -2431,37 +2642,66 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // ── Chip builders ─────────────────────────────────────────────────────────
-
-  Widget _transportChip(String value, String label, IconData icon) {
-    final c = context.appColors;
-    final selected = _transportMode == value;
+  Widget _categoryButton(String value, String label, IconData icon, AppColorScheme c) {
+    final selected = _transportCategory == value;
     return GestureDetector(
       onTap: () {
-        setState(() => _transportMode = value);
+        setState(() {
+          _transportCategory = value;
+          _commuteLegs = [];
+          _currentLegIndex = 0;
+        });
         if (_routeStops.isNotEmpty) _calculateRoute(_routeStops);
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
           color: selected ? AppColors.red500 : c.surfaceElevated,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: selected ? AppColors.red500 : c.borderSubtle),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: selected ? AppColors.red500 : c.borderSubtle),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 12,
-                color: selected ? Colors.white : c.textMuted),
-            const SizedBox(width: 4),
+            Icon(icon, size: 14, color: selected ? Colors.white : c.textMuted),
+            const SizedBox(width: 6),
             Text(label,
                 style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  fontSize: 12, fontWeight: FontWeight.w600,
                   color: selected ? Colors.white : c.textMuted,
                 )),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _subModeButton(String value, String label, AppColorScheme c) {
+    final selected = _commuteSubMode == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _commuteSubMode = value;
+          _commuteLegs = [];
+          _currentLegIndex = 0;
+        });
+        if (_routeStops.isNotEmpty) _calculateRoute(_routeStops);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.blue.withAlpha(220) : c.surfaceElevated,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: selected ? AppColors.blue : c.borderSubtle),
+        ),
+        child: Center(
+          child: Text(label,
+              style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w600,
+                color: selected ? Colors.white : c.textMuted,
+              )),
         ),
       ),
     );

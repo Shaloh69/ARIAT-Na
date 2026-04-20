@@ -6,6 +6,7 @@ import {
   recalculateRouteFromCurrent,
   checkOffCourse,
   calculateMultiModalRouteHandler,
+  calculateCommuteRouteHandler,
 } from "../controllers/route.controller";
 import { authenticate } from "../middleware/auth.middleware";
 
@@ -49,6 +50,13 @@ router.post(
   authenticate,
   calculateMultiModalRouteHandler,
 );
+
+/**
+ * POST /routes/calculate-commute
+ * Build a multi-leg commute route (saver or grab_taxi).
+ * Body: { start_lat, start_lon, end_lat, end_lon, sub_mode?: 'saver'|'grab_taxi' }
+ */
+router.post("/calculate-commute", authenticate, calculateCommuteRouteHandler);
 
 /**
  * GET /routes/nearest

@@ -119,11 +119,11 @@ class LocationService extends ChangeNotifier {
         dest.lon,
       );
 
-      if (dist <= 50 && !_arrivedAt.contains(dest.id)) {
+      if (dist <= 150 && !_arrivedAt.contains(dest.id)) {
         _arrivedAt.add(dest.id);
         NotificationService.showDestinationArrived(dest.name);
         _arrivedController.add(dest.id);
-      } else if (dist <= 200 && !_approachNotified.contains(dest.id)) {
+      } else if (dist <= 500 && !_approachNotified.contains(dest.id)) {
         _approachNotified.add(dest.id);
         NotificationService.showApproaching(dest.name);
       }

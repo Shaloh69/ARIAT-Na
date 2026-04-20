@@ -18,8 +18,6 @@ class NavProgressUpdate {
 }
 
 class NavigationWsService extends ChangeNotifier {
-  static const String _serverUrl = 'https://ariat-na-server-qhan.onrender.com';
-
   final AuthService _authService;
   io.Socket? _socket;
   String? _sessionId;
@@ -46,8 +44,11 @@ class NavigationWsService extends ChangeNotifier {
     if (token == null) return;
     if (_socket != null) return;
 
+    // Derive WS server root from the API base URL (strip /api/v1)
+    final wsUrl = _authService.baseUrl.replaceAll(RegExp(r'/api/v1$'), '');
+
     _socket = io.io(
-      _serverUrl,
+      wsUrl,
       io.OptionBuilder()
           .setTransports(['websocket'])
           .setAuth({'token': token})

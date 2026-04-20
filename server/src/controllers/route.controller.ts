@@ -7,6 +7,7 @@ import {
   checkIfOffCourse,
 } from "../services/pathfinding.service";
 import { calculateMultiModalRoute } from "../services/multimodal.service";
+import { buildCommuteRoute, CommuteSubMode } from "../services/commute.service";
 import { AuthRequest } from "../types";
 
 /**
@@ -329,6 +330,46 @@ export const calculateMultiModalRouteHandler = async (
       success: false,
       message: "Multi-modal route calculation failed.",
     });
+  }
+};
+
+/**
+ * POST /routes/calculate-commute
+ * Build a multi-leg commute route (saver or grab_taxi sub-mode).
+ * Body: { start_lat, start_lon, end_lat, end_lon, sub_mode?: 'saver'|'grab_taxi' }
+ */
+export const calculateCommuteRouteHandler = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { start_lat, start_lon, end_lat, end_lon, sub_mode = "saver" } = req.body;
+
+    if (
+      start_lat === undefined || start_lat === null ||
+      start_lon === undefined || start_lon === null ||
+      end_lat   === undefined || end_lat   === null ||
+      end_lon   === undefined || end_lon   === null
+    ) {
+      res.status(400).json({ success: false, message: "start_lat, start_lon, end_lat, end_lon are required" });
+      return;
+    }
+
+    const validSubModes: CommuteSubMode[] = ["saver", "grab_taxi"];
+    const subMode: CommuteSubMode = validSubModes.includes(sub_mode) ? sub_mode : "saver";
+
+    const result = await buildCommuteRoute(
+      parseFloat(start_lat),
+      parseFloat(start_lon),
+      parseFloat(end_lat),
+      parseFloat(end_lon),
+      subMode,
+    );
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error("Error calculating commute route:", error);
+    res.status(500).json({ success: false, message: "Commute route calculation failed." });
   }
 };
 
