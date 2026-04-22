@@ -129,9 +129,12 @@ class _MapScreenState extends State<MapScreen> {
     // Apply initial transport mode if provided
     if (widget.initialTransportMode != null) {
       _transportMode = widget.initialTransportMode!;
-      // Any mode other than private_car defaults to commute category
-      if (widget.initialTransportMode != 'private_car') {
+      if (widget.initialTransportMode == 'grab_taxi') {
         _transportCategory = 'commute';
+        _commuteSubMode = 'grab_taxi';
+      } else if (widget.initialTransportMode != 'private_car') {
+        _transportCategory = 'commute';
+        _commuteSubMode = 'saver';
       }
     }
     // Apply AI itinerary flag
@@ -444,7 +447,7 @@ class _MapScreenState extends State<MapScreen> {
         _routeLoading = false;
       });
       if (mounted) {
-        final modeLabel = _commuteSubMode == 'grab_taxi' ? 'Grab/Taxi' : 'Saver';
+        final modeLabel = _commuteSubMode == 'grab_taxi' ? 'Grab/Taxi' : 'Bus';
         AppToast.success(context,
             '$modeLabel · ${totalDist.toStringAsFixed(2)} km · ~$totalTime min · ₱${totalFare.toStringAsFixed(0)}');
       }
@@ -460,7 +463,7 @@ class _MapScreenState extends State<MapScreen> {
   // ── Navigation control ────────────────────────────────────────────────────
 
   Future<void> _startNavigation() async {
-    final hasRoute = _routeLegs.isNotEmpty || _multiModalLegs.isNotEmpty;
+    final hasRoute = _routeLegs.isNotEmpty || _multiModalLegs.isNotEmpty || _commuteLegs.isNotEmpty;
     if (!hasRoute || _routeStops.isEmpty) return;
 
     final locationService = context.read<LocationService>();
@@ -998,7 +1001,7 @@ class _MapScreenState extends State<MapScreen> {
       case 'tricycle':
       case 'habal_habal':         return const Color(0xFF16a34a);
       case 'ferry':               return const Color(0xFF7c3aed);
-      case 'taxi':                return const Color(0xFFf59e0b);
+      case 'taxi':                return const Color(0xFFea580c); // orange-600 — visible on OSM yellow roads
       default:                    return const Color(0xFFdc2626);
     }
   }
@@ -1151,8 +1154,13 @@ class _MapScreenState extends State<MapScreen> {
                 polylines: _routeLegs.expand((leg) {
                   final List<Polyline> polys = [];
                   if (leg.isWalkFallback && leg.routeGeometry != null && leg.routeGeometry!.length >= 2) {
+                    // Use only first + last point — full geometry causes scribble/hatching
+                    final geo = leg.routeGeometry!;
                     polys.add(Polyline(
-                      points: leg.routeGeometry!.map((c) => LatLng(c[0], c[1])).toList(),
+                      points: [
+                        LatLng(geo.first[0], geo.first[1]),
+                        LatLng(geo.last[0], geo.last[1]),
+                      ],
                       strokeWidth: 4,
                       color: const Color(0xFF3B82F6).withAlpha(230),
                       pattern: StrokePattern.dashed(segments: const [8, 6]),
@@ -2095,13 +2103,18 @@ class _MapScreenState extends State<MapScreen> {
   /// Compact peek bar shown when panel is collapsed — tap or swipe up to expand.
   Widget _buildPanelPeek(AppColorScheme c) {
     final stopCount = _routeStops.length;
+    final isCommute = _commuteLegs.isNotEmpty;
     final isMultiModal = _multiModalLegs.isNotEmpty;
-    final totalDist = isMultiModal
-        ? _multiModalLegs.fold<double>(0, (s, l) => s + l.totalDistance)
-        : _routeLegs.fold<double>(0, (s, l) => s + l.totalDistance);
-    final totalTime = isMultiModal
-        ? _multiModalLegs.fold<int>(0, (s, l) => s + l.totalDuration)
-        : _routeLegs.fold<int>(0, (s, l) => s + l.estimatedTime);
+    final totalDist = isCommute
+        ? _commuteLegs.fold<double>(0, (s, l) => s + l.distance)
+        : isMultiModal
+            ? _multiModalLegs.fold<double>(0, (s, l) => s + l.totalDistance)
+            : _routeLegs.fold<double>(0, (s, l) => s + l.totalDistance);
+    final totalTime = isCommute
+        ? _commuteLegs.fold<int>(0, (s, l) => s + l.duration)
+        : isMultiModal
+            ? _multiModalLegs.fold<int>(0, (s, l) => s + l.totalDuration)
+            : _routeLegs.fold<int>(0, (s, l) => s + l.estimatedTime);
     final hasRoute = totalDist > 0;
 
     return Padding(
@@ -2147,17 +2160,24 @@ class _MapScreenState extends State<MapScreen> {
 
   Widget _buildRoutePanel() {
     final c = context.appColors;
+    final isCommute = _commuteLegs.isNotEmpty;
     final isMultiModal = _multiModalLegs.isNotEmpty;
-    final totalDist = isMultiModal
-        ? _multiModalLegs.fold<double>(0, (s, l) => s + l.totalDistance)
-        : _routeLegs.fold<double>(0, (s, l) => s + l.totalDistance);
-    final totalTime = isMultiModal
-        ? _multiModalLegs.fold<int>(0, (s, l) => s + l.totalDuration)
-        : _routeLegs.fold<int>(0, (s, l) => s + l.estimatedTime);
-    final totalFare = isMultiModal
-        ? _multiModalLegs.fold<double>(0, (s, l) => s + l.totalFare)
-        : 0.0;
-    final hasRoute = _routeLegs.isNotEmpty || _multiModalLegs.isNotEmpty;
+    final totalDist = isCommute
+        ? _commuteLegs.fold<double>(0, (s, l) => s + l.distance)
+        : isMultiModal
+            ? _multiModalLegs.fold<double>(0, (s, l) => s + l.totalDistance)
+            : _routeLegs.fold<double>(0, (s, l) => s + l.totalDistance);
+    final totalTime = isCommute
+        ? _commuteLegs.fold<int>(0, (s, l) => s + l.duration)
+        : isMultiModal
+            ? _multiModalLegs.fold<int>(0, (s, l) => s + l.totalDuration)
+            : _routeLegs.fold<int>(0, (s, l) => s + l.estimatedTime);
+    final totalFare = isCommute
+        ? _commuteLegs.fold<double>(0, (s, l) => s + l.fare)
+        : isMultiModal
+            ? _multiModalLegs.fold<double>(0, (s, l) => s + l.totalFare)
+            : 0.0;
+    final hasRoute = _routeLegs.isNotEmpty || _multiModalLegs.isNotEmpty || _commuteLegs.isNotEmpty;
     final isOnline = context.watch<ConnectivityService>().isOnline;
 
     return Column(
@@ -2220,25 +2240,16 @@ class _MapScreenState extends State<MapScreen> {
         ),
         const SizedBox(height: 10),
 
-        // Transport category selector — Private | Commute
+        // Transport chips — Private | Bus | Grab/Taxi/Maxim
         Row(
           children: [
-            Expanded(child: _categoryButton('private', 'Private', FluentIcons.car, c)),
+            Expanded(child: _transportChip('private', 'Private', FluentIcons.car, c)),
             const SizedBox(width: 8),
-            Expanded(child: _categoryButton('commute', 'Commute', FluentIcons.bus_solid, c)),
+            Expanded(child: _transportChip('bus', 'Bus', FluentIcons.bus_solid, c)),
+            const SizedBox(width: 8),
+            Expanded(child: _transportChip('grab_taxi', 'Grab/Taxi', FluentIcons.taxi, c)),
           ],
         ),
-        // Commute sub-mode row
-        if (_transportCategory == 'commute') ...[
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(child: _subModeButton('saver', 'Saver', c)),
-              const SizedBox(width: 8),
-              Expanded(child: _subModeButton('grab_taxi', 'Grab / Taxi', c)),
-            ],
-          ),
-        ],
         const SizedBox(height: 10),
 
         // Optimize toggle (private only)
@@ -2412,7 +2423,7 @@ class _MapScreenState extends State<MapScreen> {
                   Text('Time', style: TextStyle(fontSize: 10, color: c.textFaint)),
                 ]),
                 Container(width: 1, height: 28, color: c.borderSubtle),
-                if (isMultiModal && totalFare > 0) ...[
+                if ((isMultiModal || isCommute) && totalFare > 0) ...[
                   Column(children: [
                     Text('₱${totalFare.toStringAsFixed(0)}',
                         style: TextStyle(
@@ -2501,6 +2512,67 @@ class _MapScreenState extends State<MapScreen> {
           if (isMultiModal) ...[
             const SizedBox(height: 8),
             ..._multiModalLegs.expand((mm) => mm.legs).map((leg) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: [
+                  Container(
+                    width: 8, height: 8,
+                    decoration: BoxDecoration(
+                        color: _modeColor(leg.mode), shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: Text(leg.instruction,
+                          style: TextStyle(fontSize: 11, color: c.text),
+                          overflow: TextOverflow.ellipsis)),
+                  const SizedBox(width: 8),
+                  Text('${leg.duration}m',
+                      style: TextStyle(fontSize: 10, color: c.textFaint)),
+                  if (leg.fare > 0) ...[
+                    const SizedBox(width: 6),
+                    Text('₱${leg.fare.toStringAsFixed(0)}',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.amber,
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ],
+              ),
+            )),
+          ],
+
+          // Commute-only-taxi warning
+          if (isCommute &&
+              _commuteSubMode == 'saver' &&
+              _commuteLegs.length == 1 &&
+              (_commuteLegs.first.mode == 'taxi' || _commuteLegs.first.mode == 'maxim')) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.amber.withAlpha(25),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.amber.withAlpha(80)),
+              ),
+              child: Row(
+                children: [
+                  const Text('ℹ️', style: TextStyle(fontSize: 14)),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'No bus or tricycle routes found for this trip — falling back to ride-hailing.',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF92400E)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Commute leg detail
+          if (isCommute) ...[
+            const SizedBox(height: 8),
+            ..._commuteLegs.map((leg) => Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: Row(
                 children: [
@@ -2642,12 +2714,22 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Widget _categoryButton(String value, String label, IconData icon, AppColorScheme c) {
-    final selected = _transportCategory == value;
+  Widget _transportChip(String value, String label, IconData icon, AppColorScheme c) {
+    final activeChip = _transportCategory == 'private'
+        ? 'private'
+        : _commuteSubMode == 'grab_taxi'
+            ? 'grab_taxi'
+            : 'bus';
+    final selected = activeChip == value;
     return GestureDetector(
       onTap: () {
         setState(() {
-          _transportCategory = value;
+          if (value == 'private') {
+            _transportCategory = 'private';
+          } else {
+            _transportCategory = 'commute';
+            _commuteSubMode = value == 'grab_taxi' ? 'grab_taxi' : 'saver';
+          }
           _commuteLegs = [];
           _currentLegIndex = 0;
         });
@@ -2664,44 +2746,14 @@ class _MapScreenState extends State<MapScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 14, color: selected ? Colors.white : c.textMuted),
-            const SizedBox(width: 6),
+            Icon(icon, size: 13, color: selected ? Colors.white : c.textMuted),
+            const SizedBox(width: 4),
             Text(label,
                 style: TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600,
+                  fontSize: 11, fontWeight: FontWeight.w600,
                   color: selected ? Colors.white : c.textMuted,
                 )),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _subModeButton(String value, String label, AppColorScheme c) {
-    final selected = _commuteSubMode == value;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _commuteSubMode = value;
-          _commuteLegs = [];
-          _currentLegIndex = 0;
-        });
-        if (_routeStops.isNotEmpty) _calculateRoute(_routeStops);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.blue.withAlpha(220) : c.surfaceElevated,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: selected ? AppColors.blue : c.borderSubtle),
-        ),
-        child: Center(
-          child: Text(label,
-              style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w600,
-                color: selected ? Colors.white : c.textMuted,
-              )),
         ),
       ),
     );
