@@ -1111,6 +1111,13 @@ class _MapScreenState extends State<MapScreen> {
             maxZoom: 19,
             cameraConstraint: CameraConstraint.contain(bounds: _cebuBounds),
             onTap: (_, point) => _onMapTap(point),
+            // During navigation: disable pinchMove so pinch-zoom centres on the
+            // GPS position instead of the finger midpoint.
+            interactionOptions: InteractionOptions(
+              flags: _isNavigating
+                  ? InteractiveFlag.all & ~InteractiveFlag.pinchMove
+                  : InteractiveFlag.all,
+            ),
           ),
           children: [
             TileLayer(
