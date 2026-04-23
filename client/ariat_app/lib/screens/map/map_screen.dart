@@ -2672,34 +2672,81 @@ class _MapScreenState extends State<MapScreen> {
           // Multi-modal leg detail
           if (isMultiModal) ...[
             const SizedBox(height: 8),
-            ..._multiModalLegs.expand((mm) => mm.legs).map((leg) => Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
-                children: [
-                  Container(
-                    width: 8, height: 8,
-                    decoration: BoxDecoration(
-                        color: _modeColor(leg.mode), shape: BoxShape.circle),
+            ..._multiModalLegs.expand((mm) => mm.legs).map((leg) {
+              final isWalkLeg = leg.mode == 'walk';
+              final legColor = _modeColor(leg.mode);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: legColor.withAlpha(12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: legColor.withAlpha(45)),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                      child: Text(leg.instruction,
-                          style: TextStyle(fontSize: 11, color: c.text),
-                          overflow: TextOverflow.ellipsis)),
-                  const SizedBox(width: 8),
-                  Text('${leg.duration}m',
-                      style: TextStyle(fontSize: 10, color: c.textFaint)),
-                  if (leg.fare > 0) ...[
-                    const SizedBox(width: 6),
-                    Text('₱${leg.fare.toStringAsFixed(0)}',
-                        style: TextStyle(
-                            fontSize: 10,
-                            color: AppColors.amber,
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ],
-              ),
-            )),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 30, height: 30,
+                        decoration: BoxDecoration(
+                          color: legColor.withAlpha(30),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(_modeIcon(leg.mode), size: 15, color: legColor),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(leg.instruction,
+                            style: TextStyle(fontSize: 11, color: c.text),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('${leg.duration}m',
+                              style: TextStyle(fontSize: 10, color: c.textFaint)),
+                          Text('${leg.distance.toStringAsFixed(1)} km',
+                              style: TextStyle(fontSize: 10, color: c.textFaint)),
+                          const SizedBox(height: 3),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isWalkLeg
+                                  ? c.borderSubtle.withAlpha(40)
+                                  : AppColors.amber.withAlpha(22),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isWalkLeg
+                                    ? c.borderSubtle
+                                    : AppColors.amber.withAlpha(70),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  isWalkLeg ? 'Free' : '₱${leg.fare.toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: isWalkLeg ? c.textFaint : AppColors.amber,
+                                  ),
+                                ),
+                                Text('Fare',
+                                    style: TextStyle(fontSize: 8, color: c.textFaint)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
           ],
 
           // Commute-only-taxi warning
@@ -2792,12 +2839,37 @@ class _MapScreenState extends State<MapScreen> {
                         children: [
                           Text('${leg.duration}m',
                               style: TextStyle(fontSize: 10, color: c.textFaint)),
-                          if (leg.fare > 0)
-                            Text('₱${leg.fare.toStringAsFixed(0)}',
-                                style: TextStyle(
-                                    fontSize: 10,
-                                    color: AppColors.amber,
-                                    fontWeight: FontWeight.w600)),
+                          Text('${leg.distance.toStringAsFixed(1)} km',
+                              style: TextStyle(fontSize: 10, color: c.textFaint)),
+                          const SizedBox(height: 3),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isWalkLeg
+                                  ? c.borderSubtle.withAlpha(40)
+                                  : AppColors.amber.withAlpha(22),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isWalkLeg
+                                    ? c.borderSubtle
+                                    : AppColors.amber.withAlpha(70),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  isWalkLeg ? 'Free' : '₱${leg.fare.toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: isWalkLeg ? c.textFaint : AppColors.amber,
+                                  ),
+                                ),
+                                Text('Fare',
+                                    style: TextStyle(fontSize: 8, color: c.textFaint)),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ],
