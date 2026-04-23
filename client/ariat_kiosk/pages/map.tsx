@@ -244,9 +244,9 @@ const MapPage: NextPage = () => {
                 <Button
                   className="w-full h-12 text-base mt-2"
                   color="primary"
-                  onPress={() => openQR(selectedDest)}
+                  onPress={() => void router.push(`/plan?dest=${selectedDest.id}`)}
                 >
-                  Scan QR to Start Journey →
+                  ✨ Add to Itinerary →
                 </Button>
               </div>
             </div>

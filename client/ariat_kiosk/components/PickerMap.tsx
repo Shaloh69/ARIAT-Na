@@ -23,29 +23,54 @@ interface PickerMapProps {
 
 // ─── Pin factory ─────────────────────────────────────────────────────────────
 
-function createPin(isSelected: boolean, order: number): L.DivIcon {
+function createPin(isSelected: boolean, order: number, imageUrl?: string): L.DivIcon {
   if (isSelected) {
+    if (imageUrl) {
+      return L.divIcon({
+        className: "",
+        html: `
+          <div style="position:relative;width:42px;height:42px;">
+            <div style="
+              position:absolute;inset:-4px;border-radius:50%;
+              background:rgba(225,29,72,0.22);
+              animation:pinPulse 1.6s ease-in-out infinite;
+            "></div>
+            <div style="
+              position:absolute;inset:0;border-radius:50%;overflow:hidden;
+              border:2.5px solid #e11d48;
+              box-shadow:0 4px 18px rgba(225,29,72,0.7);cursor:pointer;
+            ">
+              <img src="${imageUrl}" style="width:100%;height:100%;object-fit:cover;display:block;"
+                   onerror="this.parentElement.style.background='#e11d48';this.style.display='none'"/>
+            </div>
+            <div style="
+              position:absolute;bottom:-2px;right:-2px;
+              width:18px;height:18px;border-radius:50%;
+              background:#e11d48;border:2px solid #fff;
+              display:flex;align-items:center;justify-content:center;
+              font-size:10px;font-weight:800;color:#fff;font-family:sans-serif;
+            ">${order}</div>
+          </div>`,
+        iconSize: [42, 42],
+        iconAnchor: [21, 21],
+        popupAnchor: [0, -26],
+      });
+    }
     return L.divIcon({
       className: "",
       html: `
         <div style="position:relative;width:36px;height:36px;">
-          <!-- glow ring -->
           <div style="
-            position:absolute;inset:-4px;
-            border-radius:50%;
+            position:absolute;inset:-4px;border-radius:50%;
             background:rgba(225,29,72,0.22);
             animation:pinPulse 1.6s ease-in-out infinite;
           "></div>
-          <!-- pin body -->
           <div style="
-            position:absolute;inset:0;
-            border-radius:50%;
-            background:#e11d48;
-            border:2.5px solid #fff;
+            position:absolute;inset:0;border-radius:50%;
+            background:#e11d48;border:2.5px solid #fff;
             box-shadow:0 4px 18px rgba(225,29,72,0.7);
             display:flex;align-items:center;justify-content:center;
-            font-size:14px;font-weight:800;color:#fff;font-family:sans-serif;
-            cursor:pointer;
+            font-size:14px;font-weight:800;color:#fff;font-family:sans-serif;cursor:pointer;
           ">${order}</div>
         </div>`,
       iconSize: [36, 36],
@@ -54,17 +79,31 @@ function createPin(isSelected: boolean, order: number): L.DivIcon {
     });
   }
 
+  if (imageUrl) {
+    return L.divIcon({
+      className: "",
+      html: `
+        <div style="
+          width:26px;height:26px;border-radius:50%;overflow:hidden;
+          border:2px solid rgba(255,255,255,0.75);
+          box-shadow:0 2px 8px rgba(0,0,0,0.55);cursor:pointer;
+        ">
+          <img src="${imageUrl}" style="width:100%;height:100%;object-fit:cover;display:block;"
+               onerror="this.parentElement.style.background='#334155';this.style.display='none'"/>
+        </div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13],
+      popupAnchor: [0, -17],
+    });
+  }
+
   return L.divIcon({
     className: "",
     html: `
       <div style="
-        width:18px;height:18px;
-        border-radius:50%;
-        background:#ffffff;
-        border:2px solid rgba(255,255,255,0.3);
-        box-shadow:0 2px 8px rgba(0,0,0,0.5);
-        cursor:pointer;
-        transition:transform .15s;
+        width:18px;height:18px;border-radius:50%;
+        background:#ffffff;border:2px solid rgba(255,255,255,0.3);
+        box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:pointer;
       "></div>`,
     iconSize: [18, 18],
     iconAnchor: [9, 9],
@@ -82,6 +121,7 @@ export default function PickerMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const destMapRef = useRef<Map<string, PickerDestination>>(new Map());
 
   // Keep latest callbacks in refs so marker event handlers stay fresh
   const selectedIdsRef = useRef(selectedIds);
@@ -149,11 +189,12 @@ export default function PickerMap({
       if (!dest.latitude || !dest.longitude) return;
       if (existing.has(dest.id)) return;
 
+      destMapRef.current.set(dest.id, dest);
       const isSelected = selectedIdsRef.current.includes(dest.id);
       const order = selectedIdsRef.current.indexOf(dest.id) + 1;
 
       const marker = L.marker([dest.latitude, dest.longitude], {
-        icon: createPin(isSelected, order),
+        icon: createPin(isSelected, order, dest.images?.[0]),
         zIndexOffset: isSelected ? 1000 : 0,
       })
         .addTo(map)
@@ -193,8 +234,9 @@ export default function PickerMap({
     markersRef.current.forEach((marker, id) => {
       const isSel = selectedIds.includes(id);
       const order = selectedIds.indexOf(id) + 1;
+      const imgUrl = destMapRef.current.get(id)?.images?.[0];
 
-      marker.setIcon(createPin(isSel, order));
+      marker.setIcon(createPin(isSel, order, imgUrl));
       marker.setZIndexOffset(isSel ? 1000 : 0);
     });
 

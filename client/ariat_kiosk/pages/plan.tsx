@@ -1,6 +1,7 @@
 import type { NextPage } from "next";
 
 import dynamic from "next/dynamic";
+import { useRouter } from "next/router";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@heroui/button";
 import { Chip } from "@heroui/chip";
@@ -131,6 +132,7 @@ const CEBU_CENTER = { lat: 10.3157, lon: 123.8854 };
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const KioskPlanPage: NextPage = () => {
+  const router = useRouter();
   const [planMode, setPlanMode] = useState<PlanMode | null>(null);
 
   // ── Pick-mode state ────────────────────────────────────────────────
@@ -169,6 +171,15 @@ const KioskPlanPage: NextPage = () => {
   const [kioskUser, setKioskUser] = useState<KioskAuthUser | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [claiming, setClaiming] = useState(false);
+
+  // Auto-enter pick mode when coming from map page with ?dest=ID
+  useEffect(() => {
+    const destId = router.query.dest as string | undefined;
+    if (destId && planMode === null) {
+      setSelectedIds([destId]);
+      setPlanMode("pick");
+    }
+  }, [router.query.dest, planMode]);
 
   // Fetch all destinations + categories for pick mode
   useEffect(() => {
@@ -569,11 +580,20 @@ const KioskPlanPage: NextPage = () => {
                       type="button"
                       onClick={() => toggleSelect(dest.id)}
                     >
-                      {isSel ? (
-                        <span className="picker-dest-badge">{selIdx + 1}</span>
-                      ) : (
-                        <span className="picker-dest-dot" />
-                      )}
+                      <div className="picker-dest-thumb">
+                        {dest.images?.[0] ? (
+                          <img
+                            alt=""
+                            style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 6 }}
+                            src={dest.images[0]}
+                          />
+                        ) : (
+                          <span style={{ fontSize: 16 }}>🗺️</span>
+                        )}
+                        {isSel && (
+                          <div className="picker-dest-thumb-badge">{selIdx + 1}</div>
+                        )}
+                      </div>
                       <div className="picker-dest-info">
                         <span className="picker-dest-name">{dest.name}</span>
                         {(dest.municipality ?? dest.category_name) && (

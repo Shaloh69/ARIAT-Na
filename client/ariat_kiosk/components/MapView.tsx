@@ -22,23 +22,50 @@ interface MapViewProps {
 const CEBU_CENTER: [number, number] = [10.3157, 123.8854];
 const DEFAULT_ZOOM = 10;
 
-// Custom red pin for selected, white pin for others
-function createPin(selected: boolean): L.DivIcon {
-  const color = selected ? "#e11d48" : "#ffffff";
+function createPin(selected: boolean, imageUrl?: string): L.DivIcon {
+  const size = selected ? 42 : 28;
+  const half = size / 2;
+  const border = selected
+    ? "3px solid #e11d48"
+    : "2px solid rgba(255,255,255,0.75)";
   const shadow = selected
+    ? "0 4px 18px rgba(225,29,72,0.75)"
+    : "0 2px 8px rgba(0,0,0,0.55)";
+
+  if (imageUrl) {
+    return L.divIcon({
+      className: "",
+      html: `
+        <div style="
+          position:relative;width:${size}px;height:${size}px;
+          border-radius:50%;overflow:hidden;
+          border:${border};box-shadow:${shadow};cursor:pointer;
+        ">
+          <img src="${imageUrl}" style="width:100%;height:100%;object-fit:cover;display:block;"
+               onerror="this.parentElement.style.background='#334155';this.style.display='none'"/>
+          ${selected ? '<div style="position:absolute;inset:0;background:rgba(225,29,72,0.18);border-radius:50%;"></div>' : ""}
+        </div>`,
+      iconSize: [size, size],
+      iconAnchor: [half, half],
+      popupAnchor: [0, -(half + 4)],
+    });
+  }
+
+  // Plain pin fallback
+  const color = selected ? "#e11d48" : "#ffffff";
+  const plainShadow = selected
     ? "0 4px 16px rgba(225,29,72,0.7)"
     : "0 2px 8px rgba(0,0,0,0.4)";
-
   return L.divIcon({
     className: "",
     html: `
       <div style="
-        width:20px; height:20px;
+        width:20px;height:20px;
         border-radius:50% 50% 50% 0;
         background:${color};
-        border: 2.5px solid ${selected ? "#fff" : "rgba(0,0,0,0.25)"};
-        box-shadow:${shadow};
-        transform: rotate(-45deg) translate(-2px,-2px);
+        border:2.5px solid ${selected ? "#fff" : "rgba(0,0,0,0.25)"};
+        box-shadow:${plainShadow};
+        transform:rotate(-45deg) translate(-2px,-2px);
         cursor:pointer;
       "></div>`,
     iconAnchor: [10, 20],
@@ -55,6 +82,7 @@ export default function MapView({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const destImageRef = useRef<Map<string, string | undefined>>(new Map());
 
   // Initialize map once
   useEffect(() => {
@@ -99,8 +127,10 @@ export default function MapView({
       if (!dest.latitude || !dest.longitude) return;
 
       const isSelected = dest.id === selectedId;
+      const imgUrl = dest.images?.[0];
+      destImageRef.current.set(dest.id, imgUrl);
       const marker = L.marker([dest.latitude, dest.longitude], {
-        icon: createPin(isSelected),
+        icon: createPin(isSelected, imgUrl),
         title: dest.name,
         zIndexOffset: isSelected ? 1000 : 0,
       });
@@ -137,8 +167,9 @@ export default function MapView({
 
     // Update marker icons
     markersRef.current.forEach((marker, id) => {
-      marker.setIcon(createPin(id === selectedId));
-      marker.setZIndexOffset(id === selectedId ? 1000 : 0);
+      const isSel = id === selectedId;
+      marker.setIcon(createPin(isSel, destImageRef.current.get(id)));
+      marker.setZIndexOffset(isSel ? 1000 : 0);
     });
   }, [selectedId, destinations]);
 

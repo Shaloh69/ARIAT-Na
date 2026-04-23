@@ -8,6 +8,7 @@ import '../../theme/app_theme.dart';
 class ItineraryParams {
   final double availableHours;
   final double budget;
+  final int days;
   final List<String> interests;
   final int maxStops;
   final String optimizeFor;
@@ -16,6 +17,7 @@ class ItineraryParams {
   ItineraryParams({
     required this.availableHours,
     required this.budget,
+    required this.days,
     required this.interests,
     required this.maxStops,
     required this.optimizeFor,
@@ -25,6 +27,7 @@ class ItineraryParams {
   Map<String, dynamic> toJson() => {
     'available_hours': availableHours,
     'budget': budget,
+    'days': days,
     'interests': interests,
     'max_stops': maxStops,
     'optimize_for': optimizeFor,
@@ -53,6 +56,7 @@ class _ItineraryBottomSheet extends StatefulWidget {
 class _ItineraryBottomSheetState extends State<_ItineraryBottomSheet> {
   double _hours = 4;
   double _budget = 0;
+  int _days = 1;
   int _maxStops = 3;
   String _optimizeFor = 'time';
   String _transportMode = 'private_car';
@@ -65,11 +69,9 @@ class _ItineraryBottomSheetState extends State<_ItineraryBottomSheet> {
   ];
 
   static final _transportOptions = [
-    ('private_car', 'Car',     FluentIcons.car),
-    ('bus_commute', 'Bus',     FluentIcons.bus_solid),
-    ('taxi',        'Taxi',    FluentIcons.taxi),
-    ('ferry',       'Ferry',   FluentIcons.airplane),
-    ('walk',        'Walk',    FluentIcons.location),
+    ('private_car', 'Private',   FluentIcons.car),
+    ('bus_commute', 'Bus',       FluentIcons.bus_solid),
+    ('taxi',        'Grab/Taxi', FluentIcons.taxi),
   ];
 
   @override
@@ -188,8 +190,45 @@ class _ItineraryBottomSheetState extends State<_ItineraryBottomSheet> {
                   ),
                   SizedBox(height: 16),
 
+                  // Days
+                  _label('Number of Days: $_days'),
+                  SizedBox(height: 8),
+                  Row(
+                    children: [1, 2, 3, 4, 5, 6, 7].map((d) {
+                      final sel = _days == d;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _days = d),
+                          child: Container(
+                            width: 36, height: 36,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: sel ? AppColors.red500 : c.surfaceElevated,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: sel ? AppColors.red500 : c.borderSubtle,
+                              ),
+                            ),
+                            child: Text(
+                              '$d',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: sel ? FontWeight.w700 : FontWeight.w400,
+                                color: sel ? Colors.white : c.textMuted,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  SizedBox(height: 14),
+
                   // Hours
-                  _label('Available Hours: ${_hours.toStringAsFixed(1)} hrs'),
+                  _label(_days > 1
+                      ? 'Hours per Day: ${_hours.toStringAsFixed(1)} hrs'
+                      : 'Available Hours: ${_hours.toStringAsFixed(1)} hrs'),
                   Slider(
                     value: _hours,
                     min: 1,
@@ -352,6 +391,7 @@ class _ItineraryBottomSheetState extends State<_ItineraryBottomSheet> {
     Navigator.of(context).pop(ItineraryParams(
       availableHours: _hours,
       budget: _budget,
+      days: _days,
       interests: _interests.toList(),
       maxStops: _maxStops,
       optimizeFor: _optimizeFor,
