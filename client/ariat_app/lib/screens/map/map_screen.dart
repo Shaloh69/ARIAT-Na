@@ -1690,6 +1690,49 @@ class _MapScreenState extends State<MapScreen> {
                             ),
                           ],
                         ),
+                        // Action strip for walk / book-a-ride legs
+                        if (leg.mode == 'walk' ||
+                            (!_transitModes.contains(leg.mode) && leg.mode != 'ferry')) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: leg.mode == 'walk'
+                                  ? const Color(0xFF9ca3af).withAlpha(25)
+                                  : AppColors.amber.withAlpha(25),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  leg.mode == 'walk' ? FluentIcons.location : FluentIcons.taxi,
+                                  size: 12,
+                                  color: leg.mode == 'walk'
+                                      ? const Color(0xFF9ca3af)
+                                      : AppColors.amber,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    leg.mode == 'walk'
+                                        ? 'Follow walking route to ${leg.to.name}'
+                                        : 'Hail or book a ride to ${leg.to.name}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                      color: leg.mode == 'walk'
+                                          ? const Color(0xFF9ca3af)
+                                          : AppColors.amber,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         // "Next:" preview row — shown within 500 m of a leg transition
                         if (isApproaching && nextLeg != null) ...[
                           const SizedBox(height: 6),
@@ -2683,34 +2726,78 @@ class _MapScreenState extends State<MapScreen> {
           // Commute leg detail
           if (isCommute) ...[
             const SizedBox(height: 8),
-            ..._commuteLegs.map((leg) => Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
-                children: [
-                  Container(
-                    width: 8, height: 8,
-                    decoration: BoxDecoration(
-                        color: _modeColor(leg.mode), shape: BoxShape.circle),
+            ..._commuteLegs.map((leg) {
+              final isWalkLeg = leg.mode == 'walk';
+              final isTransitLeg = _transitModes.contains(leg.mode);
+              final legColor = _modeColor(leg.mode);
+              final typeLabel = isWalkLeg ? 'Walk' : isTransitLeg ? 'Ride' : 'Book';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: legColor.withAlpha(12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: legColor.withAlpha(45)),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                      child: Text(leg.instruction,
-                          style: TextStyle(fontSize: 11, color: c.text),
-                          overflow: TextOverflow.ellipsis)),
-                  const SizedBox(width: 8),
-                  Text('${leg.duration}m',
-                      style: TextStyle(fontSize: 10, color: c.textFaint)),
-                  if (leg.fare > 0) ...[
-                    const SizedBox(width: 6),
-                    Text('₱${leg.fare.toStringAsFixed(0)}',
-                        style: TextStyle(
-                            fontSize: 10,
-                            color: AppColors.amber,
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ],
-              ),
-            )),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Mode icon badge
+                      Container(
+                        width: 30, height: 30,
+                        decoration: BoxDecoration(
+                          color: legColor.withAlpha(30),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(_modeIcon(leg.mode), size: 15, color: legColor),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(leg.instruction,
+                                style: TextStyle(fontSize: 11, color: c.text),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 3),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: legColor.withAlpha(30),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(typeLabel,
+                                  style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      color: legColor)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('${leg.duration}m',
+                              style: TextStyle(fontSize: 10, color: c.textFaint)),
+                          if (leg.fare > 0)
+                            Text('₱${leg.fare.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.amber,
+                                    fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
           ],
           const SizedBox(height: 10),
 

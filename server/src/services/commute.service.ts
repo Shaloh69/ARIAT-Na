@@ -95,7 +95,11 @@ function calcFare(row: FareRow, distKm: number): number {
   const raw     = row.base_fare + row.per_km_rate * distKm;
   const withMin = Math.max(row.minimum_fare, raw);
   const mult    = row.routing_behavior === "direct_fare" ? (row.peak_hour_multiplier ?? 1) : 1;
-  return Math.round(withMin * mult * 100) / 100;
+  const base    = Math.round(withMin * mult * 100) / 100;
+  if (row.routing_behavior !== "direct_fare") return base;
+  // ₱2/min time-based charge for ride-hailing (estimated at 35 km/h average speed)
+  const estMinutes = Math.ceil(distKm / 35 * 60);
+  return Math.round((base + 2 * estMinutes) * 100) / 100;
 }
 
 function feederFare(dist: number, cheapestDirect: FareRow | null): number {
@@ -309,6 +313,13 @@ async function buildLeg(
   try {
     result = await calculateRoute(fromLat, fromLon, toLat, toLon, optimizeFor, mode === "walk");
   } catch { /* fall through */ }
+  // If A* found no road path and this is not a walk, retry with bidirectional graph as fallback
+  if (mode !== "walk" && (!result || result.isWalkFallback)) {
+    try {
+      const r2 = await calculateRoute(fromLat, fromLon, toLat, toLon, optimizeFor, true);
+      if (r2 && !r2.isWalkFallback) result = r2;
+    } catch { /* fall through */ }
+  }
 
   const distKm = result?.totalDistance ?? haversine(fromLat, fromLon, toLat, toLon);
   const speedKmh: Record<string, number> = {
@@ -647,9 +658,20 @@ async function buildChainLegs(
     const bfsGeo = route.road_ids.length > 0
       ? await buildTransitLegGeometry(route.road_ids, boardNode.id, alightNode.id)
       : null;
-    const geometry: [number, number][] = bfsGeo ?? [
-      [boardNode.lat, boardNode.lon], [alightNode.lat, alightNode.lon],
-    ];
+    let geometry: [number, number][];
+    if (bfsGeo) {
+      geometry = bfsGeo;
+    } else {
+      // BFS on route-only roads failed — fall back to full A* (ignores one-way)
+      try {
+        const r = await calculateRoute(
+          boardNode.lat, boardNode.lon, alightNode.lat, alightNode.lon, "time", true,
+        );
+        geometry = r.routeGeometry ?? [[boardNode.lat, boardNode.lon], [alightNode.lat, alightNode.lon]];
+      } catch {
+        geometry = [[boardNode.lat, boardNode.lon], [alightNode.lat, alightNode.lon]];
+      }
+    }
 
     const speed = TRANSIT_SPEEDS[route.transport_type] ?? 22;
     legs.push({
