@@ -1,18 +1,17 @@
 /**
  * Commute Routing Service
  *
- * Builds multi-leg routes for "Commute" mode.
- *
  * Two sub-modes:
- *   saver     — chains walk → corridor_stops (bus/jeep) → corridor_anywhere
- *               (tricycle/habal) → direct_fare (maxim) → taxi fallback
- *   grab_taxi — single direct_fare leg using the best available ride-hailing
- *               mode (admin-configurable via fare_configs)
+ *   saver     — Transit-first.  Finds the cheapest combination of 1, 2, or 3
+ *               transit routes to cover the trip.  Board/alight = nearest road
+ *               node on the route corridor for ALL route types (corridor_stops
+ *               and corridor_anywhere treated identically — no bus-stop marker
+ *               required).  Feeder gaps use walk (≤500 m) or cheapest
+ *               direct_fare.  Falls back to direct_fare with note when no
+ *               transit route is found.
+ *   grab_taxi — Single direct_fare leg; admin-configurable via fare_configs.
  *
- * Ferry is injected automatically (both modes) when A* finds no road path.
- *
- * All mode priorities and fares are driven by fare_configs — no transport
- * type is hardcoded beyond the routing_behavior grouping.
+ * Ferry is injected automatically when A* finds no road path.
  */
 
 import { pool } from "../config/database";
@@ -42,16 +41,43 @@ interface StopNode {
   point_type: string;
 }
 
+interface RouteRecord {
+  id: string;
+  route_name: string;
+  transport_type: string;
+  road_ids: string[];
+  stop_ids: string[];
+  fare: FareRow;
+  nodes: StopNode[];   // all road-graph intersection nodes on this corridor
+}
+
+interface ChainLeg {
+  route: RouteRecord;
+  boardNode: StopNode;
+  alightNode: StopNode;
+}
+
+interface TransitChain {
+  chainLegs: ChainLeg[];
+  transfers: { from: StopNode; to: StopNode }[];
+  totalFare: number;
+}
+
 export interface CommuteRoute {
   legs: TransportLeg[];
-  totalDistance: number;   // km
-  totalDuration: number;   // minutes
-  totalFare: number;       // PHP
-  summary: string;         // "Walk → Tricycle → Bus → Walk"
+  totalDistance: number;
+  totalDuration: number;
+  totalFare: number;
+  summary: string;
   subMode: CommuteSubMode;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const MAX_BOARD_KM    = 15;   // max feeder distance user → first board node
+const MAX_TRANSFER_KM = 5;    // max gap between consecutive transit hops
+
+// ─── Pure helpers ─────────────────────────────────────────────────────────────
 
 function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
@@ -66,16 +92,77 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number): numb
 }
 
 function calcFare(row: FareRow, distKm: number): number {
-  const raw = row.base_fare + row.per_km_rate * distKm;
+  const raw     = row.base_fare + row.per_km_rate * distKm;
   const withMin = Math.max(row.minimum_fare, raw);
-  // Apply peak multiplier only for direct_fare modes
-  const multiplier =
-    row.routing_behavior === "direct_fare" ? (row.peak_hour_multiplier ?? 1) : 1;
-  return Math.round(withMin * multiplier * 100) / 100;
+  const mult    = row.routing_behavior === "direct_fare" ? (row.peak_hour_multiplier ?? 1) : 1;
+  return Math.round(withMin * mult * 100) / 100;
 }
 
+function feederFare(dist: number, cheapestDirect: FareRow | null): number {
+  if (dist <= 0.05) return 0;
+  if (dist <= 0.5)  return 0;              // walkable
+  if (!cheapestDirect) return Infinity;    // no mode available
+  return calcFare(cheapestDirect, dist);
+}
 
-/** Load all active fare configs ordered by display_order (cheapest-first). */
+function parseJsonArray(value: any): string[] {
+  if (Array.isArray(value)) return value as string[];
+  if (typeof value === "string") return JSON.parse(value || "[]");
+  return [];
+}
+
+/**
+ * In-memory nearest-node finder.
+ * When destLat/destLon are provided, applies a forward-progress filter:
+ * only considers nodes that are within 5 % of the user-to-dest distance from
+ * the destination, preventing backtracking board points.
+ */
+function findNearestNodeInMemory(
+  lat: number, lon: number,
+  nodes: StopNode[],
+  destLat?: number, destLon?: number,
+): StopNode | null {
+  if (!nodes.length) return null;
+
+  let candidates = nodes;
+  if (destLat !== undefined && destLon !== undefined) {
+    const userToDest = haversine(lat, lon, destLat, destLon);
+    const forward    = nodes.filter(
+      n => haversine(n.lat, n.lon, destLat, destLon) <= userToDest * 1.05,
+    );
+    if (forward.length > 0) candidates = forward;
+  }
+
+  let best = candidates[0];
+  let bestDist = haversine(lat, lon, best.lat, best.lon);
+  for (let i = 1; i < candidates.length; i++) {
+    const d = haversine(lat, lon, candidates[i].lat, candidates[i].lon);
+    if (d < bestDist) { bestDist = d; best = candidates[i]; }
+  }
+  return best;
+}
+
+/** O(M × N) search for the nearest pair of nodes between two route corridors. */
+function findClosestTransfer(
+  nodesA: StopNode[],
+  nodesB: StopNode[],
+): { a: StopNode; b: StopNode; dist: number } | null {
+  if (!nodesA.length || !nodesB.length) return null;
+
+  let bestA = nodesA[0], bestB = nodesB[0];
+  let bestDist = haversine(nodesA[0].lat, nodesA[0].lon, nodesB[0].lat, nodesB[0].lon);
+
+  for (const a of nodesA) {
+    for (const b of nodesB) {
+      const d = haversine(a.lat, a.lon, b.lat, b.lon);
+      if (d < bestDist) { bestDist = d; bestA = a; bestB = b; }
+    }
+  }
+  return { a: bestA, b: bestB, dist: bestDist };
+}
+
+// ─── DB helpers ───────────────────────────────────────────────────────────────
+
 async function loadFares(): Promise<FareRow[]> {
   const [rows]: any = await pool.execute(
     `SELECT transport_type, display_name, base_fare, per_km_rate,
@@ -88,117 +175,102 @@ async function loadFares(): Promise<FareRow[]> {
 }
 
 /**
- * Load all transit-accessible stop nodes (bus_stop, bus_terminal)
- * within maxKm of a position.  Returns sorted nearest-first.
+ * Load all active transit routes with pre-populated road-node sets.
+ * 3 bulk DB queries total regardless of how many routes exist.
  */
-async function findBusStopsNear(
-  lat: number,
-  lon: number,
-  maxKm: number,
-): Promise<StopNode[]> {
-  const [rows]: any = await pool.execute(
-    `SELECT id, name, latitude AS lat, longitude AS lon, point_type
-     FROM intersections
-     WHERE point_type IN ('bus_stop','bus_terminal')`,
+async function loadAllTransitRoutes(fares: FareRow[]): Promise<RouteRecord[]> {
+  const [routeRows]: any = await pool.execute(
+    `SELECT id, route_name, transport_type, road_ids, stop_ids
+     FROM transit_routes WHERE is_active = TRUE`,
   );
-  return (rows as any[])
-    .map((r: any) => ({ ...r, _dist: haversine(lat, lon, r.lat, r.lon) }))
-    .filter((r: any) => r._dist <= maxKm)
-    .sort((a: any, b: any) => a._dist - b._dist) as StopNode[];
-}
+  if (!(routeRows as any[]).length) return [];
 
-/**
- * Find the nearest bus_stop that is also "toward" the destination —
- * i.e. the stop is closer to the destination than the current position is.
- */
-async function findBusStopToward(
-  fromLat: number,
-  fromLon: number,
-  toLat: number,
-  toLon: number,
-  maxKm: number,
-): Promise<StopNode | null> {
-  const stops = await findBusStopsNear(fromLat, fromLon, maxKm);
-  const distTotal = haversine(fromLat, fromLon, toLat, toLon);
-  // Keep only stops that bring us meaningfully closer (≥ 10 % progress)
-  const useful = stops.filter(
-    (s) => haversine(s.lat, s.lon, toLat, toLon) < distTotal * 0.9,
-  );
-  return useful[0] ?? null;
-}
+  // Collect all road IDs across every route
+  const allRoadIds = new Set<string>();
+  for (const row of routeRows as any[]) {
+    for (const rid of parseJsonArray(row.road_ids)) allRoadIds.add(rid);
+  }
 
-/**
- * Find the nearest road-graph node for a corridor_anywhere route.
- * Collects every start/end intersection from the route's road_ids.
- * Falls back to stop_ids if road_ids yield no nodes.
- *
- * destLat/destLon (optional): when provided, only considers nodes that make
- * forward progress toward the destination — i.e. the node must be closer to
- * the destination than the caller's position.  This prevents picking a board
- * point that requires the user to backtrack away from their destination.
- * If no forward-progress node exists the filter is relaxed (all nodes used).
- */
-async function findNearestRoadNodeOnRoute(
-  lat: number,
-  lon: number,
-  roadIds: string[],
-  stopIds: string[],
-  destLat?: number,
-  destLon?: number,
-): Promise<StopNode | null> {
-  let nodeIds: string[] = [];
-  if (roadIds.length) {
-    const placeholders = roadIds.map(() => "?").join(",");
+  const roadToEndpoints = new Map<string, { start: string; end: string }>();
+  const allNodeIds      = new Set<string>();
+
+  if (allRoadIds.size > 0) {
+    const roadIdList     = Array.from(allRoadIds);
+    const placeholders   = roadIdList.map(() => "?").join(",");
     const [roadRows]: any = await pool.execute(
-      `SELECT start_intersection_id, end_intersection_id
+      `SELECT id, start_intersection_id, end_intersection_id
        FROM roads WHERE id IN (${placeholders}) AND is_active = TRUE`,
-      roadIds,
+      roadIdList,
     );
-    const seen = new Set<string>();
     for (const r of roadRows as any[]) {
-      if (r.start_intersection_id) seen.add(r.start_intersection_id);
-      if (r.end_intersection_id)   seen.add(r.end_intersection_id);
+      roadToEndpoints.set(r.id, {
+        start: r.start_intersection_id,
+        end:   r.end_intersection_id,
+      });
+      if (r.start_intersection_id) allNodeIds.add(r.start_intersection_id);
+      if (r.end_intersection_id)   allNodeIds.add(r.end_intersection_id);
     }
-    nodeIds = Array.from(seen);
   }
 
-  if (!nodeIds.length) nodeIds = [...stopIds];
-  if (!nodeIds.length) return null;
+  // Also collect stop_ids as fallback node sources
+  for (const row of routeRows as any[]) {
+    for (const sid of parseJsonArray(row.stop_ids)) allNodeIds.add(sid);
+  }
 
-  const nodePlaceholders = nodeIds.map(() => "?").join(",");
-  const [rows]: any = await pool.execute(
-    `SELECT id, name, latitude AS lat, longitude AS lon, point_type
-     FROM intersections WHERE id IN (${nodePlaceholders})`,
-    nodeIds,
-  );
-
-  let candidates = rows as any[];
-
-  // Forward-progress filter: only keep nodes closer to destination than caller.
-  // 5 % tolerance handles minor detours near the user's position.
-  if (destLat !== undefined && destLon !== undefined && candidates.length > 0) {
-    const userToDest = haversine(lat, lon, destLat, destLon);
-    const forward = candidates.filter(
-      (n: any) => haversine(n.lat, n.lon, destLat, destLon) <= userToDest * 1.05,
+  const nodeMap = new Map<string, StopNode>();
+  if (allNodeIds.size > 0) {
+    const nodeIdList       = Array.from(allNodeIds);
+    const nodePlaceholders = nodeIdList.map(() => "?").join(",");
+    const [nodeRows]: any  = await pool.execute(
+      `SELECT id, name, latitude AS lat, longitude AS lon, point_type
+       FROM intersections WHERE id IN (${nodePlaceholders})`,
+      nodeIdList,
     );
-    if (forward.length > 0) candidates = forward; // prefer forward nodes
-    // else fall through — relax filter, use all nodes
+    for (const n of nodeRows as any[]) nodeMap.set(n.id, n as StopNode);
   }
 
-  let best: StopNode | null = null;
-  let bestDist = Infinity;
-  for (const r of candidates) {
-    const d = haversine(lat, lon, r.lat, r.lon);
-    if (d < bestDist) { bestDist = d; best = r as StopNode; }
+  const routes: RouteRecord[] = [];
+  for (const row of routeRows as any[]) {
+    const fare = fares.find(f => f.transport_type === row.transport_type);
+    if (!fare) continue;
+
+    const roadIds = parseJsonArray(row.road_ids);
+    const stopIds = parseJsonArray(row.stop_ids);
+
+    const nodeIdSet = new Set<string>();
+    for (const rid of roadIds) {
+      const ep = roadToEndpoints.get(rid);
+      if (ep) {
+        if (ep.start) nodeIdSet.add(ep.start);
+        if (ep.end)   nodeIdSet.add(ep.end);
+      }
+    }
+    if (nodeIdSet.size === 0) {
+      for (const sid of stopIds) nodeIdSet.add(sid);
+    }
+
+    const nodes: StopNode[] = [];
+    for (const nid of nodeIdSet) {
+      const n = nodeMap.get(nid);
+      if (n) nodes.push(n);
+    }
+    if (nodes.length === 0) continue;
+
+    routes.push({
+      id: row.id,
+      route_name: row.route_name,
+      transport_type: row.transport_type,
+      road_ids: roadIds,
+      stop_ids: stopIds,
+      fare,
+      nodes,
+    });
   }
-  return best;
+  return routes;
 }
 
-/** Find the nearest pier within maxKm. */
 async function findNearestPier(
-  lat: number,
-  lon: number,
-  maxKm = 15,
+  lat: number, lon: number, maxKm = 15,
 ): Promise<StopNode | null> {
   const [rows]: any = await pool.execute(
     `SELECT id, name, latitude AS lat, longitude AS lon, point_type
@@ -213,10 +285,6 @@ async function findNearestPier(
   return best;
 }
 
-/**
- * Check whether A* can physically reach the destination over roads.
- * Returns false when pathfinding returns no route (island / water gap).
- */
 async function canReachByRoad(
   fromLat: number, fromLon: number,
   toLat: number, toLon: number,
@@ -229,10 +297,6 @@ async function canReachByRoad(
   }
 }
 
-/**
- * Build a single TransportLeg via A* pathfinding.
- * Falls back to straight-line geometry + Haversine ETA if routing fails.
- */
 async function buildLeg(
   fromLat: number, fromLon: number, fromName: string,
   toLat: number, toLon: number, toName: string,
@@ -246,14 +310,14 @@ async function buildLeg(
     result = await calculateRoute(fromLat, fromLon, toLat, toLon, optimizeFor);
   } catch { /* fall through */ }
 
-  const distKm  = result?.totalDistance  ?? haversine(fromLat, fromLon, toLat, toLon);
+  const distKm = result?.totalDistance ?? haversine(fromLat, fromLon, toLat, toLon);
   const speedKmh: Record<string, number> = {
     walk: 5, tricycle: 20, habal_habal: 30, jeepney: 22,
     bus: 25, bus_ac: 25, bus_commute: 25, taxi: 35,
     private_car: 40, ferry: 25,
   };
-  const speed     = speedKmh[mode] ?? 25;
-  const duration  = result?.estimatedTime ?? Math.max(1, Math.round((distKm / speed) * 60));
+  const speed    = speedKmh[mode] ?? 25;
+  const duration = result?.estimatedTime ?? Math.max(1, Math.round((distKm / speed) * 60));
   const geometry: [number, number][] = result?.routeGeometry ?? [
     [fromLat, fromLon], [toLat, toLon],
   ];
@@ -261,7 +325,7 @@ async function buildLeg(
   return {
     mode: mode as TransportLeg["mode"],
     from: { name: fromName, lat: fromLat, lon: fromLon },
-    to:   { name: toName,   lat: toLat,   lon: toLon   },
+    to:   { name: toName,   lat: toLat,   lon: toLon },
     distance: Math.round(distKm * 100) / 100,
     duration,
     fare,
@@ -286,7 +350,6 @@ async function injectFerryLegs(
 
   const legs: TransportLeg[] = [];
 
-  // Walk / tricycle to source pier
   const toPierDist = haversine(fromLat, fromLon, srcPier.lat, srcPier.lon);
   if (toPierDist > 0.05) {
     const landMode = toPierDist <= 0.5 ? "walk" : "tricycle";
@@ -300,7 +363,6 @@ async function injectFerryLegs(
     ));
   }
 
-  // Ferry crossing
   const ferryDist = haversine(srcPier.lat, srcPier.lon, destPier.lat, destPier.lon);
   legs.push(await buildLeg(
     srcPier.lat, srcPier.lon, srcPier.name,
@@ -310,17 +372,11 @@ async function injectFerryLegs(
     `Board ferry at ${srcPier.name}. Arrive at ${destPier.name}`,
   ));
 
-  // From dest pier onward (remaining land legs built by caller)
   return legs;
 }
 
-// ─── Transit geometry reconstruction ──────────────────────────────────────────
+// ─── Transit leg geometry ─────────────────────────────────────────────────────
 
-/**
- * Rebuilds the polyline for a transit leg using the route's road_ids.
- * Builds a mini-graph from those roads and BFS from boardStopId → alightStopId.
- * Returns null when the path cannot be traced (caller should try the next route).
- */
 async function buildTransitLegGeometry(
   roadIds: string[],
   boardStopId: string,
@@ -359,7 +415,6 @@ async function buildTransitLegGeometry(
     }
   }
 
-  // BFS — shortest hop-count path through the mini-graph
   type QItem = { node: string; path: Array<{ road: RoadRow; reversed: boolean }> };
   const queue: QItem[] = [{ node: boardStopId, path: [] }];
   const visited = new Set<string>([boardStopId]);
@@ -384,286 +439,332 @@ async function buildTransitLegGeometry(
   return null;
 }
 
-// ─── Transit corridor check ───────────────────────────────────────────────────
+// ─── Transit chain search ─────────────────────────────────────────────────────
 
 /**
- * Find an active transit_route that serves both ends of the trip.
+ * Score all 1-hop, 2-hop, and 3-hop transit route combinations.
+ * Returns the combination with the lowest total fare, or null if none valid.
  *
- * corridor_stops  — board AND alight at designated bus stops/terminals only.
- *                   Alight stop must be within 1 km of destination.
- *
- * corridor_anywhere — board AND alight at the nearest road-graph node
- *                     (any intersection endpoint in road_ids) to user /
- *                     destination respectively. The vehicle follows the
- *                     assigned corridor regardless; the user alights at
- *                     the node closest to their destination, then
- *                     walk / ride the remaining gap.
- *                     Feeder legs: walk ≤0.5 km, corridor_anywhere ride,
- *                     or taxi/maxim/grab fallback.
- *
- * BFS mini-graph from road_ids gives road-following geometry.
- * If BFS board→alight fails the route is skipped (wrong direction / gap).
+ * Progress guard: for each hop, the alight node must be closer to the
+ * destination than the board node.  For multi-hop chains, each subsequent
+ * hop must also improve over the previous hop's alight position.
  */
-async function tryCorridorRoute(
+function findBestTransitChain(
   fromLat: number, fromLon: number,
   toLat: number, toLon: number,
-  allModes: FareRow[],
-  directFareModes: FareRow[],
-): Promise<TransportLeg[] | null> {
-  if (allModes.length === 0) return null;
+  routes: RouteRecord[],
+  cheapestDirect: FareRow | null,
+): TransitChain | null {
+  let best: TransitChain | null = null;
 
-  const MAX_BOARD_KM = 15;
-  // Pre-fetch for corridor_stops only — these need a designated stop within 1 km
-  const toStopsForFixed = await findBusStopsNear(toLat, toLon, 1.0);
+  function consider(candidate: TransitChain): void {
+    if (!isFinite(candidate.totalFare)) return;
+    if (!best || candidate.totalFare < best.totalFare) best = candidate;
+  }
 
-  for (const mode of allModes) {
-    const [routes]: any = await pool.execute(
-      `SELECT id, route_name, stop_ids, road_ids, transport_type, pickup_mode
-       FROM transit_routes
-       WHERE transport_type = ? AND is_active = TRUE`,
-      [mode.transport_type],
-    );
+  // ── 1-hop ──────────────────────────────────────────────────────────────────
+  for (const route of routes) {
+    const boardNode = findNearestNodeInMemory(fromLat, fromLon, route.nodes, toLat, toLon);
+    if (!boardNode) continue;
+    const alightNode = findNearestNodeInMemory(toLat, toLon, route.nodes);
+    if (!alightNode || boardNode.id === alightNode.id) continue;
 
-    for (const route of routes as any[]) {
-      const stopIds: string[] = Array.isArray(route.stop_ids)
-        ? route.stop_ids
-        : typeof route.stop_ids === "string" ? JSON.parse(route.stop_ids || "[]") : [];
-      const roadIds: string[] = Array.isArray(route.road_ids)
-        ? route.road_ids
-        : typeof route.road_ids === "string" ? JSON.parse(route.road_ids || "[]") : [];
-      const pickupMode = route.pickup_mode as string;
+    const boardDist    = haversine(fromLat, fromLon, boardNode.lat, boardNode.lon);
+    if (boardDist > MAX_BOARD_KM) continue;
 
-      const effectiveAnywhere =
-        pickupMode === "anywhere" || mode.routing_behavior === "corridor_anywhere";
+    const boardToDest  = haversine(boardNode.lat, boardNode.lon, toLat, toLon);
+    const alightToDest = haversine(alightNode.lat, alightNode.lon, toLat, toLon);
+    if (alightToDest >= boardToDest) continue;
 
-      // ── Determine alight stop ────────────────────────────────────────────
-      // corridor_anywhere: nearest road node on THIS route to the destination.
-      //   The bus always follows its corridor; user alights at the closest
-      //   point on the route to their destination, then covers the last gap.
-      // corridor_stops: must be a designated stop within 1 km of destination.
-      let alightStop: StopNode;
-      if (effectiveAnywhere) {
-        const nearestAlight = await findNearestRoadNodeOnRoute(toLat, toLon, roadIds, stopIds);
-        if (!nearestAlight) continue;
-        alightStop = nearestAlight;
-      } else {
-        if (!toStopsForFixed.length) continue;
-        const alightCandidate = toStopsForFixed.find(s => stopIds.includes(s.id));
-        if (!alightCandidate) continue;
-        alightStop = alightCandidate;
-      }
+    const transitDist = haversine(boardNode.lat, boardNode.lon, alightNode.lat, alightNode.lon);
+    consider({
+      chainLegs: [{ route, boardNode, alightNode }],
+      transfers: [],
+      totalFare: feederFare(boardDist, cheapestDirect)
+               + calcFare(route.fare, transitDist)
+               + feederFare(alightToDest, cheapestDirect),
+    });
+  }
 
-      // ── Determine board stop ─────────────────────────────────────────────
-      let boardStop: StopNode;
-      let boardDist = 0;
-      if (effectiveAnywhere) {
-        // Nearest road-graph node to user that makes FORWARD PROGRESS toward
-        // destination — prevents routing the user away from their destination
-        // to reach a board point, then back again (backtracking).
-        const nearestNode = await findNearestRoadNodeOnRoute(
-          fromLat, fromLon, roadIds, stopIds, toLat, toLon,
-        );
-        if (!nearestNode) continue;
-        boardStop = nearestNode;
-        boardDist = haversine(fromLat, fromLon, boardStop.lat, boardStop.lon);
-      } else {
-        const fromStops = await findBusStopsNear(fromLat, fromLon, MAX_BOARD_KM);
-        const candidate = fromStops.find(s => stopIds.includes(s.id));
-        if (!candidate) continue;
-        boardStop = candidate;
-        boardDist = haversine(fromLat, fromLon, boardStop.lat, boardStop.lon);
-      }
-      if (boardStop.id === alightStop.id) continue;
+  // ── 2-hop ──────────────────────────────────────────────────────────────────
+  for (let i = 0; i < routes.length; i++) {
+    const r1 = routes[i];
+    for (let j = 0; j < routes.length; j++) {
+      if (j === i) continue;
+      const r2 = routes[j];
 
-      // Route must make net progress: alight must be closer to destination than
-      // board. Rejects routes that go the wrong direction (e.g. "Parkmall to
-      // Bayfront" when heading south to Anjo World).
-      const boardToDest = haversine(boardStop.lat, boardStop.lon, toLat, toLon);
-      const alightToDestDist = haversine(alightStop.lat, alightStop.lon, toLat, toLon);
-      if (alightToDestDist >= boardToDest) continue;
+      const t1 = findClosestTransfer(r1.nodes, r2.nodes);
+      if (!t1 || t1.dist > MAX_TRANSFER_KM) continue;
 
-      const legs: TransportLeg[] = [];
+      const boardR1 = findNearestNodeInMemory(fromLat, fromLon, r1.nodes, toLat, toLon);
+      if (!boardR1) continue;
+      const alightR2 = findNearestNodeInMemory(toLat, toLon, r2.nodes);
+      if (!alightR2) continue;
 
-      // ── Leg A: reach the board stop ─────────────────────────────────────
-      if (boardDist > 0.05) {
-        if (boardDist <= 0.5) {
-          legs.push(await buildLeg(
-            fromLat, fromLon, "Current Location",
-            boardStop.lat, boardStop.lon, boardStop.name,
-            "walk", 0,
-            `Walk ${Math.round(boardDist * 1000)}m to board near ${boardStop.name}`,
-          ));
-        } else {
-          // Only direct_fare modes (Grab, Taxi, Maxim) can feeder point-to-point.
-          // corridor_anywhere modes (tricycle, habal, jeepney) have fixed routes
-          // and cannot be hailed door-to-door.
-          const cheapestDirect = directFareModes[0];
-          if (cheapestDirect) {
-            legs.push(await buildLeg(
-              fromLat, fromLon, "Current Location",
-              boardStop.lat, boardStop.lon, boardStop.name,
-              cheapestDirect.transport_type,
-              calcFare(cheapestDirect, boardDist),
-              `Book a ${cheapestDirect.display_name} to board near ${boardStop.name}. Fare: ₱${calcFare(cheapestDirect, boardDist).toFixed(0)}`,
-            ));
-          } else {
-            continue; // no direct_fare available — can't reach board stop
-          }
-        }
-      }
+      const alightR1 = t1.a;
+      const boardR2  = t1.b;
 
-      // ── Leg B: transit leg with reconstructed geometry ──────────────────
-      const transitDist = haversine(boardStop.lat, boardStop.lon, alightStop.lat, alightStop.lon);
-      let transitGeometry: [number, number][] | null = null;
+      if (boardR1.id === alightR1.id || boardR2.id === alightR2.id) continue;
 
-      if (roadIds.length > 0) {
-        transitGeometry = await buildTransitLegGeometry(roadIds, boardStop.id, alightStop.id);
-        if (!transitGeometry) continue; // mini-graph failed — try next route
-      }
+      const boardR1Dist    = haversine(fromLat, fromLon, boardR1.lat, boardR1.lon);
+      if (boardR1Dist > MAX_BOARD_KM) continue;
 
-      const transitSpeeds: Record<string, number> = {
-        bus: 25, bus_ac: 25, bus_commute: 25, jeepney: 22,
-      };
-      legs.push({
-        mode: mode.transport_type as TransportLeg["mode"],
-        from: { name: boardStop.name, lat: boardStop.lat, lon: boardStop.lon },
-        to:   { name: alightStop.name, lat: alightStop.lat, lon: alightStop.lon },
-        distance: Math.round(transitDist * 100) / 100,
-        duration: Math.max(1, Math.round((transitDist / (transitSpeeds[mode.transport_type] ?? 22)) * 60)),
-        fare: calcFare(mode, transitDist),
-        instruction: `Board ${mode.display_name} (${route.route_name}) at ${boardStop.name}. Alight at ${alightStop.name}`,
-        geometry: transitGeometry ?? [[boardStop.lat, boardStop.lon], [alightStop.lat, alightStop.lon]],
+      const boardR1ToDest  = haversine(boardR1.lat, boardR1.lon, toLat, toLon);
+      const alightR1ToDest = haversine(alightR1.lat, alightR1.lon, toLat, toLon);
+      const alightR2ToDest = haversine(alightR2.lat, alightR2.lon, toLat, toLon);
+
+      if (alightR1ToDest >= boardR1ToDest)  continue;
+      if (alightR2ToDest >= alightR1ToDest) continue;
+
+      const r1Dist = haversine(boardR1.lat, boardR1.lon, alightR1.lat, alightR1.lon);
+      const r2Dist = haversine(boardR2.lat, boardR2.lon, alightR2.lat, alightR2.lon);
+
+      consider({
+        chainLegs: [
+          { route: r1, boardNode: boardR1, alightNode: alightR1 },
+          { route: r2, boardNode: boardR2, alightNode: alightR2 },
+        ],
+        transfers: [{ from: alightR1, to: boardR2 }],
+        totalFare: feederFare(boardR1Dist, cheapestDirect)
+                 + calcFare(r1.fare, r1Dist)
+                 + feederFare(t1.dist, cheapestDirect)
+                 + calcFare(r2.fare, r2Dist)
+                 + feederFare(alightR2ToDest, cheapestDirect),
       });
-
-      // ── Leg C: alight stop → destination ────────────────────────────────
-      if (alightToDestDist > 0.05) {
-        if (alightToDestDist <= 0.5) {
-          legs.push(await buildLeg(
-            alightStop.lat, alightStop.lon, alightStop.name,
-            toLat, toLon, "Destination", "walk", 0,
-            `Walk ${Math.round(alightToDestDist * 1000)}m to your destination`,
-          ));
-        } else {
-          const cheapestDirect = directFareModes[0];
-          if (cheapestDirect) {
-            legs.push(await buildLeg(
-              alightStop.lat, alightStop.lon, alightStop.name,
-              toLat, toLon, "Destination",
-              cheapestDirect.transport_type,
-              calcFare(cheapestDirect, alightToDestDist),
-              `Book a ${cheapestDirect.display_name} to your destination. Fare: ₱${calcFare(cheapestDirect, alightToDestDist).toFixed(0)}`,
-            ));
-          }
-          // If no direct_fare: outer saver loop handles remaining gap
-        }
-      }
-
-      return legs;
     }
   }
-  return null;
+
+  // ── 3-hop ──────────────────────────────────────────────────────────────────
+  for (let i = 0; i < routes.length; i++) {
+    const r1 = routes[i];
+    for (let j = 0; j < routes.length; j++) {
+      if (j === i) continue;
+      const r2 = routes[j];
+      const t1 = findClosestTransfer(r1.nodes, r2.nodes);
+      if (!t1 || t1.dist > MAX_TRANSFER_KM) continue;
+
+      for (let k = 0; k < routes.length; k++) {
+        if (k === i || k === j) continue;
+        const r3 = routes[k];
+        const t2 = findClosestTransfer(r2.nodes, r3.nodes);
+        if (!t2 || t2.dist > MAX_TRANSFER_KM) continue;
+
+        const boardR1 = findNearestNodeInMemory(fromLat, fromLon, r1.nodes, toLat, toLon);
+        if (!boardR1) continue;
+        const alightR3 = findNearestNodeInMemory(toLat, toLon, r3.nodes);
+        if (!alightR3) continue;
+
+        const alightR1 = t1.a, boardR2 = t1.b;
+        const alightR2 = t2.a, boardR3 = t2.b;
+
+        if (boardR1.id === alightR1.id) continue;
+        if (boardR2.id === alightR2.id) continue;
+        if (boardR3.id === alightR3.id) continue;
+
+        const boardR1Dist    = haversine(fromLat, fromLon, boardR1.lat, boardR1.lon);
+        if (boardR1Dist > MAX_BOARD_KM) continue;
+
+        const boardR1ToDest  = haversine(boardR1.lat, boardR1.lon, toLat, toLon);
+        const alightR1ToDest = haversine(alightR1.lat, alightR1.lon, toLat, toLon);
+        const boardR2ToDest  = haversine(boardR2.lat, boardR2.lon, toLat, toLon);
+        const alightR2ToDest = haversine(alightR2.lat, alightR2.lon, toLat, toLon);
+        const alightR3ToDest = haversine(alightR3.lat, alightR3.lon, toLat, toLon);
+
+        if (alightR1ToDest >= boardR1ToDest)  continue;
+        if (alightR2ToDest >= boardR2ToDest)  continue;
+        if (alightR3ToDest >= alightR2ToDest) continue;
+
+        const r1Dist = haversine(boardR1.lat, boardR1.lon, alightR1.lat, alightR1.lon);
+        const r2Dist = haversine(boardR2.lat, boardR2.lon, alightR2.lat, alightR2.lon);
+        const r3Dist = haversine(boardR3.lat, boardR3.lon, alightR3.lat, alightR3.lon);
+
+        consider({
+          chainLegs: [
+            { route: r1, boardNode: boardR1, alightNode: alightR1 },
+            { route: r2, boardNode: boardR2, alightNode: alightR2 },
+            { route: r3, boardNode: boardR3, alightNode: alightR3 },
+          ],
+          transfers: [
+            { from: alightR1, to: boardR2 },
+            { from: alightR2, to: boardR3 },
+          ],
+          totalFare: feederFare(boardR1Dist, cheapestDirect)
+                   + calcFare(r1.fare, r1Dist)
+                   + feederFare(t1.dist, cheapestDirect)
+                   + calcFare(r2.fare, r2Dist)
+                   + feederFare(t2.dist, cheapestDirect)
+                   + calcFare(r3.fare, r3Dist)
+                   + feederFare(alightR3ToDest, cheapestDirect),
+        });
+      }
+    }
+  }
+
+  return best;
 }
 
-// ─── Saver algorithm ─────────────────────────────────────────────────────────
+// ─── Build actual legs for winning chain ──────────────────────────────────────
+
+const TRANSIT_SPEEDS: Record<string, number> = {
+  bus: 25, bus_ac: 25, bus_commute: 25, jeepney: 22, odutco: 22,
+};
+
+async function buildChainLegs(
+  chain: TransitChain,
+  fromLat: number, fromLon: number,
+  toLat: number, toLon: number,
+  cheapestDirect: FareRow,
+): Promise<TransportLeg[]> {
+  const legs: TransportLeg[] = [];
+  const firstBoard = chain.chainLegs[0].boardNode;
+  const lastAlight = chain.chainLegs[chain.chainLegs.length - 1].alightNode;
+
+  // Feeder A: user → first board node
+  const boardADist = haversine(fromLat, fromLon, firstBoard.lat, firstBoard.lon);
+  if (boardADist > 0.05) {
+    if (boardADist <= 0.5) {
+      legs.push(await buildLeg(
+        fromLat, fromLon, "Current Location",
+        firstBoard.lat, firstBoard.lon, firstBoard.name,
+        "walk", 0,
+        `Walk ${Math.round(boardADist * 1000)}m to ${firstBoard.name}`,
+      ));
+    } else {
+      legs.push(await buildLeg(
+        fromLat, fromLon, "Current Location",
+        firstBoard.lat, firstBoard.lon, firstBoard.name,
+        cheapestDirect.transport_type,
+        calcFare(cheapestDirect, boardADist),
+        `Book a ${cheapestDirect.display_name} to ${firstBoard.name}. Fare: ₱${calcFare(cheapestDirect, boardADist).toFixed(0)}`,
+      ));
+    }
+  }
+
+  // Transit hops + transfer gaps
+  for (let idx = 0; idx < chain.chainLegs.length; idx++) {
+    const { route, boardNode, alightNode } = chain.chainLegs[idx];
+    const transitDist = haversine(boardNode.lat, boardNode.lon, alightNode.lat, alightNode.lon);
+
+    const bfsGeo = route.road_ids.length > 0
+      ? await buildTransitLegGeometry(route.road_ids, boardNode.id, alightNode.id)
+      : null;
+    const geometry: [number, number][] = bfsGeo ?? [
+      [boardNode.lat, boardNode.lon], [alightNode.lat, alightNode.lon],
+    ];
+
+    const speed = TRANSIT_SPEEDS[route.transport_type] ?? 22;
+    legs.push({
+      mode: route.transport_type as TransportLeg["mode"],
+      from: { name: boardNode.name,  lat: boardNode.lat,  lon: boardNode.lon },
+      to:   { name: alightNode.name, lat: alightNode.lat, lon: alightNode.lon },
+      distance: Math.round(transitDist * 100) / 100,
+      duration: Math.max(1, Math.round((transitDist / speed) * 60)),
+      fare: calcFare(route.fare, transitDist),
+      instruction: `Board ${route.fare.display_name} (${route.route_name}) at ${boardNode.name}. Alight at ${alightNode.name}`,
+      geometry,
+    });
+
+    // Transfer gap to next hop
+    if (idx < chain.transfers.length) {
+      const xfer     = chain.transfers[idx];
+      const xferDist = haversine(xfer.from.lat, xfer.from.lon, xfer.to.lat, xfer.to.lon);
+      if (xferDist > 0.05) {
+        if (xferDist <= 0.5) {
+          legs.push(await buildLeg(
+            xfer.from.lat, xfer.from.lon, xfer.from.name,
+            xfer.to.lat, xfer.to.lon, xfer.to.name,
+            "walk", 0,
+            `Walk ${Math.round(xferDist * 1000)}m to transfer to next route`,
+          ));
+        } else {
+          legs.push(await buildLeg(
+            xfer.from.lat, xfer.from.lon, xfer.from.name,
+            xfer.to.lat, xfer.to.lon, xfer.to.name,
+            cheapestDirect.transport_type,
+            calcFare(cheapestDirect, xferDist),
+            `Book a ${cheapestDirect.display_name} to transfer. Fare: ₱${calcFare(cheapestDirect, xferDist).toFixed(0)}`,
+          ));
+        }
+      }
+    }
+  }
+
+  // Feeder C: last alight → destination
+  const alightToDest = haversine(lastAlight.lat, lastAlight.lon, toLat, toLon);
+  if (alightToDest > 0.05) {
+    if (alightToDest <= 0.5) {
+      legs.push(await buildLeg(
+        lastAlight.lat, lastAlight.lon, lastAlight.name,
+        toLat, toLon, "Destination",
+        "walk", 0,
+        `Walk ${Math.round(alightToDest * 1000)}m to your destination`,
+      ));
+    } else {
+      legs.push(await buildLeg(
+        lastAlight.lat, lastAlight.lon, lastAlight.name,
+        toLat, toLon, "Destination",
+        cheapestDirect.transport_type,
+        calcFare(cheapestDirect, alightToDest),
+        `Book a ${cheapestDirect.display_name} to your destination. Fare: ₱${calcFare(cheapestDirect, alightToDest).toFixed(0)}`,
+      ));
+    }
+  }
+
+  return legs;
+}
+
+// ─── Saver algorithm (transit-first, cheapest-fare) ──────────────────────────
 
 async function buildSaverRoute(
   startLat: number, startLon: number,
   endLat: number, endLon: number,
 ): Promise<TransportLeg[]> {
-  const fares = await loadFares();
-
-  // Group modes by behavior, sorted cheapest-first (display_order)
-  const corridorStopModes   = fares.filter(f => f.routing_behavior === "corridor_stops");
-  const corridorAnyModes    = fares.filter(f => f.routing_behavior === "corridor_anywhere");
-  const directFareModes     = fares.filter(f => f.routing_behavior === "direct_fare");
-  // Taxi/grab = highest display_order direct_fare (last resort)
-  const taxiMode = directFareModes[directFareModes.length - 1] ?? {
+  const fares          = await loadFares();
+  const directFareModes = fares.filter(f => f.routing_behavior === "direct_fare");
+  const taxiMode: FareRow = directFareModes[directFareModes.length - 1] ?? {
     transport_type: "taxi", display_name: "Taxi/Grab",
     base_fare: 40, per_km_rate: 13.5, minimum_fare: 40,
     peak_hour_multiplier: 1.2, routing_behavior: "direct_fare", display_order: 99,
-  } as FareRow;
+  };
+  const cheapestDirect: FareRow = directFareModes[0] ?? taxiMode;
 
-  const legs: TransportLeg[] = [];
-  let curLat = startLat;
-  let curLon = startLon;
-  let curName = "Current Location";
-
-  const MAX_LEGS = 10;
-
-  for (let i = 0; i < MAX_LEGS; i++) {
-    const remaining = haversine(curLat, curLon, endLat, endLon);
-
-    // ── 1. Walk if close enough (or already arrived) ───────────────────────
-    if (remaining <= 0.05) break; // already at destination — no ghost walk leg
-    if (remaining <= 0.5) {
-      legs.push(await buildLeg(
-        curLat, curLon, curName,
-        endLat, endLon, "Destination",
-        "walk", 0,
-        `Walk ${Math.round(remaining * 1000)}m to your destination`,
-      ));
-      break;
-    }
-
-    // ── 2. Ferry if road unreachable ────────────────────────────────────────
-    if (i === 0) {
-      const reachable = await canReachByRoad(curLat, curLon, endLat, endLon);
-      if (!reachable) {
-        const ferryLegs = await injectFerryLegs(curLat, curLon, endLat, endLon, fares);
-        if (ferryLegs && ferryLegs.length > 0) {
-          legs.push(...ferryLegs);
-          // Continue from the dest pier
-          const lastPierLeg = ferryLegs[ferryLegs.length - 1];
-          curLat  = lastPierLeg.to.lat;
-          curLon  = lastPierLeg.to.lon;
-          curName = lastPierLeg.to.name;
-          continue;
-        }
-      }
-    }
-
-    // ── 3. Try transit routes — both corridor_stops and corridor_anywhere ──
-    const corridorResult = await tryCorridorRoute(
-      curLat, curLon, endLat, endLon,
-      [...corridorStopModes, ...corridorAnyModes], directFareModes,
-    );
-    if (corridorResult) {
-      legs.push(...corridorResult);
-      const last = corridorResult[corridorResult.length - 1];
-      curLat  = last.to.lat;
-      curLon  = last.to.lon;
-      curName = last.to.name;
-      continue;
-    }
-
-    // ── 4. Non-taxi direct_fare (maxim, etc.) ───────────────────────────────
-    const nonTaxiDirect = directFareModes.filter(
-      f => f.transport_type !== taxiMode.transport_type,
-    );
-    if (nonTaxiDirect.length > 0) {
-      const m = nonTaxiDirect[0];
-      legs.push(await buildLeg(
-        curLat, curLon, curName,
-        endLat, endLon, "Destination",
-        m.transport_type,
-        calcFare(m, remaining),
-        `Book a ${m.display_name} to your destination. Fare: ₱${calcFare(m, remaining).toFixed(0)}`,
-      ));
-      break;
-    }
-
-    // ── 5. Taxi / Grab fallback ─────────────────────────────────────────────
-    legs.push(await buildLeg(
-      curLat, curLon, curName,
+  // Walk check
+  const totalDist = haversine(startLat, startLon, endLat, endLon);
+  if (totalDist <= 0.05) return [];
+  if (totalDist <= 0.5) {
+    return [await buildLeg(
+      startLat, startLon, "Current Location",
       endLat, endLon, "Destination",
-      taxiMode.transport_type,
-      calcFare(taxiMode, remaining),
-      `Book a ${taxiMode.display_name} to your destination. Fare: ₱${calcFare(taxiMode, remaining).toFixed(0)}`,
-    ));
-    break;
+      "walk", 0,
+      `Walk ${Math.round(totalDist * 1000)}m to your destination`,
+    )];
   }
 
-  return legs;
+  // Ferry check
+  const reachable = await canReachByRoad(startLat, startLon, endLat, endLon);
+  if (!reachable) {
+    const ferryLegs = await injectFerryLegs(startLat, startLon, endLat, endLon, fares);
+    if (ferryLegs && ferryLegs.length > 0) return ferryLegs;
+  }
+
+  // Transit chain search — picks cheapest 1/2/3-hop option
+  const routes = await loadAllTransitRoutes(fares);
+  const chain  = findBestTransitChain(
+    startLat, startLon, endLat, endLon, routes, cheapestDirect,
+  );
+
+  if (chain) {
+    return buildChainLegs(chain, startLat, startLon, endLat, endLon, cheapestDirect);
+  }
+
+  // No transit available — direct_fare with note
+  return [await buildLeg(
+    startLat, startLon, "Current Location",
+    endLat, endLon, "Destination",
+    taxiMode.transport_type,
+    calcFare(taxiMode, totalDist),
+    `No transit route available for this trip. If you want less hassle, book a ${taxiMode.display_name}. Fare: ₱${calcFare(taxiMode, totalDist).toFixed(0)}`,
+  )];
 }
 
 // ─── Grab/Taxi sub-mode ───────────────────────────────────────────────────────
@@ -672,33 +773,29 @@ async function buildGrabTaxiRoute(
   startLat: number, startLon: number,
   endLat: number, endLon: number,
 ): Promise<TransportLeg[]> {
-  const fares = await loadFares();
+  const fares           = await loadFares();
   const directFareModes = fares.filter(f => f.routing_behavior === "direct_fare");
 
-  // Ferry injection if island destination
   const reachable = await canReachByRoad(startLat, startLon, endLat, endLon);
   if (!reachable) {
     const ferryLegs = await injectFerryLegs(startLat, startLon, endLat, endLon, fares);
     if (ferryLegs) return ferryLegs;
   }
 
-  // Use the first (cheapest) direct_fare mode available, fallback to taxi config
-  const mode = directFareModes[0] ?? {
+  const mode: FareRow = directFareModes[0] ?? {
     transport_type: "taxi", display_name: "Taxi/Grab",
     base_fare: 40, per_km_rate: 13.5, minimum_fare: 40,
     peak_hour_multiplier: 1.2, routing_behavior: "direct_fare", display_order: 99,
-  } as FareRow;
+  };
 
   const dist = haversine(startLat, startLon, endLat, endLon);
-  return [
-    await buildLeg(
-      startLat, startLon, "Current Location",
-      endLat, endLon, "Destination",
-      mode.transport_type,
-      calcFare(mode, dist),
-      `Book a ${mode.display_name} directly to your destination. Fare: ₱${calcFare(mode, dist).toFixed(0)}`,
-    ),
-  ];
+  return [await buildLeg(
+    startLat, startLon, "Current Location",
+    endLat, endLon, "Destination",
+    mode.transport_type,
+    calcFare(mode, dist),
+    `Book a ${mode.display_name} directly to your destination. Fare: ₱${calcFare(mode, dist).toFixed(0)}`,
+  )];
 }
 
 // ─── Public entry point ───────────────────────────────────────────────────────
