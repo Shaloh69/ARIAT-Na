@@ -226,6 +226,10 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> refreshAccessToken() async {
+    if (_refreshToken == null) {
+      await _clearTokens();
+      throw Exception('No refresh token — re-login required');
+    }
     final response = await http.post(
       Uri.parse('$_baseUrl/auth/refresh'),
       headers: {'Content-Type': 'application/json'},
@@ -238,6 +242,8 @@ class AuthService extends ChangeNotifier {
       await _secureStorage.write(key: _tokenKey, value: _accessToken);
       await _secureStorage.write(key: _refreshKey, value: _refreshToken);
     } else {
+      // Refresh token rejected by server — force re-login
+      await _clearTokens();
       throw Exception('Token refresh failed');
     }
   }
