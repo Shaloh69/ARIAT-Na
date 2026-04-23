@@ -307,7 +307,7 @@ async function buildLeg(
 ): Promise<TransportLeg> {
   let result: any = null;
   try {
-    result = await calculateRoute(fromLat, fromLon, toLat, toLon, optimizeFor);
+    result = await calculateRoute(fromLat, fromLon, toLat, toLon, optimizeFor, mode === "walk");
   } catch { /* fall through */ }
 
   const distKm = result?.totalDistance ?? haversine(fromLat, fromLon, toLat, toLon);

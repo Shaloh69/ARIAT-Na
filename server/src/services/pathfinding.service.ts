@@ -24,10 +24,12 @@ interface GraphCache {
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes safety-net TTL
 let _graphCache: GraphCache | null = null;
+let _walkGraphCache: GraphCache | null = null; // bidirectional-only, for walk/feeder routing
 
 /** Call this whenever a road or intersection is created, updated, or deleted. */
 export function invalidateGraphCache(): void {
   _graphCache = null;
+  _walkGraphCache = null;
 }
 
 interface Intersection extends RowDataPacket {
@@ -321,14 +323,15 @@ async function findNearestRoadNode(
  * Build adjacency list (graph) from database
  * Now includes interpolated virtual nodes every ~100m along roads
  */
-async function buildGraph(): Promise<{
+async function buildGraph(ignoreOneWay = false): Promise<{
   intersections: Map<string, Intersection>;
   adjacencyList: Map<string, Array<{ road: Road; neighbor: string }>>;
   roadPaths: Map<string, [number, number][]>;
   roadNodeMap: Map<string, string[]>;
 }> {
-  if (_graphCache && Date.now() - _graphCache.builtAt < CACHE_TTL_MS) {
-    return _graphCache;
+  const activeCache = ignoreOneWay ? _walkGraphCache : _graphCache;
+  if (activeCache && Date.now() - activeCache.builtAt < CACHE_TTL_MS) {
+    return activeCache;
   }
 
   // Get all intersections
@@ -444,8 +447,8 @@ async function buildGraph(): Promise<{
         if (!adjacencyList.has(fromId)) adjacencyList.set(fromId, []);
         adjacencyList.get(fromId)!.push({ road: segmentRoad, neighbor: toId });
 
-        // Reverse edge if bidirectional
-        if (road.is_bidirectional) {
+        // Reverse edge if bidirectional (or ignoring one-way for walk/feeder routing)
+        if (ignoreOneWay || road.is_bidirectional) {
           const reverseRoad = {
             ...segmentRoad,
             start_intersection_id: toId,
@@ -472,7 +475,7 @@ async function buildGraph(): Promise<{
         neighbor: road.end_intersection_id,
       });
 
-      if (road.is_bidirectional) {
+      if (ignoreOneWay || road.is_bidirectional) {
         if (!adjacencyList.has(road.end_intersection_id)) {
           adjacencyList.set(road.end_intersection_id, []);
         }
@@ -488,14 +491,16 @@ async function buildGraph(): Promise<{
     }
   }
 
-  _graphCache = {
+  const newCache = {
     intersections: intersectionMap,
     adjacencyList,
     roadPaths,
     roadNodeMap,
     builtAt: Date.now(),
   };
-  return _graphCache;
+  if (ignoreOneWay) _walkGraphCache = newCache;
+  else _graphCache = newCache;
+  return newCache;
 }
 
 /**
@@ -947,6 +952,7 @@ export async function calculateRoute(
   endLat: number,
   endLon: number,
   optimizeFor: "distance" | "time" = "distance",
+  ignoreOneWay = false,
 ): Promise<RouteResult> {
   // Build the enriched graph with virtual nodes
   const {
@@ -954,7 +960,7 @@ export async function calculateRoute(
     adjacencyList,
     roadPaths,
     roadNodeMap,
-  } = await buildGraph();
+  } = await buildGraph(ignoreOneWay);
 
   // Snap both GPS points to the road network.
   // snapToNetwork uses perpendicular projection to pick the nearest road first,
