@@ -151,17 +151,23 @@ async function findBusStopToward(
 
 /**
  * Find the nearest road-graph node for a corridor_anywhere route.
- * Collects every start/end intersection from the route's road_ids — these are
- * the actual flagging points on the road, not designated bus stops.
- * Falls back to the route's stop_ids if road_ids yield no nodes.
+ * Collects every start/end intersection from the route's road_ids.
+ * Falls back to stop_ids if road_ids yield no nodes.
+ *
+ * destLat/destLon (optional): when provided, only considers nodes that make
+ * forward progress toward the destination — i.e. the node must be closer to
+ * the destination than the caller's position.  This prevents picking a board
+ * point that requires the user to backtrack away from their destination.
+ * If no forward-progress node exists the filter is relaxed (all nodes used).
  */
 async function findNearestRoadNodeOnRoute(
   lat: number,
   lon: number,
   roadIds: string[],
   stopIds: string[],
+  destLat?: number,
+  destLon?: number,
 ): Promise<StopNode | null> {
-  // Primary: collect all intersection endpoints from the route's roads
   let nodeIds: string[] = [];
   if (roadIds.length) {
     const placeholders = roadIds.map(() => "?").join(",");
@@ -178,7 +184,6 @@ async function findNearestRoadNodeOnRoute(
     nodeIds = Array.from(seen);
   }
 
-  // Fallback: use stop_ids if no road nodes found
   if (!nodeIds.length) nodeIds = [...stopIds];
   if (!nodeIds.length) return null;
 
@@ -188,9 +193,23 @@ async function findNearestRoadNodeOnRoute(
      FROM intersections WHERE id IN (${nodePlaceholders})`,
     nodeIds,
   );
+
+  let candidates = rows as any[];
+
+  // Forward-progress filter: only keep nodes closer to destination than caller.
+  // 5 % tolerance handles minor detours near the user's position.
+  if (destLat !== undefined && destLon !== undefined && candidates.length > 0) {
+    const userToDest = haversine(lat, lon, destLat, destLon);
+    const forward = candidates.filter(
+      (n: any) => haversine(n.lat, n.lon, destLat, destLon) <= userToDest * 1.05,
+    );
+    if (forward.length > 0) candidates = forward; // prefer forward nodes
+    // else fall through — relax filter, use all nodes
+  }
+
   let best: StopNode | null = null;
   let bestDist = Infinity;
-  for (const r of rows as any[]) {
+  for (const r of candidates) {
     const d = haversine(lat, lon, r.lat, r.lon);
     if (d < bestDist) { bestDist = d; best = r as StopNode; }
   }
@@ -463,8 +482,12 @@ async function tryCorridorRoute(
       let boardStop: StopNode;
       let boardDist = 0;
       if (effectiveAnywhere) {
-        // Nearest road-graph node to user — vehicle is flagged from roadside
-        const nearestNode = await findNearestRoadNodeOnRoute(fromLat, fromLon, roadIds, stopIds);
+        // Nearest road-graph node to user that makes FORWARD PROGRESS toward
+        // destination — prevents routing the user away from their destination
+        // to reach a board point, then back again (backtracking).
+        const nearestNode = await findNearestRoadNodeOnRoute(
+          fromLat, fromLon, roadIds, stopIds, toLat, toLon,
+        );
         if (!nearestNode) continue;
         boardStop = nearestNode;
         boardDist = haversine(fromLat, fromLon, boardStop.lat, boardStop.lon);
@@ -477,6 +500,15 @@ async function tryCorridorRoute(
       }
       if (boardStop.id === alightStop.id) continue;
 
+      // Local feeder modes: short-range transport (tricycle ≤5 km, habal ≤15 km)
+      // that can pick up door-to-door from any position.
+      // Corridor buses (Odutco, Jeepney — maxRange ~50 km) are excluded because
+      // they run fixed routes and cannot be booked as point-to-point feeders.
+      const LOCAL_FEEDER_MAX_KM = 20;
+      const localFeedModes = corridorAnyModes.filter(
+        m => maxRangeKm(m.transport_type, m) <= LOCAL_FEEDER_MAX_KM,
+      );
+
       const legs: TransportLeg[] = [];
 
       // ── Leg A: reach the board stop ─────────────────────────────────────
@@ -486,10 +518,10 @@ async function tryCorridorRoute(
             fromLat, fromLon, "Current Location",
             boardStop.lat, boardStop.lon, boardStop.name,
             "walk", 0,
-            `Walk ${Math.round(boardDist * 1000)}m to ${boardStop.name}`,
+            `Walk ${Math.round(boardDist * 1000)}m to board near ${boardStop.name}`,
           ));
         } else {
-          const rideToStop = corridorAnyModes.find(
+          const rideToStop = localFeedModes.find(
             m => boardDist <= maxRangeKm(m.transport_type, m),
           );
           if (rideToStop) {
@@ -498,7 +530,7 @@ async function tryCorridorRoute(
               boardStop.lat, boardStop.lon, boardStop.name,
               rideToStop.transport_type,
               calcFare(rideToStop, boardDist),
-              `Hail a ${rideToStop.display_name} to ${boardStop.name}. Fare: ₱${calcFare(rideToStop, boardDist).toFixed(0)}`,
+              `Hail a ${rideToStop.display_name} to board near ${boardStop.name}. Fare: ₱${calcFare(rideToStop, boardDist).toFixed(0)}`,
             ));
           } else if (fallbackDirect) {
             legs.push(await buildLeg(
@@ -506,7 +538,7 @@ async function tryCorridorRoute(
               boardStop.lat, boardStop.lon, boardStop.name,
               fallbackDirect.transport_type,
               calcFare(fallbackDirect, boardDist),
-              `Book a ${fallbackDirect.display_name} to ${boardStop.name}. Fare: ₱${calcFare(fallbackDirect, boardDist).toFixed(0)}`,
+              `Book a ${fallbackDirect.display_name} to board near ${boardStop.name}. Fare: ₱${calcFare(fallbackDirect, boardDist).toFixed(0)}`,
             ));
           } else {
             continue; // Can't reach board stop — try next route
@@ -547,7 +579,8 @@ async function tryCorridorRoute(
             `Walk ${Math.round(alightToDest * 1000)}m to your destination`,
           ));
         } else {
-          const finalRide = corridorAnyModes.find(
+          // Use local feeder only (tricycle/habal) — not corridor buses
+          const finalRide = localFeedModes.find(
             m => alightToDest <= maxRangeKm(m.transport_type, m),
           );
           if (finalRide) {
