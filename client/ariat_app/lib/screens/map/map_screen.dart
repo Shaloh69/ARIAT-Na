@@ -402,6 +402,41 @@ class _MapScreenState extends State<MapScreen> {
 
   // ── Commute route calculation ─────────────────────────────────────────────
 
+  static const _transitModes = {
+    'bus', 'bus_ac', 'bus_commute', 'jeepney', 'odutco', 'ferry',
+  };
+
+  /// Merge consecutive same-mode feeder legs produced at waypoint segment
+  /// boundaries (e.g. feeder_C of segment 1 + feeder_A of segment 2).
+  /// Result is always: feeder → transit → feeder → transit → feeder …
+  List<TransportLeg> _mergeFeeders(List<TransportLeg> legs) {
+    if (legs.length < 2) return legs;
+    final result = <TransportLeg>[];
+    for (final leg in legs) {
+      if (result.isNotEmpty &&
+          !_transitModes.contains(result.last.mode) &&
+          !_transitModes.contains(leg.mode) &&
+          result.last.mode == leg.mode) {
+        final prev = result.removeLast();
+        final geo = List<List<double>>.from(prev.geometry);
+        if (leg.geometry.length > 1) geo.addAll(leg.geometry.sublist(1));
+        result.add(TransportLeg(
+          mode: prev.mode,
+          from: prev.from,
+          to: leg.to,
+          distance: prev.distance + leg.distance,
+          duration: prev.duration + leg.duration,
+          fare: prev.fare + leg.fare,
+          instruction: prev.instruction,
+          geometry: geo,
+        ));
+      } else {
+        result.add(leg);
+      }
+    }
+    return result;
+  }
+
   Future<void> _calculateCommuteRoute(List<_RouteStop> stops) async {
     try {
       final api = context.read<ApiService>();
@@ -437,12 +472,13 @@ class _MapScreenState extends State<MapScreen> {
         }
       }
 
-      final totalDist = allLegs.fold<double>(0, (s, l) => s + l.distance);
-      final totalTime = allLegs.fold<int>(0, (s, l) => s + l.duration);
-      final totalFare = allLegs.fold<double>(0, (s, l) => s + l.fare);
+      final merged = _mergeFeeders(allLegs);
+      final totalDist = merged.fold<double>(0, (s, l) => s + l.distance);
+      final totalTime = merged.fold<int>(0, (s, l) => s + l.duration);
+      final totalFare = merged.fold<double>(0, (s, l) => s + l.fare);
 
       setState(() {
-        _commuteLegs = allLegs;
+        _commuteLegs = merged;
         _currentLegIndex = 0;
         _routeLegs = [];
         _multiModalLegs = [];
@@ -2711,7 +2747,7 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
           ),
-          if (_isAiItinerary) ...[
+          if (_routeStops.isNotEmpty) ...[
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,

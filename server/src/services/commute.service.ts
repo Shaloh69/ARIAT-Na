@@ -410,9 +410,8 @@ async function buildTransitLegGeometry(
     if (!adj.has(road.start_intersection_id)) adj.set(road.start_intersection_id, []);
     if (!adj.has(road.end_intersection_id))   adj.set(road.end_intersection_id, []);
     adj.get(road.start_intersection_id)!.push({ to: road.end_intersection_id, road, reversed: false });
-    if (road.is_bidirectional) {
-      adj.get(road.end_intersection_id)!.push({ to: road.start_intersection_id, road, reversed: true });
-    }
+    // Transit vehicles travel their corridor regardless of one-way restrictions
+    adj.get(road.end_intersection_id)!.push({ to: road.start_intersection_id, road, reversed: true });
   }
 
   type QItem = { node: string; path: Array<{ road: RoadRow; reversed: boolean }> };
