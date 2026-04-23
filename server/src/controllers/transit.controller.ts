@@ -228,12 +228,16 @@ export const createTransitRoute = async (
     throw new AppError('pickup_mode must be "anywhere" or "stops_only"', 400);
   }
 
-  // Verify fare_config exists
+  // Verify fare_config exists and derive pickup_mode from routing_behavior
   const [fc]: any = await pool.execute(
-    "SELECT id FROM fare_configs WHERE id = ?",
+    "SELECT id, routing_behavior FROM fare_configs WHERE id = ?",
     [fare_config_id],
   );
   if (fc.length === 0) throw new AppError("fare_config not found", 404);
+
+  // corridor_anywhere fare configs must always use pickup_mode='anywhere'
+  const resolvedPickupMode =
+    fc[0].routing_behavior === "corridor_anywhere" ? "anywhere" : pickup_mode;
 
   const id = uuidv4();
   await pool.execute(
@@ -247,7 +251,7 @@ export const createTransitRoute = async (
       transport_type,
       JSON.stringify(road_ids),
       JSON.stringify(stop_ids),
-      pickup_mode,
+      resolvedPickupMode,
       color,
       description || null,
       is_active,
@@ -276,10 +280,29 @@ export const updateTransitRoute = async (
   const updates = req.body;
 
   const [existing]: any = await pool.execute(
-    "SELECT id FROM transit_routes WHERE id = ?",
+    `SELECT tr.id, fc.routing_behavior AS current_routing_behavior
+     FROM transit_routes tr
+     LEFT JOIN fare_configs fc ON fc.id = tr.fare_config_id
+     WHERE tr.id = ?`,
     [id],
   );
   if (existing.length === 0) throw new AppError("Transit route not found", 404);
+
+  // If fare_config_id is changing, resolve routing_behavior from the new config
+  let resolvedRoutingBehavior = existing[0].current_routing_behavior as string;
+  if (updates.fare_config_id) {
+    const [newFc]: any = await pool.execute(
+      "SELECT routing_behavior FROM fare_configs WHERE id = ?",
+      [updates.fare_config_id],
+    );
+    if (newFc.length === 0) throw new AppError("fare_config not found", 404);
+    resolvedRoutingBehavior = newFc[0].routing_behavior;
+  }
+
+  // Force pickup_mode='anywhere' when fare config is corridor_anywhere
+  if (resolvedRoutingBehavior === "corridor_anywhere") {
+    updates.pickup_mode = "anywhere";
+  }
 
   const allowed = [
     "fare_config_id",

@@ -584,6 +584,28 @@ const ensureKioskMigration = async (): Promise<void> => {
   }
 };
 
+/** Migration 010: Set pickup_mode='anywhere' for all transit routes whose
+ *  fare config has routing_behavior='corridor_anywhere'. */
+const ensureTransitPickupModeFix = async (): Promise<void> => {
+  try {
+    const [result]: any = await pool.execute(`
+      UPDATE transit_routes tr
+        JOIN fare_configs fc ON fc.id = tr.fare_config_id
+      SET tr.pickup_mode = 'anywhere',
+          tr.updated_at  = CURRENT_TIMESTAMP
+      WHERE fc.routing_behavior = 'corridor_anywhere'
+        AND tr.pickup_mode = 'stops_only'
+    `);
+    if (result.affectedRows > 0) {
+      logger.info(
+        `[STARTUP] Fixed pickup_mode for ${result.affectedRows} corridor_anywhere transit route(s).`,
+      );
+    }
+  } catch (error) {
+    logger.error("[STARTUP] Transit pickup_mode fix failed:", error);
+  }
+};
+
 const startServer = async (): Promise<void> => {
   try {
     // Test database connection
@@ -600,6 +622,9 @@ const startServer = async (): Promise<void> => {
 
     // Kiosk sessions table
     await ensureKioskMigration();
+
+    // Fix transit route pickup_mode for corridor_anywhere fare configs (migration 010)
+    await ensureTransitPickupModeFix();
 
     // Ensure intersections.point_type ENUM includes 'entrance'
     await ensureEntrancePointType();

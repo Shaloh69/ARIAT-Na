@@ -2176,6 +2176,11 @@ class _MapScreenState extends State<MapScreen> {
         : isMultiModal
             ? _multiModalLegs.fold<int>(0, (s, l) => s + l.totalDuration)
             : _routeLegs.fold<int>(0, (s, l) => s + l.estimatedTime);
+    final totalFare = isCommute
+        ? _commuteLegs.fold<double>(0, (s, l) => s + l.fare)
+        : isMultiModal
+            ? _multiModalLegs.fold<double>(0, (s, l) => s + l.totalFare)
+            : 0.0;
     final hasRoute = totalDist > 0;
 
     return Padding(
@@ -2208,6 +2213,15 @@ class _MapScreenState extends State<MapScreen> {
               '${totalDist.toStringAsFixed(1)} km  ·  ~$totalTime min',
               style: TextStyle(fontSize: 12, color: c.textMuted),
             ),
+            if ((isCommute || isMultiModal) && totalFare > 0) ...[
+              const SizedBox(width: 6),
+              Text('·', style: TextStyle(color: c.textFaint)),
+              const SizedBox(width: 6),
+              Text(
+                '₱${totalFare.toStringAsFixed(0)}',
+                style: TextStyle(fontSize: 12, color: AppColors.amber, fontWeight: FontWeight.w600),
+              ),
+            ],
           ],
           const Spacer(),
           GestureDetector(

@@ -344,7 +344,7 @@ async function buildTransitLegGeometry(
 /**
  * Find an active transit_route that serves both ends of the trip.
  * Handles:
- *  - pickup_mode='anywhere': board from current position (no stop needed)
+ *  - pickup_mode='anywhere' OR corridor_anywhere routing_behavior: board from current position
  *  - Board stop up to 15 km away: prepend tricycle/habal/taxi leg to reach it
  *  - Alight stop not at destination: append walk/tricycle/taxi leg
  *  - Transit geometry via mini-graph from road_ids (skips route if path fails)
@@ -352,11 +352,11 @@ async function buildTransitLegGeometry(
 async function tryCorridorRoute(
   fromLat: number, fromLon: number,
   toLat: number, toLon: number,
-  stopModes: FareRow[],
+  allModes: FareRow[],
   corridorAnyModes: FareRow[],
   directFareModes: FareRow[],
 ): Promise<TransportLeg[] | null> {
-  if (stopModes.length === 0) return null;
+  if (allModes.length === 0) return null;
 
   const MAX_BOARD_KM = 15;
   const toStops = await findBusStopsNear(toLat, toLon, 1.0);
@@ -364,7 +364,7 @@ async function tryCorridorRoute(
 
   const fallbackDirect = directFareModes[directFareModes.length - 1];
 
-  for (const mode of stopModes) {
+  for (const mode of allModes) {
     const [routes]: any = await pool.execute(
       `SELECT id, route_name, stop_ids, road_ids, transport_type, pickup_mode
        FROM transit_routes
@@ -388,7 +388,11 @@ async function tryCorridorRoute(
       let boardStop: StopNode;
       let boardDist = 0;
 
-      if (pickupMode === "anywhere") {
+      // corridor_anywhere fare modes always board at current position
+      const effectiveAnywhere =
+        pickupMode === "anywhere" || mode.routing_behavior === "corridor_anywhere";
+
+      if (effectiveAnywhere) {
         boardStop = { id: "__current__", name: "Current Location",
           lat: fromLat, lon: fromLon, point_type: "virtual" };
       } else {
@@ -527,7 +531,8 @@ async function buildSaverRoute(
   for (let i = 0; i < MAX_LEGS; i++) {
     const remaining = haversine(curLat, curLon, endLat, endLon);
 
-    // ── 1. Walk if close enough ─────────────────────────────────────────────
+    // ── 1. Walk if close enough (or already arrived) ───────────────────────
+    if (remaining <= 0.05) break; // already at destination — no ghost walk leg
     if (remaining <= 0.5) {
       legs.push(await buildLeg(
         curLat, curLon, curName,
@@ -555,10 +560,10 @@ async function buildSaverRoute(
       }
     }
 
-    // ── 3. Try corridor_stops (bus/jeepney) via transit route data ──────────
+    // ── 3. Try transit routes — both corridor_stops and corridor_anywhere ──
     const corridorResult = await tryCorridorRoute(
       curLat, curLon, endLat, endLon,
-      corridorStopModes, corridorAnyModes, directFareModes,
+      [...corridorStopModes, ...corridorAnyModes], corridorAnyModes, directFareModes,
     );
     if (corridorResult) {
       legs.push(...corridorResult);

@@ -34,6 +34,7 @@ interface FareConfig {
   id: string;
   transport_type: string;
   display_name: string;
+  routing_behavior: string;
 }
 
 interface TransitRoute {
@@ -792,6 +793,11 @@ export default function TransitPage() {
                       ...p,
                       fare_config_id: id,
                       transport_type: fc?.transport_type ?? p.transport_type,
+                      // Auto-set pickup_mode from fare config routing behavior
+                      pickup_mode:
+                        fc?.routing_behavior === "corridor_anywhere"
+                          ? "anywhere"
+                          : p.pickup_mode,
                     }));
                   }}
                 >
@@ -810,58 +816,80 @@ export default function TransitPage() {
               </div>
 
               {/* Pickup mode */}
-              <div>
-                <p
-                  className="text-xs font-medium mb-2"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Pickup Mode
-                </p>
-                <div className="flex gap-3">
-                  {(["stops_only", "anywhere"] as const).map((m) => (
-                    <button
-                      key={m}
-                      className="flex-1 px-3 py-2 rounded-xl border text-sm text-left transition-colors"
-                      style={{
-                        borderColor:
-                          routeForm.pickup_mode === m
-                            ? "var(--red-500)"
-                            : "var(--border)",
-                        background:
-                          routeForm.pickup_mode === m
-                            ? "rgba(244,63,94,0.1)"
-                            : "transparent",
-                        color: "var(--text)",
-                      }}
-                      onClick={() =>
-                        setRouteForm((p) => ({ ...p, pickup_mode: m }))
-                      }
+              {(() => {
+                const selectedFc = fareConfigs.find(
+                  (f) => f.id === routeForm.fare_config_id,
+                );
+                const isAutoAnywhere =
+                  selectedFc?.routing_behavior === "corridor_anywhere";
+
+                return (
+                  <div>
+                    <p
+                      className="text-xs font-medium mb-2"
+                      style={{ color: "var(--text-muted)" }}
                     >
-                      <span
-                        className="font-medium block"
-                        style={{
-                          color:
-                            routeForm.pickup_mode === m
-                              ? "var(--red-400)"
-                              : "var(--text-strong)",
-                        }}
-                      >
-                        {m === "stops_only"
-                          ? "Stops / Terminals only"
-                          : "Anywhere on route"}
-                      </span>
-                      <span
-                        className="text-xs"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        {m === "stops_only"
-                          ? "Bus, Jeepney — board at marked stops"
-                          : "Tricycle, Habal-habal — flag from roadside"}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+                      Pickup Mode
+                      {isAutoAnywhere && (
+                        <span
+                          className="ml-2 text-xs font-normal"
+                          style={{ color: "var(--amber-400)" }}
+                        >
+                          (auto — set by fare config)
+                        </span>
+                      )}
+                    </p>
+                    <div className="flex gap-3">
+                      {(["stops_only", "anywhere"] as const).map((m) => (
+                        <button
+                          key={m}
+                          disabled={isAutoAnywhere}
+                          className="flex-1 px-3 py-2 rounded-xl border text-sm text-left transition-colors"
+                          style={{
+                            borderColor:
+                              routeForm.pickup_mode === m
+                                ? "var(--red-500)"
+                                : "var(--border)",
+                            background:
+                              routeForm.pickup_mode === m
+                                ? "rgba(244,63,94,0.1)"
+                                : "transparent",
+                            color: "var(--text)",
+                            opacity: isAutoAnywhere && m !== routeForm.pickup_mode ? 0.35 : 1,
+                            cursor: isAutoAnywhere ? "default" : "pointer",
+                          }}
+                          onClick={() => {
+                            if (!isAutoAnywhere)
+                              setRouteForm((p) => ({ ...p, pickup_mode: m }));
+                          }}
+                        >
+                          <span
+                            className="font-medium block"
+                            style={{
+                              color:
+                                routeForm.pickup_mode === m
+                                  ? "var(--red-400)"
+                                  : "var(--text-strong)",
+                            }}
+                          >
+                            {m === "stops_only"
+                              ? "Stops / Terminals only"
+                              : "Anywhere on route"}
+                          </span>
+                          <span
+                            className="text-xs"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            {m === "stops_only"
+                              ? "Bus, Jeepney — board at marked stops"
+                              : "Tricycle, Habal-habal — flag from roadside"}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Route color */}
               <div className="flex items-center gap-3">
