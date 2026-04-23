@@ -95,6 +95,8 @@ class _MapScreenState extends State<MapScreen> {
   String _commuteSubMode = 'saver';       // 'saver' | 'grab_taxi'
   List<TransportLeg> _commuteLegs = [];
   int _currentLegIndex = 0;
+  /// True once the 200m approaching announcement has fired for the current leg.
+  bool _commuteApproachSpoken = false;
 
   // ── Turn-by-turn navigation (private car) ────────────────────────────────
   late final FlutterTts _tts;
@@ -513,8 +515,15 @@ class _MapScreenState extends State<MapScreen> {
       _lastHandledPositionTime = null;
     });
     _currentStepIndex = -1;
+    _commuteApproachSpoken = false;
     final stopCount = _routeStops.length;
     _speak('Navigation started. $stopCount stop${stopCount == 1 ? '' : 's'} ahead.');
+    // Announce first commute leg after the opening message
+    if (_commuteLegs.isNotEmpty) {
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted && _isNavigating) _speak(_commuteLegs[0].instruction);
+      });
+    }
     if (mounted) AppToast.success(context, 'Navigation started! You will be notified when you arrive.');
   }
 
@@ -620,6 +629,7 @@ class _MapScreenState extends State<MapScreen> {
       _etaMinutes = 0;
       _currentStepIndex = -1;
       _currentLegIndex = 0;
+      _commuteApproachSpoken = false;
     });
     // Reset map to north-up
     try { _mapController.rotate(0); } catch (_) {}
@@ -719,16 +729,31 @@ class _MapScreenState extends State<MapScreen> {
       setState(() => _snappedPosition = userLatLng);
     }
 
-    // ── Commute leg auto-advance ──────────────────────────────────────────
-    if (_commuteLegs.isNotEmpty && _currentLegIndex < _commuteLegs.length) {
+    // ── Commute leg auto-advance + TTS ───────────────────────────────────
+    if (_isNavigating && _commuteLegs.isNotEmpty && _currentLegIndex < _commuteLegs.length) {
       final leg = _commuteLegs[_currentLegIndex];
       final toPoint = LatLng(leg.to.lat, leg.to.lon);
-      if (_distMeters(userLatLng, toPoint) < 50) {
-        if (_currentLegIndex < _commuteLegs.length - 1) {
-          final next = _commuteLegs[_currentLegIndex + 1];
-          setState(() => _currentLegIndex++);
-          _speak('${leg.to.name}. Next: ${next.instruction}');
-        }
+      final distToTransition = _distMeters(userLatLng, toPoint);
+      final isLastLeg = _currentLegIndex == _commuteLegs.length - 1;
+
+      // 200 m approaching announcement (fires once per leg, non-last legs only)
+      if (!isLastLeg && distToTransition < 200 && !_commuteApproachSpoken) {
+        _commuteApproachSpoken = true;
+        final next = _commuteLegs[_currentLegIndex + 1];
+        final distLabel = distToTransition < 1000
+            ? '${distToTransition.round()} meters'
+            : '${(distToTransition / 1000).toStringAsFixed(1)} kilometers';
+        _speak('In $distLabel, ${next.instruction}');
+      }
+
+      // 50 m auto-advance (non-last legs — last leg arrival handled by LocationService)
+      if (!isLastLeg && distToTransition < 50) {
+        final next = _commuteLegs[_currentLegIndex + 1];
+        setState(() {
+          _currentLegIndex++;
+          _commuteApproachSpoken = false;
+        });
+        _speak(next.instruction);
       }
     }
 
@@ -1568,57 +1593,93 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                   child: Builder(builder: (_) {
                     final leg = _commuteLegs[_currentLegIndex];
+                    final hasNext = _currentLegIndex < _commuteLegs.length - 1;
+                    final nextLeg = hasNext ? _commuteLegs[_currentLegIndex + 1] : null;
                     final toPoint = LatLng(leg.to.lat, leg.to.lon);
                     final userLatLng = userPos != null ? LatLng(userPos.latitude, userPos.longitude) : null;
                     final distM = userLatLng != null ? _distMeters(userLatLng, toPoint) : 0.0;
                     final distLabel = distM < 1000
                         ? '${distM.round()}m'
                         : '${(distM / 1000).toStringAsFixed(1)}km';
-                    return Row(
+                    final isApproaching = distM < 500 && hasNext;
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          width: 38, height: 38,
-                          decoration: BoxDecoration(
-                            color: _modeColor(leg.mode).withAlpha(25),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(_modeIcon(leg.mode), size: 20, color: _modeColor(leg.mode)),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                leg.instruction,
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.textStrong),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Text('To: ${leg.to.name}',
-                                  style: TextStyle(fontSize: 11, color: c.textFaint),
-                                  overflow: TextOverflow.ellipsis),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisSize: MainAxisSize.min,
+                        Row(
                           children: [
-                            Text(distLabel,
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
-                                    color: _modeColor(leg.mode))),
-                            if (leg.fare > 0)
-                              Text('₱${leg.fare.toStringAsFixed(0)}',
-                                  style: TextStyle(fontSize: 11, color: AppColors.amber,
-                                      fontWeight: FontWeight.w600)),
-                            Text('${_currentLegIndex + 1}/${_commuteLegs.length}',
-                                style: TextStyle(fontSize: 10, color: c.textFaint)),
+                            Container(
+                              width: 38, height: 38,
+                              decoration: BoxDecoration(
+                                color: _modeColor(leg.mode).withAlpha(25),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(_modeIcon(leg.mode), size: 20, color: _modeColor(leg.mode)),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    leg.instruction,
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.textStrong),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text('To: ${leg.to.name}',
+                                      style: TextStyle(fontSize: 11, color: c.textFaint),
+                                      overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(distLabel,
+                                    style: TextStyle(
+                                      fontSize: 15, fontWeight: FontWeight.w800,
+                                      color: isApproaching ? AppColors.amber : _modeColor(leg.mode),
+                                    )),
+                                if (leg.fare > 0)
+                                  Text('₱${leg.fare.toStringAsFixed(0)}',
+                                      style: TextStyle(fontSize: 11, color: AppColors.amber,
+                                          fontWeight: FontWeight.w600)),
+                                Text('${_currentLegIndex + 1}/${_commuteLegs.length}',
+                                    style: TextStyle(fontSize: 10, color: c.textFaint)),
+                              ],
+                            ),
                           ],
                         ),
+                        // "Next:" preview row — shown within 500 m of a leg transition
+                        if (isApproaching && nextLeg != null) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: AppColors.amber.withAlpha(20),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(_modeIcon(nextLeg.mode), size: 13, color: AppColors.amber),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Next: ${nextLeg.instruction}',
+                                    style: TextStyle(fontSize: 10, color: AppColors.amber,
+                                        fontWeight: FontWeight.w600),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     );
                   }),

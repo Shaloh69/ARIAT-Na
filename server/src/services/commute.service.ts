@@ -269,63 +269,228 @@ async function injectFerryLegs(
   return legs;
 }
 
+// ─── Transit geometry reconstruction ──────────────────────────────────────────
+
+/**
+ * Rebuilds the polyline for a transit leg using the route's road_ids.
+ * Builds a mini-graph from those roads and BFS from boardStopId → alightStopId.
+ * Returns null when the path cannot be traced (caller should try the next route).
+ */
+async function buildTransitLegGeometry(
+  roadIds: string[],
+  boardStopId: string,
+  alightStopId: string,
+): Promise<[number, number][] | null> {
+  if (!roadIds.length) return null;
+
+  const placeholders = roadIds.map(() => "?").join(",");
+  const [roadRows]: any = await pool.execute(
+    `SELECT id, start_intersection_id, end_intersection_id, path, is_bidirectional
+     FROM roads WHERE id IN (${placeholders}) AND is_active = TRUE`,
+    roadIds,
+  );
+  if (!(roadRows as any[]).length) return null;
+
+  type RoadRow = {
+    id: string;
+    start_intersection_id: string;
+    end_intersection_id: string;
+    path: [number, number][];
+    is_bidirectional: boolean;
+  };
+  const roads = (roadRows as any[]).map((r): RoadRow => ({
+    ...r,
+    path: Array.isArray(r.path) ? r.path : JSON.parse(r.path || "[]"),
+  }));
+
+  type Edge = { to: string; road: RoadRow; reversed: boolean };
+  const adj = new Map<string, Edge[]>();
+  for (const road of roads) {
+    if (!adj.has(road.start_intersection_id)) adj.set(road.start_intersection_id, []);
+    if (!adj.has(road.end_intersection_id))   adj.set(road.end_intersection_id, []);
+    adj.get(road.start_intersection_id)!.push({ to: road.end_intersection_id, road, reversed: false });
+    if (road.is_bidirectional) {
+      adj.get(road.end_intersection_id)!.push({ to: road.start_intersection_id, road, reversed: true });
+    }
+  }
+
+  // BFS — shortest hop-count path through the mini-graph
+  type QItem = { node: string; path: Array<{ road: RoadRow; reversed: boolean }> };
+  const queue: QItem[] = [{ node: boardStopId, path: [] }];
+  const visited = new Set<string>([boardStopId]);
+
+  while (queue.length > 0) {
+    const { node, path } = queue.shift()!;
+    if (node === alightStopId) {
+      const geometry: [number, number][] = [];
+      for (const { road, reversed } of path) {
+        const pts = reversed ? [...road.path].reverse() : road.path;
+        geometry.push(...(geometry.length > 0 ? pts.slice(1) : pts));
+      }
+      return geometry.length >= 2 ? geometry : null;
+    }
+    for (const edge of adj.get(node) ?? []) {
+      if (!visited.has(edge.to)) {
+        visited.add(edge.to);
+        queue.push({ node: edge.to, path: [...path, { road: edge.road, reversed: edge.reversed }] });
+      }
+    }
+  }
+  return null;
+}
+
 // ─── Transit corridor check ───────────────────────────────────────────────────
 
-/** Check if any active transit_route covers both ends (board + alight stops). */
+/**
+ * Find an active transit_route that serves both ends of the trip.
+ * Handles:
+ *  - pickup_mode='anywhere': board from current position (no stop needed)
+ *  - Board stop up to 15 km away: prepend tricycle/habal/taxi leg to reach it
+ *  - Alight stop not at destination: append walk/tricycle/taxi leg
+ *  - Transit geometry via mini-graph from road_ids (skips route if path fails)
+ */
 async function tryCorridorRoute(
   fromLat: number, fromLon: number,
   toLat: number, toLon: number,
   stopModes: FareRow[],
-  fares: FareRow[],
+  corridorAnyModes: FareRow[],
+  directFareModes: FareRow[],
 ): Promise<TransportLeg[] | null> {
   if (stopModes.length === 0) return null;
 
-  // Find bus stops near both ends
-  const fromStops = await findBusStopsNear(fromLat, fromLon, 0.5);
-  const toStops   = await findBusStopsNear(toLat, toLon, 1.0);
-  if (!fromStops.length || !toStops.length) return null;
+  const MAX_BOARD_KM = 15;
+  const toStops = await findBusStopsNear(toLat, toLon, 1.0);
+  if (!toStops.length) return null;
 
-  // Look for a transit route whose stop_ids cover both a from-stop and a to-stop
+  const fallbackDirect = directFareModes[directFareModes.length - 1];
+
   for (const mode of stopModes) {
     const [routes]: any = await pool.execute(
-      `SELECT id, route_name, stop_ids, transport_type
+      `SELECT id, route_name, stop_ids, road_ids, transport_type, pickup_mode
        FROM transit_routes
        WHERE transport_type = ? AND is_active = TRUE`,
       [mode.transport_type],
     );
+
     for (const route of routes as any[]) {
       const stopIds: string[] = Array.isArray(route.stop_ids)
         ? route.stop_ids
-        : typeof route.stop_ids === "string"
-          ? JSON.parse(route.stop_ids || "[]")
-          : [];
+        : typeof route.stop_ids === "string" ? JSON.parse(route.stop_ids || "[]") : [];
+      const roadIds: string[] = Array.isArray(route.road_ids)
+        ? route.road_ids
+        : typeof route.road_ids === "string" ? JSON.parse(route.road_ids || "[]") : [];
+      const pickupMode = route.pickup_mode as string;
 
-      const boardStop = fromStops.find(s => stopIds.includes(s.id));
       const alightStop = toStops.find(s => stopIds.includes(s.id));
-      if (!boardStop || !alightStop || boardStop.id === alightStop.id) continue;
+      if (!alightStop) continue;
+
+      // ── Determine board point ────────────────────────────────────────────
+      let boardStop: StopNode;
+      let boardDist = 0;
+
+      if (pickupMode === "anywhere") {
+        boardStop = { id: "__current__", name: "Current Location",
+          lat: fromLat, lon: fromLon, point_type: "virtual" };
+      } else {
+        const fromStops = await findBusStopsNear(fromLat, fromLon, MAX_BOARD_KM);
+        const candidate = fromStops.find(s => stopIds.includes(s.id));
+        if (!candidate) continue;
+        boardStop = candidate;
+        boardDist = haversine(fromLat, fromLon, boardStop.lat, boardStop.lon);
+      }
+      if (boardStop.id === alightStop.id) continue;
 
       const legs: TransportLeg[] = [];
 
-      // Walk to board stop if needed
-      const walkToDist = haversine(fromLat, fromLon, boardStop.lat, boardStop.lon);
-      if (walkToDist > 0.05) {
-        legs.push(await buildLeg(
-          fromLat, fromLon, "Current Location",
-          boardStop.lat, boardStop.lon, boardStop.name,
-          "walk", 0,
-          `Walk ${Math.round(walkToDist * 1000)}m to ${boardStop.name}`,
-        ));
+      // ── Leg A: reach the board stop ─────────────────────────────────────
+      if (boardDist > 0.05) {
+        if (boardDist <= 0.5) {
+          legs.push(await buildLeg(
+            fromLat, fromLon, "Current Location",
+            boardStop.lat, boardStop.lon, boardStop.name,
+            "walk", 0,
+            `Walk ${Math.round(boardDist * 1000)}m to ${boardStop.name}`,
+          ));
+        } else {
+          const rideToStop = corridorAnyModes.find(
+            m => boardDist <= maxRangeKm(m.transport_type, m),
+          );
+          if (rideToStop) {
+            legs.push(await buildLeg(
+              fromLat, fromLon, "Current Location",
+              boardStop.lat, boardStop.lon, boardStop.name,
+              rideToStop.transport_type,
+              calcFare(rideToStop, boardDist),
+              `Hail a ${rideToStop.display_name} to ${boardStop.name}. Fare: ₱${calcFare(rideToStop, boardDist).toFixed(0)}`,
+            ));
+          } else if (fallbackDirect) {
+            legs.push(await buildLeg(
+              fromLat, fromLon, "Current Location",
+              boardStop.lat, boardStop.lon, boardStop.name,
+              fallbackDirect.transport_type,
+              calcFare(fallbackDirect, boardDist),
+              `Book a ${fallbackDirect.display_name} to ${boardStop.name}. Fare: ₱${calcFare(fallbackDirect, boardDist).toFixed(0)}`,
+            ));
+          } else {
+            continue; // Can't reach board stop — try next route
+          }
+        }
       }
 
-      // Transit leg
+      // ── Leg B: transit leg with reconstructed geometry ──────────────────
       const transitDist = haversine(boardStop.lat, boardStop.lon, alightStop.lat, alightStop.lon);
-      legs.push(await buildLeg(
-        boardStop.lat, boardStop.lon, boardStop.name,
-        alightStop.lat, alightStop.lon, alightStop.name,
-        mode.transport_type,
-        calcFare(mode, transitDist),
-        `Board ${mode.display_name} (${route.route_name}) at ${boardStop.name}. Alight at ${alightStop.name}`,
-      ));
+      let transitGeometry: [number, number][] | null = null;
+
+      if (roadIds.length > 0 && boardStop.id !== "__current__") {
+        transitGeometry = await buildTransitLegGeometry(roadIds, boardStop.id, alightStop.id);
+        if (!transitGeometry) continue; // mini-graph failed — try next route (Q1)
+      }
+
+      const transitSpeeds: Record<string, number> = {
+        bus: 25, bus_ac: 25, bus_commute: 25, jeepney: 22,
+      };
+      legs.push({
+        mode: mode.transport_type as TransportLeg["mode"],
+        from: { name: boardStop.name, lat: boardStop.lat, lon: boardStop.lon },
+        to:   { name: alightStop.name, lat: alightStop.lat, lon: alightStop.lon },
+        distance: Math.round(transitDist * 100) / 100,
+        duration: Math.max(1, Math.round((transitDist / (transitSpeeds[mode.transport_type] ?? 22)) * 60)),
+        fare: calcFare(mode, transitDist),
+        instruction: `Board ${mode.display_name} (${route.route_name}) at ${boardStop.name}. Alight at ${alightStop.name}`,
+        geometry: transitGeometry ?? [[boardStop.lat, boardStop.lon], [alightStop.lat, alightStop.lon]],
+      });
+
+      // ── Leg C: alight stop → destination ────────────────────────────────
+      const alightToDest = haversine(alightStop.lat, alightStop.lon, toLat, toLon);
+      if (alightToDest > 0.05) {
+        if (alightToDest <= 0.5) {
+          legs.push(await buildLeg(
+            alightStop.lat, alightStop.lon, alightStop.name,
+            toLat, toLon, "Destination", "walk", 0,
+            `Walk ${Math.round(alightToDest * 1000)}m to your destination`,
+          ));
+        } else {
+          const finalRide = corridorAnyModes.find(
+            m => alightToDest <= maxRangeKm(m.transport_type, m),
+          );
+          if (finalRide) {
+            legs.push(await buildLeg(
+              alightStop.lat, alightStop.lon, alightStop.name,
+              toLat, toLon, "Destination",
+              finalRide.transport_type, calcFare(finalRide, alightToDest),
+              `Hail a ${finalRide.display_name} to your destination. Fare: ₱${calcFare(finalRide, alightToDest).toFixed(0)}`,
+            ));
+          } else if (fallbackDirect) {
+            legs.push(await buildLeg(
+              alightStop.lat, alightStop.lon, alightStop.name,
+              toLat, toLon, "Destination",
+              fallbackDirect.transport_type, calcFare(fallbackDirect, alightToDest),
+              `Book a ${fallbackDirect.display_name} to your destination. Fare: ₱${calcFare(fallbackDirect, alightToDest).toFixed(0)}`,
+            ));
+          }
+          // If no mode available, remaining distance handled by the outer saver loop
+        }
+      }
 
       return legs;
     }
@@ -392,7 +557,8 @@ async function buildSaverRoute(
 
     // ── 3. Try corridor_stops (bus/jeepney) via transit route data ──────────
     const corridorResult = await tryCorridorRoute(
-      curLat, curLon, endLat, endLon, corridorStopModes, fares,
+      curLat, curLon, endLat, endLon,
+      corridorStopModes, corridorAnyModes, directFareModes,
     );
     if (corridorResult) {
       legs.push(...corridorResult);
