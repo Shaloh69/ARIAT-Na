@@ -391,13 +391,21 @@ async function buildTransitLegGeometry(
 
 /**
  * Find an active transit_route that serves both ends of the trip.
- * Handles:
- *  - corridor_stops: board at a designated bus stop/terminal in stop_ids
- *  - corridor_anywhere: board at the nearest road-graph node (any intersection
- *    endpoint from road_ids) — not a bus stop; vehicle is flagged from roadside
- *    Feeder: walk ≤0.5 km, else corridor_anywhere ride, else taxi/maxim/grab
- *  - Alight stop not at destination: append walk/tricycle/taxi leg
- *  - Transit geometry via BFS mini-graph from road_ids
+ *
+ * corridor_stops  — board AND alight at designated bus stops/terminals only.
+ *                   Alight stop must be within 1 km of destination.
+ *
+ * corridor_anywhere — board AND alight at the nearest road-graph node
+ *                     (any intersection endpoint in road_ids) to user /
+ *                     destination respectively. The vehicle follows the
+ *                     assigned corridor regardless; the user alights at
+ *                     the node closest to their destination, then
+ *                     walk / ride the remaining gap.
+ *                     Feeder legs: walk ≤0.5 km, corridor_anywhere ride,
+ *                     or taxi/maxim/grab fallback.
+ *
+ * BFS mini-graph from road_ids gives road-following geometry.
+ * If BFS board→alight fails the route is skipped (wrong direction / gap).
  */
 async function tryCorridorRoute(
   fromLat: number, fromLon: number,
@@ -409,8 +417,8 @@ async function tryCorridorRoute(
   if (allModes.length === 0) return null;
 
   const MAX_BOARD_KM = 15;
-  const toStops = await findBusStopsNear(toLat, toLon, 1.0);
-  if (!toStops.length) return null;
+  // Pre-fetch for corridor_stops only — these need a designated stop within 1 km
+  const toStopsForFixed = await findBusStopsNear(toLat, toLon, 1.0);
 
   const fallbackDirect = directFareModes[directFareModes.length - 1];
 
@@ -431,24 +439,33 @@ async function tryCorridorRoute(
         : typeof route.road_ids === "string" ? JSON.parse(route.road_ids || "[]") : [];
       const pickupMode = route.pickup_mode as string;
 
-      const alightStop = toStops.find(s => stopIds.includes(s.id));
-      if (!alightStop) continue;
-
-      // ── Determine board point ────────────────────────────────────────────
-      let boardStop: StopNode;
-      let boardDist = 0;
-
-      // corridor_anywhere fare modes can board anywhere on the route.
-      // We still find the NEAREST stop on this specific route so we can:
-      //  1. Generate a proper walk/ride feeder leg to it
-      //  2. Use it as the BFS start for road-following geometry (no more straight lines)
       const effectiveAnywhere =
         pickupMode === "anywhere" || mode.routing_behavior === "corridor_anywhere";
 
+      // ── Determine alight stop ────────────────────────────────────────────
+      // corridor_anywhere: nearest road node on THIS route to the destination.
+      //   The bus always follows its corridor; user alights at the closest
+      //   point on the route to their destination, then covers the last gap.
+      // corridor_stops: must be a designated stop within 1 km of destination.
+      let alightStop: StopNode;
       if (effectiveAnywhere) {
-        // Nearest road-graph node (any intersection on route roads) — not a bus stop
+        const nearestAlight = await findNearestRoadNodeOnRoute(toLat, toLon, roadIds, stopIds);
+        if (!nearestAlight) continue;
+        alightStop = nearestAlight;
+      } else {
+        if (!toStopsForFixed.length) continue;
+        const alightCandidate = toStopsForFixed.find(s => stopIds.includes(s.id));
+        if (!alightCandidate) continue;
+        alightStop = alightCandidate;
+      }
+
+      // ── Determine board stop ─────────────────────────────────────────────
+      let boardStop: StopNode;
+      let boardDist = 0;
+      if (effectiveAnywhere) {
+        // Nearest road-graph node to user — vehicle is flagged from roadside
         const nearestNode = await findNearestRoadNodeOnRoute(fromLat, fromLon, roadIds, stopIds);
-        if (!nearestNode) continue; // route has no usable nodes — skip
+        if (!nearestNode) continue;
         boardStop = nearestNode;
         boardDist = haversine(fromLat, fromLon, boardStop.lat, boardStop.lon);
       } else {
