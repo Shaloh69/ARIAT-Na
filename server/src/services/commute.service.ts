@@ -74,28 +74,6 @@ function calcFare(row: FareRow, distKm: number): number {
   return Math.round(withMin * multiplier * 100) / 100;
 }
 
-/** Linear interpolation — returns the point distKm along the line from→to. */
-function interpolatePoint(
-  fromLat: number, fromLon: number,
-  toLat: number, toLon: number,
-  distKm: number,
-): { lat: number; lon: number } {
-  const total = haversine(fromLat, fromLon, toLat, toLon);
-  if (total === 0 || distKm >= total) return { lat: toLat, lon: toLon };
-  const t = distKm / total;
-  return { lat: fromLat + (toLat - fromLat) * t, lon: fromLon + (toLon - fromLon) * t };
-}
-
-/** Soft max range per corridor_anywhere mode — keeps legs reasonably sized. */
-function maxRangeKm(transportType: string, row: FareRow): number {
-  const known: Record<string, number> = {
-    tricycle: 5,
-    habal_habal: 15,
-  };
-  if (known[transportType]) return known[transportType];
-  // Heuristic for unknown admin-added modes: ₱200 worth of travel, capped at 50 km
-  return row.per_km_rate > 0 ? Math.min(200 / row.per_km_rate, 50) : 20;
-}
 
 /** Load all active fare configs ordered by display_order (cheapest-first). */
 async function loadFares(): Promise<FareRow[]> {
@@ -430,7 +408,6 @@ async function tryCorridorRoute(
   fromLat: number, fromLon: number,
   toLat: number, toLon: number,
   allModes: FareRow[],
-  corridorAnyModes: FareRow[],
   directFareModes: FareRow[],
 ): Promise<TransportLeg[] | null> {
   if (allModes.length === 0) return null;
@@ -438,8 +415,6 @@ async function tryCorridorRoute(
   const MAX_BOARD_KM = 15;
   // Pre-fetch for corridor_stops only — these need a designated stop within 1 km
   const toStopsForFixed = await findBusStopsNear(toLat, toLon, 1.0);
-
-  const fallbackDirect = directFareModes[directFareModes.length - 1];
 
   for (const mode of allModes) {
     const [routes]: any = await pool.execute(
@@ -500,14 +475,12 @@ async function tryCorridorRoute(
       }
       if (boardStop.id === alightStop.id) continue;
 
-      // Local feeder modes: short-range transport (tricycle ≤5 km, habal ≤15 km)
-      // that can pick up door-to-door from any position.
-      // Corridor buses (Odutco, Jeepney — maxRange ~50 km) are excluded because
-      // they run fixed routes and cannot be booked as point-to-point feeders.
-      const LOCAL_FEEDER_MAX_KM = 20;
-      const localFeedModes = corridorAnyModes.filter(
-        m => maxRangeKm(m.transport_type, m) <= LOCAL_FEEDER_MAX_KM,
-      );
+      // Route must make net progress: alight must be closer to destination than
+      // board. Rejects routes that go the wrong direction (e.g. "Parkmall to
+      // Bayfront" when heading south to Anjo World).
+      const boardToDest = haversine(boardStop.lat, boardStop.lon, toLat, toLon);
+      const alightToDestDist = haversine(alightStop.lat, alightStop.lon, toLat, toLon);
+      if (alightToDestDist >= boardToDest) continue;
 
       const legs: TransportLeg[] = [];
 
@@ -521,27 +494,20 @@ async function tryCorridorRoute(
             `Walk ${Math.round(boardDist * 1000)}m to board near ${boardStop.name}`,
           ));
         } else {
-          const rideToStop = localFeedModes.find(
-            m => boardDist <= maxRangeKm(m.transport_type, m),
-          );
-          if (rideToStop) {
+          // Only direct_fare modes (Grab, Taxi, Maxim) can feeder point-to-point.
+          // corridor_anywhere modes (tricycle, habal, jeepney) have fixed routes
+          // and cannot be hailed door-to-door.
+          const cheapestDirect = directFareModes[0];
+          if (cheapestDirect) {
             legs.push(await buildLeg(
               fromLat, fromLon, "Current Location",
               boardStop.lat, boardStop.lon, boardStop.name,
-              rideToStop.transport_type,
-              calcFare(rideToStop, boardDist),
-              `Hail a ${rideToStop.display_name} to board near ${boardStop.name}. Fare: ₱${calcFare(rideToStop, boardDist).toFixed(0)}`,
-            ));
-          } else if (fallbackDirect) {
-            legs.push(await buildLeg(
-              fromLat, fromLon, "Current Location",
-              boardStop.lat, boardStop.lon, boardStop.name,
-              fallbackDirect.transport_type,
-              calcFare(fallbackDirect, boardDist),
-              `Book a ${fallbackDirect.display_name} to board near ${boardStop.name}. Fare: ₱${calcFare(fallbackDirect, boardDist).toFixed(0)}`,
+              cheapestDirect.transport_type,
+              calcFare(cheapestDirect, boardDist),
+              `Book a ${cheapestDirect.display_name} to board near ${boardStop.name}. Fare: ₱${calcFare(cheapestDirect, boardDist).toFixed(0)}`,
             ));
           } else {
-            continue; // Can't reach board stop — try next route
+            continue; // no direct_fare available — can't reach board stop
           }
         }
       }
@@ -570,35 +536,25 @@ async function tryCorridorRoute(
       });
 
       // ── Leg C: alight stop → destination ────────────────────────────────
-      const alightToDest = haversine(alightStop.lat, alightStop.lon, toLat, toLon);
-      if (alightToDest > 0.05) {
-        if (alightToDest <= 0.5) {
+      if (alightToDestDist > 0.05) {
+        if (alightToDestDist <= 0.5) {
           legs.push(await buildLeg(
             alightStop.lat, alightStop.lon, alightStop.name,
             toLat, toLon, "Destination", "walk", 0,
-            `Walk ${Math.round(alightToDest * 1000)}m to your destination`,
+            `Walk ${Math.round(alightToDestDist * 1000)}m to your destination`,
           ));
         } else {
-          // Use local feeder only (tricycle/habal) — not corridor buses
-          const finalRide = localFeedModes.find(
-            m => alightToDest <= maxRangeKm(m.transport_type, m),
-          );
-          if (finalRide) {
+          const cheapestDirect = directFareModes[0];
+          if (cheapestDirect) {
             legs.push(await buildLeg(
               alightStop.lat, alightStop.lon, alightStop.name,
               toLat, toLon, "Destination",
-              finalRide.transport_type, calcFare(finalRide, alightToDest),
-              `Hail a ${finalRide.display_name} to your destination. Fare: ₱${calcFare(finalRide, alightToDest).toFixed(0)}`,
-            ));
-          } else if (fallbackDirect) {
-            legs.push(await buildLeg(
-              alightStop.lat, alightStop.lon, alightStop.name,
-              toLat, toLon, "Destination",
-              fallbackDirect.transport_type, calcFare(fallbackDirect, alightToDest),
-              `Book a ${fallbackDirect.display_name} to your destination. Fare: ₱${calcFare(fallbackDirect, alightToDest).toFixed(0)}`,
+              cheapestDirect.transport_type,
+              calcFare(cheapestDirect, alightToDestDist),
+              `Book a ${cheapestDirect.display_name} to your destination. Fare: ₱${calcFare(cheapestDirect, alightToDestDist).toFixed(0)}`,
             ));
           }
-          // If no mode available, remaining distance handled by the outer saver loop
+          // If no direct_fare: outer saver loop handles remaining gap
         }
       }
 
@@ -669,7 +625,7 @@ async function buildSaverRoute(
     // ── 3. Try transit routes — both corridor_stops and corridor_anywhere ──
     const corridorResult = await tryCorridorRoute(
       curLat, curLon, endLat, endLon,
-      [...corridorStopModes, ...corridorAnyModes], corridorAnyModes, directFareModes,
+      [...corridorStopModes, ...corridorAnyModes], directFareModes,
     );
     if (corridorResult) {
       legs.push(...corridorResult);
@@ -680,48 +636,7 @@ async function buildSaverRoute(
       continue;
     }
 
-    // ── 4. corridor_anywhere — board/alight at any road point ──────────────
-    //    No fixed bus stops needed; vehicles pick up and drop off anywhere.
-    //    If remaining distance fits within a mode's range, go directly.
-    //    Otherwise take the longest-range mode partway and loop again.
-    if (corridorAnyModes.length > 0) {
-      const exactMode = corridorAnyModes.find(
-        m => remaining <= maxRangeKm(m.transport_type, m),
-      );
-
-      if (exactMode) {
-        legs.push(await buildLeg(
-          curLat, curLon, curName,
-          endLat, endLon, "Destination",
-          exactMode.transport_type,
-          calcFare(exactMode, remaining),
-          `Hail a ${exactMode.display_name} to your destination. Fare: ₱${calcFare(exactMode, remaining).toFixed(0)}`,
-        ));
-        break;
-      }
-
-      // Partial leg — ride the longest-range mode as far as it goes
-      const longMode = corridorAnyModes[corridorAnyModes.length - 1];
-      const legDist  = maxRangeKm(longMode.transport_type, longMode);
-      if (legDist <= 0) break; // guard: zero-range config
-      const newRemaining = remaining - legDist;
-      // If this partial leg barely makes progress (< 5% reduction), skip to direct_fare
-      if (newRemaining / remaining > 0.95) break;
-      const mid      = interpolatePoint(curLat, curLon, endLat, endLon, legDist);
-      legs.push(await buildLeg(
-        curLat, curLon, curName,
-        mid.lat, mid.lon, "Along the way",
-        longMode.transport_type,
-        calcFare(longMode, legDist),
-        `Hail a ${longMode.display_name}. Fare: ₱${calcFare(longMode, legDist).toFixed(0)}`,
-      ));
-      curLat  = mid.lat;
-      curLon  = mid.lon;
-      curName = "Along the way";
-      continue;
-    }
-
-    // ── 6. Non-taxi direct_fare (maxim, etc.) ───────────────────────────────
+    // ── 4. Non-taxi direct_fare (maxim, etc.) ───────────────────────────────
     const nonTaxiDirect = directFareModes.filter(
       f => f.transport_type !== taxiMode.transport_type,
     );
@@ -737,7 +652,7 @@ async function buildSaverRoute(
       break;
     }
 
-    // ── 7. Taxi / Grab fallback ─────────────────────────────────────────────
+    // ── 5. Taxi / Grab fallback ─────────────────────────────────────────────
     legs.push(await buildLeg(
       curLat, curLon, curName,
       endLat, endLon, "Destination",
