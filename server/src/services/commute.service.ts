@@ -149,6 +149,31 @@ async function findBusStopToward(
   return useful[0] ?? null;
 }
 
+/**
+ * Find the nearest intersection node from a specific list of IDs.
+ * Used by corridor_anywhere routes to find the nearest board point on the route.
+ */
+async function findNearestStopOnRoute(
+  lat: number,
+  lon: number,
+  stopIds: string[],
+): Promise<StopNode | null> {
+  if (!stopIds.length) return null;
+  const placeholders = stopIds.map(() => "?").join(",");
+  const [rows]: any = await pool.execute(
+    `SELECT id, name, latitude AS lat, longitude AS lon, point_type
+     FROM intersections WHERE id IN (${placeholders})`,
+    stopIds,
+  );
+  let best: StopNode | null = null;
+  let bestDist = Infinity;
+  for (const r of rows as any[]) {
+    const d = haversine(lat, lon, r.lat, r.lon);
+    if (d < bestDist) { bestDist = d; best = r as StopNode; }
+  }
+  return best;
+}
+
 /** Find the nearest pier within maxKm. */
 async function findNearestPier(
   lat: number,
@@ -344,10 +369,12 @@ async function buildTransitLegGeometry(
 /**
  * Find an active transit_route that serves both ends of the trip.
  * Handles:
- *  - pickup_mode='anywhere' OR corridor_anywhere routing_behavior: board from current position
+ *  - corridor_stops: board must be at a designated stop (walk/ride to reach it)
+ *  - corridor_anywhere: board at the NEAREST stop on this specific route —
+ *    gives road-following geometry + proper feeder walk/ride leg (no straight lines)
  *  - Board stop up to 15 km away: prepend tricycle/habal/taxi leg to reach it
  *  - Alight stop not at destination: append walk/tricycle/taxi leg
- *  - Transit geometry via mini-graph from road_ids (skips route if path fails)
+ *  - Transit geometry via BFS mini-graph from road_ids
  */
 async function tryCorridorRoute(
   fromLat: number, fromLon: number,
@@ -388,13 +415,18 @@ async function tryCorridorRoute(
       let boardStop: StopNode;
       let boardDist = 0;
 
-      // corridor_anywhere fare modes always board at current position
+      // corridor_anywhere fare modes can board anywhere on the route.
+      // We still find the NEAREST stop on this specific route so we can:
+      //  1. Generate a proper walk/ride feeder leg to it
+      //  2. Use it as the BFS start for road-following geometry (no more straight lines)
       const effectiveAnywhere =
         pickupMode === "anywhere" || mode.routing_behavior === "corridor_anywhere";
 
       if (effectiveAnywhere) {
-        boardStop = { id: "__current__", name: "Current Location",
-          lat: fromLat, lon: fromLon, point_type: "virtual" };
+        const nearestOnRoute = await findNearestStopOnRoute(fromLat, fromLon, stopIds);
+        if (!nearestOnRoute) continue; // route has no stops — skip
+        boardStop = nearestOnRoute;
+        boardDist = haversine(fromLat, fromLon, boardStop.lat, boardStop.lon);
       } else {
         const fromStops = await findBusStopsNear(fromLat, fromLon, MAX_BOARD_KM);
         const candidate = fromStops.find(s => stopIds.includes(s.id));
@@ -445,9 +477,9 @@ async function tryCorridorRoute(
       const transitDist = haversine(boardStop.lat, boardStop.lon, alightStop.lat, alightStop.lon);
       let transitGeometry: [number, number][] | null = null;
 
-      if (roadIds.length > 0 && boardStop.id !== "__current__") {
+      if (roadIds.length > 0) {
         transitGeometry = await buildTransitLegGeometry(roadIds, boardStop.id, alightStop.id);
-        if (!transitGeometry) continue; // mini-graph failed — try next route (Q1)
+        if (!transitGeometry) continue; // mini-graph failed — try next route
       }
 
       const transitSpeeds: Record<string, number> = {
