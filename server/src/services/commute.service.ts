@@ -150,20 +150,43 @@ async function findBusStopToward(
 }
 
 /**
- * Find the nearest intersection node from a specific list of IDs.
- * Used by corridor_anywhere routes to find the nearest board point on the route.
+ * Find the nearest road-graph node for a corridor_anywhere route.
+ * Collects every start/end intersection from the route's road_ids — these are
+ * the actual flagging points on the road, not designated bus stops.
+ * Falls back to the route's stop_ids if road_ids yield no nodes.
  */
-async function findNearestStopOnRoute(
+async function findNearestRoadNodeOnRoute(
   lat: number,
   lon: number,
+  roadIds: string[],
   stopIds: string[],
 ): Promise<StopNode | null> {
-  if (!stopIds.length) return null;
-  const placeholders = stopIds.map(() => "?").join(",");
+  // Primary: collect all intersection endpoints from the route's roads
+  let nodeIds: string[] = [];
+  if (roadIds.length) {
+    const placeholders = roadIds.map(() => "?").join(",");
+    const [roadRows]: any = await pool.execute(
+      `SELECT start_intersection_id, end_intersection_id
+       FROM roads WHERE id IN (${placeholders}) AND is_active = TRUE`,
+      roadIds,
+    );
+    const seen = new Set<string>();
+    for (const r of roadRows as any[]) {
+      if (r.start_intersection_id) seen.add(r.start_intersection_id);
+      if (r.end_intersection_id)   seen.add(r.end_intersection_id);
+    }
+    nodeIds = Array.from(seen);
+  }
+
+  // Fallback: use stop_ids if no road nodes found
+  if (!nodeIds.length) nodeIds = [...stopIds];
+  if (!nodeIds.length) return null;
+
+  const nodePlaceholders = nodeIds.map(() => "?").join(",");
   const [rows]: any = await pool.execute(
     `SELECT id, name, latitude AS lat, longitude AS lon, point_type
-     FROM intersections WHERE id IN (${placeholders})`,
-    stopIds,
+     FROM intersections WHERE id IN (${nodePlaceholders})`,
+    nodeIds,
   );
   let best: StopNode | null = null;
   let bestDist = Infinity;
@@ -369,10 +392,10 @@ async function buildTransitLegGeometry(
 /**
  * Find an active transit_route that serves both ends of the trip.
  * Handles:
- *  - corridor_stops: board must be at a designated stop (walk/ride to reach it)
- *  - corridor_anywhere: board at the NEAREST stop on this specific route —
- *    gives road-following geometry + proper feeder walk/ride leg (no straight lines)
- *  - Board stop up to 15 km away: prepend tricycle/habal/taxi leg to reach it
+ *  - corridor_stops: board at a designated bus stop/terminal in stop_ids
+ *  - corridor_anywhere: board at the nearest road-graph node (any intersection
+ *    endpoint from road_ids) — not a bus stop; vehicle is flagged from roadside
+ *    Feeder: walk ≤0.5 km, else corridor_anywhere ride, else taxi/maxim/grab
  *  - Alight stop not at destination: append walk/tricycle/taxi leg
  *  - Transit geometry via BFS mini-graph from road_ids
  */
@@ -423,9 +446,10 @@ async function tryCorridorRoute(
         pickupMode === "anywhere" || mode.routing_behavior === "corridor_anywhere";
 
       if (effectiveAnywhere) {
-        const nearestOnRoute = await findNearestStopOnRoute(fromLat, fromLon, stopIds);
-        if (!nearestOnRoute) continue; // route has no stops — skip
-        boardStop = nearestOnRoute;
+        // Nearest road-graph node (any intersection on route roads) — not a bus stop
+        const nearestNode = await findNearestRoadNodeOnRoute(fromLat, fromLon, roadIds, stopIds);
+        if (!nearestNode) continue; // route has no usable nodes — skip
+        boardStop = nearestNode;
         boardDist = haversine(fromLat, fromLon, boardStop.lat, boardStop.lon);
       } else {
         const fromStops = await findBusStopsNear(fromLat, fromLon, MAX_BOARD_KM);
