@@ -985,9 +985,9 @@ export async function calculateRoute(
     adjacencyList,
   );
 
-  const startNode =
+  let startNode =
     startSnap ?? (await findNearestRoadNode(startLat, startLon, allNodes));
-  const endNode =
+  let endNode =
     endSnap ?? (await findNearestRoadNode(endLat, endLon, allNodes));
 
   if (!startNode.intersection || !endNode.intersection) {
@@ -1026,19 +1026,68 @@ export async function calculateRoute(
     }
   }
 
-  // Run A* pathfinding using the pre-built graph (avoids rebuilding it)
-  const result = await findShortestPath(
+  // ── Attempt 1: directed graph, normal snap ──────────────────────────────
+  let result = await findShortestPath(
     startNode.intersection.id,
     endNode.intersection.id,
     optimizeFor,
     { intersections: allNodes, adjacencyList, roadPaths },
   );
 
+  // ── Attempt 2: relax one-way restrictions ──────────────────────────────
+  // Handles cases where a physical road path exists but one-way rules in the
+  // directed graph block A* from finding it.
+  if (!result.success && !ignoreOneWay) {
+    const bidir = await buildGraph(true);
+    const r2 = await findShortestPath(
+      startNode.intersection.id,
+      endNode.intersection.id,
+      optimizeFor,
+      { intersections: bidir.intersections, adjacencyList: bidir.adjacencyList, roadPaths: bidir.roadPaths },
+    );
+    if (r2.success) result = r2;
+  }
+
+  // ── Attempt 3: widen snap radius to 5 km + bidirectional ──────────────
+  // Catches destinations that lie far from the default 1 km snap window so
+  // the initial snap landed on a disconnected stub of the graph.
   if (!result.success) {
-    // Walk fallback — no road route exists between these two points.
-    // Return a straight-line walking route so the UI can still render something useful.
+    const bidir = await buildGraph(true);
+    const s5 = snapToNetwork(
+      startLat, startLon,
+      bidir.roadPaths, bidir.roadNodeMap, bidir.intersections, bidir.adjacencyList,
+      5.0,
+    );
+    const e5 = snapToNetwork(
+      endLat, endLon,
+      bidir.roadPaths, bidir.roadNodeMap, bidir.intersections, bidir.adjacencyList,
+      5.0,
+    );
+    const sNode5 = s5 ?? startNode;
+    const eNode5 = e5 ?? endNode;
+
+    if (
+      sNode5.intersection.id !== startNode.intersection.id ||
+      eNode5.intersection.id !== endNode.intersection.id
+    ) {
+      const r3 = await findShortestPath(
+        sNode5.intersection.id,
+        eNode5.intersection.id,
+        optimizeFor,
+        { intersections: bidir.intersections, adjacencyList: bidir.adjacencyList, roadPaths: bidir.roadPaths },
+      );
+      if (r3.success) {
+        result = r3;
+        startNode = sNode5;
+        endNode = eNode5;
+      }
+    }
+  }
+
+  if (!result.success) {
+    // All routing attempts exhausted — straight-line walk fallback as last resort.
     const walkDist = haversineDistance(startLat, startLon, endLat, endLon);
-    const walkMins = Math.ceil((walkDist / 5) * 60); // 5 km/h walking speed
+    const walkMins = Math.ceil((walkDist / 5) * 60);
     return {
       success: true,
       path: [],
