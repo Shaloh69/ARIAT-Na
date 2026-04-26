@@ -35,12 +35,18 @@ class _KioskScanScreenState extends State<KioskScanScreen> {
       final raw = barcode.rawValue;
       if (raw == null) continue;
 
-      // Accept airatna://kiosk/TOKEN or plain 8-char tokens
+      // Accept:
+      //  airatna://kiosk/TOKEN         — deep link (direct)
+      //  https://.../open?token=TOKEN  — web handoff URL (QRHandoffModal output)
+      //  plain 6-12 char token         — fallback
       String? token;
       if (raw.startsWith('airatna://kiosk/')) {
         final uri = Uri.tryParse(raw);
         token = uri?.pathSegments.isNotEmpty == true ? uri!.pathSegments.last : null;
-      } else if (RegExp(r'^[A-Z0-9]{6,12}$').hasMatch(raw)) {
+      } else if (raw.contains('/open') && raw.contains('token=')) {
+        final uri = Uri.tryParse(raw);
+        token = uri?.queryParameters['token'];
+      } else if (RegExp(r'^[A-Za-z0-9]{6,32}$').hasMatch(raw)) {
         token = raw;
       }
 

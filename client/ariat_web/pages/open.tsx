@@ -11,50 +11,41 @@ export default function OpenPage() {
   // Extract token from ?token=ABC123
   const token = typeof router.query.token === "string" ? router.query.token : null;
 
-  const deepLink = token ? `airatna://kiosk/${token}` : null;
-
   const APK_URL = process.env.NEXT_PUBLIC_APK_URL ?? "https://drive.google.com/file/d/YOUR_FILE_ID/view";
 
   useEffect(() => {
     if (!token) return;
 
-    // Try opening the app via deep link.
-    // If the app is installed Android will hand off immediately;
-    // if not, nothing happens and we fall through after a timeout.
-    const link = `airatna://kiosk/${token}`;
+    const schemeLink = `airatna://kiosk/${token}`;
+    // Android Intent URL — most reliable way to open a custom scheme in Chrome on Android.
+    // Falls back to plain scheme on non-Android or older browsers.
+    const intentLink = `intent://kiosk/${token}#Intent;scheme=airatna;package=com.example.ariat_app;end`;
 
-    // Use an iframe trick — safer than setting window.location (avoids navigation error on some browsers)
-    const iframe = document.createElement("iframe");
-    iframe.style.display = "none";
-    iframe.src = link;
-    document.body.appendChild(iframe);
-
-    // Also try window.location as a backup
-    setTimeout(() => {
-      window.location.href = link;
-    }, 100);
-
-    // After 2.5 seconds — if still here the app wasn't installed
-    const fallbackTimer = setTimeout(() => {
-      setPhase("no-app");
-      document.body.removeChild(iframe);
-    }, 2500);
+    const isAndroid = /android/i.test(navigator.userAgent);
 
     // If the page goes hidden the app opened — mark as opened
     const handleVisibility = () => {
       if (document.hidden) {
         setPhase("opened");
         clearTimeout(fallbackTimer);
-        document.body.removeChild(iframe);
       }
     };
-
     document.addEventListener("visibilitychange", handleVisibility);
+
+    // Try opening the app. On Android Chrome, Intent URL is reliable;
+    // on other platforms use the plain custom scheme.
+    setTimeout(() => {
+      window.location.href = isAndroid ? intentLink : schemeLink;
+    }, 100);
+
+    // After 2.5 s — if still here the app wasn't installed / didn't respond
+    const fallbackTimer = setTimeout(() => {
+      setPhase("no-app");
+    }, 2500);
 
     return () => {
       clearTimeout(fallbackTimer);
       document.removeEventListener("visibilitychange", handleVisibility);
-      if (document.body.contains(iframe)) document.body.removeChild(iframe);
     };
   }, [token]);
 
@@ -88,9 +79,9 @@ export default function OpenPage() {
                 <h1 className="text-xl font-bold text-white">Opening AIRAT-NA…</h1>
                 <p className="text-slate-400 text-sm mt-1">Launching the app on your device</p>
               </div>
-              {deepLink && (
+              {token && (
                 <a
-                  href={deepLink}
+                  href={`airatna://kiosk/${token}`}
                   className="text-xs text-slate-500 underline underline-offset-2"
                 >
                   Tap here if nothing happens
