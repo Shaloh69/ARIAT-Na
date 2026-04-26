@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
+import '../../main.dart' show navigatorKey;
 import '../../models/itinerary.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
@@ -121,9 +122,9 @@ class _KioskClaimScreenState extends State<KioskClaimScreen> {
       if (!mounted) return;
       if (res['success'] == true) {
         await auth.loginWithAuthData(res['data'] as Map<String, dynamic>);
-        if (!mounted) return;
-        // Replace entire stack with AppShell at Saved tab — avoids landing on LoginScreen.
-        Navigator.of(context).pushAndRemoveUntil(
+        // Use the global navigator key so the push works even if this widget
+        // was rebuilt or unmounted by the Consumer2 triggered above.
+        navigatorKey.currentState?.pushAndRemoveUntil(
           FluentPageRoute(builder: (_) => const AppShell(initialIndex: 3)),
           (route) => false,
         );
