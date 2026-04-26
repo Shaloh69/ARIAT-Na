@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/toast_overlay.dart';
+import '../app_shell.dart';
 import '../auth/login_screen.dart';
 import '../map/map_screen.dart';
 
@@ -121,8 +122,11 @@ class _KioskClaimScreenState extends State<KioskClaimScreen> {
       if (res['success'] == true) {
         await auth.loginWithAuthData(res['data'] as Map<String, dynamic>);
         if (!mounted) return;
-        // Root Consumer will show AppShell which starts at Saved tab for guests.
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        // Replace entire stack with AppShell at Saved tab — avoids landing on LoginScreen.
+        Navigator.of(context).pushAndRemoveUntil(
+          FluentPageRoute(builder: (_) => const AppShell(initialIndex: 3)),
+          (route) => false,
+        );
         return;
       }
     } catch (_) {

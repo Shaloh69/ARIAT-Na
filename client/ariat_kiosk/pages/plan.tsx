@@ -12,7 +12,7 @@ import KioskAuthModal, {
   type KioskAuthUser,
 } from "@/components/KioskAuthModal";
 import QRHandoffModal from "@/components/QRHandoffModal";
-import { API_BASE_URL, API_ENDPOINTS, OPEN_PAGE_URL } from "@/lib/constants";
+import { API_BASE_URL, API_ENDPOINTS } from "@/lib/constants";
 import { toast } from "@/lib/toast";
 
 // Leaflet requires window — dynamic import with no SSR
@@ -1131,7 +1131,7 @@ const KioskPlanPage: NextPage = () => {
 
       {result && (
         <QRHandoffModal
-          deepLink={`${OPEN_PAGE_URL}?token=${result.token}`}
+          deepLink={`airatna://kiosk/${result.token}`}
           isOpen={qrOpen}
           subtitle={
             kioskUser
