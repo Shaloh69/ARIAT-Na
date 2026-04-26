@@ -8,6 +8,8 @@ import '../../models/trip_params.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
+import '../../services/auth_service.dart';
+import '../../widgets/guest_wall.dart';
 import '../../widgets/toast_overlay.dart';
 import 'trip_setup_screen.dart';
 import '../map/map_screen.dart';
@@ -135,6 +137,15 @@ class _TripsScreenState extends State<TripsScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
+    final auth = context.watch<AuthService>();
+
+    if (auth.isGuest) {
+      return GradientBackground(
+        child: SafeArea(
+          child: GuestWallWidget(featureName: 'Trip planning'),
+        ),
+      );
+    }
 
     return GradientBackground(
       child: SafeArea(

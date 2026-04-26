@@ -24,6 +24,86 @@ Future<bool> showGuestWall(BuildContext context, {String? featureName}) async {
   return !context.read<AuthService>().isGuest;
 }
 
+/// Full-screen inline guest wall — embed inside a screen's build() when isGuest.
+class GuestWallWidget extends StatelessWidget {
+  final String? featureName;
+  const GuestWallWidget({super.key, this.featureName});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72, height: 72,
+              decoration: BoxDecoration(
+                color: AppColors.red500.withAlpha(20),
+                shape: BoxShape.circle,
+              ),
+              child: const Center(child: Text('🔒', style: TextStyle(fontSize: 32))),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              featureName != null
+                  ? '$featureName requires an account'
+                  : 'Please Log in or Register',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: c.textStrong),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Please Log in / Register to have full access to the app.',
+              style: TextStyle(fontSize: 14, color: c.textMuted),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  FluentPageRoute(builder: (_) => const LoginScreen()),
+                ),
+                style: ButtonStyle(
+                  backgroundColor: WidgetStateProperty.all(AppColors.red500),
+                  shape: WidgetStateProperty.all(
+                    RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 14)),
+                ),
+                child: const Text('Log In',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: Button(
+                onPressed: () => Navigator.push(
+                  context,
+                  FluentPageRoute(builder: (_) => RegisterScreen()),
+                ),
+                style: ButtonStyle(
+                  shape: WidgetStateProperty.all(
+                    RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 14)),
+                ),
+                child: Text('Create Account',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.text)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _GuestWallSheet extends StatelessWidget {
   final String? featureName;
   const _GuestWallSheet({this.featureName});

@@ -12,6 +12,7 @@ import '../../services/theme_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
+import '../../widgets/guest_wall.dart';
 import '../../widgets/toast_overlay.dart';
 import '../kiosk/kiosk_scan_screen.dart';
 
@@ -105,6 +106,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final auth = context.watch<AuthService>();
     final isOnline = context.watch<ConnectivityService>().isOnline;
     final themeService = context.watch<ThemeService>();
+    if (auth.isGuest) {
+      return GradientBackground(
+        child: SafeArea(
+          child: GuestWallWidget(featureName: 'Profile'),
+        ),
+      );
+    }
+
     final user = auth.user;
     if (user == null) return const SizedBox.shrink();
 
