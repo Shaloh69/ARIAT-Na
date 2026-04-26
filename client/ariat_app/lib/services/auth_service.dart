@@ -30,6 +30,7 @@ class AuthService extends ChangeNotifier {
   String? get accessToken => _accessToken;
   Map<String, dynamic>? get user => _user;
   bool get isAuthenticated => _accessToken != null && _user != null;
+  bool get isGuest => _user?['is_guest'] == true;
   bool get isLoading => _isLoading;
   String get baseUrl => _baseUrl;
   bool get isOfflineSession => _isOfflineSession;
@@ -114,6 +115,19 @@ class AuthService extends ChangeNotifier {
     } else {
       await _offlineLogin(email, password);
     }
+  }
+
+  Future<void> loginAsGuest() async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/auth/guest'),
+      headers: {'Content-Type': 'application/json'},
+    ).timeout(const Duration(seconds: 30));
+    final body = jsonDecode(response.body);
+    if (response.statusCode != 201 || body['success'] != true) {
+      throw Exception(body['message'] ?? body['error'] ?? 'Guest login failed');
+    }
+    _isOfflineSession = false;
+    await _saveAuthData(body['data']);
   }
 
   Future<void> _onlineLogin(String email, String password) async {

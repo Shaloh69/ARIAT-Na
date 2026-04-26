@@ -16,6 +16,7 @@ import '../../models/route_result.dart';
 import '../../models/transport_leg.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/toast_overlay.dart';
+import '../../widgets/guest_wall.dart';
 import 'itinerary_bottom_sheet.dart';
 
 /// Safe numeric parse — handles both num and String values from JSON.
@@ -1020,6 +1021,9 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _saveItinerary() async {
     if (_routeStops.isEmpty) return;
+    // Guests cannot save itineraries — show login wall
+    final allowed = await showGuestWall(context, featureName: 'Saving itineraries');
+    if (!allowed || !mounted) return;
 
     try {
       final api = context.read<ApiService>();
@@ -2674,6 +2678,8 @@ class _MapScreenState extends State<MapScreen> {
             const SizedBox(height: 8),
             ..._multiModalLegs.expand((mm) => mm.legs).map((leg) {
               final isWalkLeg = leg.mode == 'walk';
+              final isPrivateCar = leg.mode == 'private_car';
+              final isFerryLeg = leg.mode == 'ferry';
               final legColor = _modeColor(leg.mode);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 6),
@@ -2712,34 +2718,35 @@ class _MapScreenState extends State<MapScreen> {
                           Text('${leg.distance.toStringAsFixed(1)} km',
                               style: TextStyle(fontSize: 10, color: c.textFaint)),
                           const SizedBox(height: 3),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: isWalkLeg
-                                  ? c.borderSubtle.withAlpha(40)
-                                  : AppColors.amber.withAlpha(22),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: isWalkLeg
-                                    ? c.borderSubtle
-                                    : AppColors.amber.withAlpha(70),
+                          if (!isPrivateCar)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: (isWalkLeg || isFerryLeg)
+                                    ? c.borderSubtle.withAlpha(40)
+                                    : AppColors.amber.withAlpha(22),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: (isWalkLeg || isFerryLeg)
+                                      ? c.borderSubtle
+                                      : AppColors.amber.withAlpha(70),
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Text(
+                                    isWalkLeg ? 'Free' : isFerryLeg ? 'Varies' : '₱${leg.fare.toStringAsFixed(0)}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: (isWalkLeg || isFerryLeg) ? c.textFaint : AppColors.amber,
+                                    ),
+                                  ),
+                                  Text('Fare',
+                                      style: TextStyle(fontSize: 8, color: c.textFaint)),
+                                ],
                               ),
                             ),
-                            child: Column(
-                              children: [
-                                Text(
-                                  isWalkLeg ? 'Free' : '₱${leg.fare.toStringAsFixed(0)}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: isWalkLeg ? c.textFaint : AppColors.amber,
-                                  ),
-                                ),
-                                Text('Fare',
-                                    style: TextStyle(fontSize: 8, color: c.textFaint)),
-                              ],
-                            ),
-                          ),
                         ],
                       ),
                     ],
@@ -2782,6 +2789,8 @@ class _MapScreenState extends State<MapScreen> {
             const SizedBox(height: 8),
             ..._commuteLegs.map((leg) {
               final isWalkLeg = leg.mode == 'walk';
+              final isPrivateCar = leg.mode == 'private_car';
+              final isFerryLeg = leg.mode == 'ferry';
               final isTransitLeg = _transitModes.contains(leg.mode);
               final legColor = _modeColor(leg.mode);
               final typeLabel = isWalkLeg ? 'Walk' : isTransitLeg ? 'Ride' : 'Book';
@@ -2842,34 +2851,35 @@ class _MapScreenState extends State<MapScreen> {
                           Text('${leg.distance.toStringAsFixed(1)} km',
                               style: TextStyle(fontSize: 10, color: c.textFaint)),
                           const SizedBox(height: 3),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: isWalkLeg
-                                  ? c.borderSubtle.withAlpha(40)
-                                  : AppColors.amber.withAlpha(22),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: isWalkLeg
-                                    ? c.borderSubtle
-                                    : AppColors.amber.withAlpha(70),
+                          if (!isPrivateCar)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: (isWalkLeg || isFerryLeg)
+                                    ? c.borderSubtle.withAlpha(40)
+                                    : AppColors.amber.withAlpha(22),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: (isWalkLeg || isFerryLeg)
+                                      ? c.borderSubtle
+                                      : AppColors.amber.withAlpha(70),
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Text(
+                                    isWalkLeg ? 'Free' : isFerryLeg ? 'Varies' : '₱${leg.fare.toStringAsFixed(0)}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: (isWalkLeg || isFerryLeg) ? c.textFaint : AppColors.amber,
+                                    ),
+                                  ),
+                                  Text('Fare',
+                                      style: TextStyle(fontSize: 8, color: c.textFaint)),
+                                ],
                               ),
                             ),
-                            child: Column(
-                              children: [
-                                Text(
-                                  isWalkLeg ? 'Free' : '₱${leg.fare.toStringAsFixed(0)}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: isWalkLeg ? c.textFaint : AppColors.amber,
-                                  ),
-                                ),
-                                Text('Fare',
-                                    style: TextStyle(fontSize: 8, color: c.textFaint)),
-                              ],
-                            ),
-                          ),
                         ],
                       ),
                     ],

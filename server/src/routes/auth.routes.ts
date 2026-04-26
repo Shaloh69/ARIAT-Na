@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   registerUser,
   loginUser,
+  loginGuest,
   getCurrentUser,
   updateCurrentUser,
   loginAdmin,
@@ -39,6 +40,8 @@ router.post(
 );
 
 router.post("/user/login", loginValidator, validate, asyncHandler(loginUser));
+
+router.post("/guest", asyncHandler(loginGuest));
 
 router.get("/user/me", authenticateUser, asyncHandler(getCurrentUser));
 

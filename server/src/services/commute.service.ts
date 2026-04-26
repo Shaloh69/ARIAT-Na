@@ -379,8 +379,8 @@ async function injectFerryLegs(
     srcPier.lat, srcPier.lon, srcPier.name,
     destPier.lat, destPier.lon, destPier.name,
     "ferry",
-    calcFare(ferryFare, ferryDist),
-    `Board ferry at ${srcPier.name}. Arrive at ${destPier.name}`,
+    0,
+    `Board a ferry at ${srcPier.name} to ${destPier.name}. Tickets may vary depending on the ferry operator.`,
   ));
 
   return legs;

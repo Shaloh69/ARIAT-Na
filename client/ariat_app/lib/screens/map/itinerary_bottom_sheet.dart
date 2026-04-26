@@ -387,7 +387,39 @@ class _ItineraryBottomSheetState extends State<_ItineraryBottomSheet> {
     );
   }
 
-  void _onGenerate() {
+  void _onGenerate() async {
+    if (_interests.length == 1) {
+      final c = context.appColors;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => ContentDialog(
+          title: const Text('Only 1 Interest Selected'),
+          content: Text(
+            'You selected only "${_interests.first}" as your interest.\n\n'
+            'With a single interest, the AI can only suggest destinations that match that one category. '
+            'Selecting more interests (e.g. adventure + nature + beach) gives the AI a wider pool to build '
+            'a more varied and enjoyable itinerary.\n\n'
+            'Are you sure you want to continue with just one?',
+            style: TextStyle(fontSize: 13, color: c.textMuted),
+          ),
+          actions: [
+            Button(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Add More'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ButtonStyle(
+                backgroundColor: WidgetStateProperty.all(AppColors.red500),
+              ),
+              child: const Text('Continue Anyway'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+    if (!mounted) return;
     Navigator.of(context).pop(ItineraryParams(
       availableHours: _hours,
       budget: _budget,

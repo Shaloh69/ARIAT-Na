@@ -131,6 +131,24 @@ export async function rankDestinations(
     .filter((dest) => {
       // Hard filter: skip if entrance fee exceeds budget (when budget > 0)
       if (budget > 0 && dest.entrance_fee_local > budget) return false;
+      // Hard interest filter: when interests are provided, only include
+      // destinations that match at least one interest in category, tags, or name.
+      if (normalizedInterests.length > 0) {
+        const catName  = dest.category_name.toLowerCase();
+        const catSlug  = dest.category_slug.toLowerCase();
+        const destName = dest.name.toLowerCase();
+        const destTags = Array.isArray(dest.tags)
+          ? dest.tags.map((t) => t.toLowerCase())
+          : [];
+        const hasMatch = normalizedInterests.some(
+          (interest) =>
+            catName.includes(interest) ||
+            catSlug.includes(interest) ||
+            destTags.some((t) => t.includes(interest)) ||
+            destName.includes(interest),
+        );
+        if (!hasMatch) return false;
+      }
       return true;
     })
     .map((dest) => {

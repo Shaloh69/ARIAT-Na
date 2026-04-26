@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
@@ -36,10 +37,38 @@ class _KioskClaimScreenState extends State<KioskClaimScreen> {
   int _days = 1;
   int _totalStops = 0;
 
+  // ── Kiosk received banner ─────────────────────────────────────────────────
+  bool _showReceivedBanner = false;
+  int _autoStartCountdown = 3;
+  Timer? _countdownTimer;
+
   @override
   void initState() {
     super.initState();
     _fetchPreview();
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startCountdown() {
+    setState(() { _showReceivedBanner = true; _autoStartCountdown = 3; });
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) { t.cancel(); return; }
+      setState(() => _autoStartCountdown--);
+      if (_autoStartCountdown <= 0) {
+        t.cancel();
+        _startWithoutAccount();
+      }
+    });
+  }
+
+  void _cancelCountdown() {
+    _countdownTimer?.cancel();
+    setState(() => _showReceivedBanner = false);
   }
 
   Future<void> _fetchPreview() async {
@@ -62,6 +91,8 @@ class _KioskClaimScreenState extends State<KioskClaimScreen> {
             _totalStops = stops.length;
           }
         });
+        // Auto-start countdown after a kiosk QR scan
+        _startCountdown();
       } else {
         setState(() => _error = res['message'] ?? 'Failed to load itinerary');
       }
@@ -232,6 +263,55 @@ class _KioskClaimScreenState extends State<KioskClaimScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Received from KIOSK banner ──────────────────────────────────
+          if (_showReceivedBanner) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.red500.withAlpha(220), AppColors.purple.withAlpha(200)],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  const Text('📱', style: TextStyle(fontSize: 22)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Itinerary Received from KIOSK',
+                          style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          'Starting in $_autoStartCountdown second${_autoStartCountdown != 1 ? "s" : ""}…',
+                          style: TextStyle(fontSize: 12, color: Colors.white.withAlpha(200)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Button(
+                    onPressed: _cancelCountdown,
+                    style: ButtonStyle(
+                      padding: WidgetStateProperty.all(
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      ),
+                    ),
+                    child: const Text('Cancel', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+            ).animate().fadeIn(duration: 300.ms).slideY(begin: -0.1, end: 0),
+            const SizedBox(height: 12),
+          ],
+
           // Hero card
           GlassCard(
             padding: const EdgeInsets.all(24),

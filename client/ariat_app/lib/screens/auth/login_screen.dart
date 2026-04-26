@@ -20,6 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _loading = false;
+  bool _guestLoading = false;
   final bool _obscurePassword = true;
 
   @override
@@ -27,6 +28,18 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loginAsGuest() async {
+    setState(() => _guestLoading = true);
+    try {
+      await context.read<AuthService>().loginAsGuest();
+      if (mounted) AppToast.info(context, 'Browsing as guest — some features require an account');
+    } catch (e) {
+      if (mounted) AppToast.error(context, e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _guestLoading = false);
+    }
   }
 
   Future<void> _login() async {
@@ -206,6 +219,59 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
                 ).animate().fadeIn(delay: 600.ms, duration: 500.ms),
+
+                SizedBox(height: 16),
+
+                // Divider
+                Row(
+                  children: [
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text('or', style: TextStyle(fontSize: 12, color: c.textFaint)),
+                    ),
+                    Expanded(child: Divider()),
+                  ],
+                ).animate().fadeIn(delay: 700.ms, duration: 400.ms),
+
+                SizedBox(height: 16),
+
+                // Guest button
+                SizedBox(
+                  width: double.infinity,
+                  child: Button(
+                    onPressed: (_guestLoading || !isOnline) ? null : _loginAsGuest,
+                    style: ButtonStyle(
+                      shape: WidgetStateProperty.all(
+                        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 14)),
+                    ),
+                    child: _guestLoading
+                        ? SizedBox(width: 16, height: 16, child: ProgressRing(strokeWidth: 2))
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(FluentIcons.contact, size: 15, color: isOnline ? c.textMuted : c.textFaint),
+                              SizedBox(width: 8),
+                              Text(
+                                'Continue as Guest',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: isOnline ? c.textMuted : c.textFaint,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ).animate().fadeIn(delay: 800.ms, duration: 400.ms),
+
+                SizedBox(height: 8),
+                Text(
+                  'Guest access is limited — log in for full features',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11, color: c.textFaint),
+                ).animate().fadeIn(delay: 850.ms, duration: 400.ms),
               ],
             ),
           ),

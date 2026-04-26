@@ -148,6 +148,44 @@ export const loginUser = async (
 };
 
 /**
+ * Guest login — creates a temporary guest account and returns a token.
+ * POST /api/v1/auth/guest
+ */
+export const loginGuest = async (
+  _req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  const guestId    = uuidv4();
+  const guestEmail = `guest_${guestId}@guest.local`;
+
+  await pool.execute(
+    `INSERT INTO users (id, email, password_hash, full_name, is_verified, is_active, is_guest)
+     VALUES (?, ?, '', 'Guest', FALSE, TRUE, TRUE)`,
+    [guestId, guestEmail],
+  );
+
+  const tokens = await generateTokens({ id: guestId, email: guestEmail, type: "user" });
+
+  res.status(201).json({
+    success: true,
+    message: "Guest session created",
+    data: {
+      user: {
+        id: guestId,
+        email: guestEmail,
+        full_name: "Guest",
+        phone_number: null,
+        profile_image_url: null,
+        is_verified: false,
+        is_guest: true,
+        created_at: new Date().toISOString(),
+      },
+      ...tokens,
+    },
+  });
+};
+
+/**
  * Get current user profile
  * GET /api/v1/auth/user/me
  */
@@ -160,7 +198,7 @@ export const getCurrentUser = async (
   }
 
   const [users]: any = await pool.execute(
-    "SELECT id, email, full_name, phone_number, profile_image_url, is_verified, created_at FROM users WHERE id = ?",
+    "SELECT id, email, full_name, phone_number, profile_image_url, is_verified, is_guest, created_at FROM users WHERE id = ?",
     [req.user.id],
   );
 

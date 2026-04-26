@@ -162,7 +162,8 @@ export default function DestinationsPage() {
   const [formClusterId, setFormClusterId] = useState("");
   const [formMunicipality, setFormMunicipality] = useState("");
   const [formBudgetLevel, setFormBudgetLevel] = useState("mid");
-  const [formTags, setFormTags] = useState("");
+  const [formTags, setFormTags] = useState<string[]>([]);
+  const [formTagInput, setFormTagInput] = useState("");
   const [formFamilyFriendly, setFormFamilyFriendly] = useState(false);
   const [formIsActive, setFormIsActive] = useState(true);
   const [formIsIsland, setFormIsIsland] = useState(false);
@@ -280,7 +281,8 @@ export default function DestinationsPage() {
     setFormClusterId("");
     setFormMunicipality("");
     setFormBudgetLevel("mid");
-    setFormTags("");
+    setFormTags([]);
+    setFormTagInput("");
     setFormFamilyFriendly(false);
     setFormIsActive(true);
     setFormIsIsland(false);
@@ -329,7 +331,8 @@ export default function DestinationsPage() {
       setFormClusterId(destination.cluster_id || "");
       setFormMunicipality(destination.municipality || "");
       setFormBudgetLevel(destination.budget_level || "mid");
-      setFormTags((destination.tags ?? []).join(", "));
+      setFormTags(destination.tags ?? []);
+      setFormTagInput("");
       setFormFamilyFriendly(
         destination.family_friendly === true ||
           (destination.family_friendly as any) === 1,
@@ -520,10 +523,7 @@ export default function DestinationsPage() {
       .split(",")
       .map((a) => a.trim())
       .filter(Boolean);
-    const tagsList = formTags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
+    const tagsList = formTags.filter(Boolean);
     const cuisineList = formCuisineTypes
       .split(",")
       .map((c) => c.trim())
@@ -1067,31 +1067,73 @@ export default function DestinationsPage() {
                       <SelectItem key="mid">💰💰 Mid-range</SelectItem>
                       <SelectItem key="premium">💰💰💰 Premium</SelectItem>
                     </Select>
-                    <Input
-                      label="Tags"
-                      placeholder="Comma-separated: nature, heritage, beach..."
-                      value={formTags}
-                      onChange={(e) => setFormTags(e.target.value)}
-                    />
-                  </div>
-                  {formTags && (
-                    <div className="flex flex-wrap gap-1">
-                      {formTags
-                        .split(",")
-                        .map((t) => t.trim())
-                        .filter(Boolean)
-                        .map((tag, i) => (
+                    <div>
+                      <p className="text-xs text-default-500 mb-1 font-medium">Tags</p>
+                      {/* chip display */}
+                      <div className="flex flex-wrap gap-1 mb-2 min-h-[28px]">
+                        {formTags.map((tag, i) => (
                           <Chip
                             key={i}
                             color="secondary"
                             size="sm"
                             variant="flat"
+                            onClose={() =>
+                              setFormTags((prev) => prev.filter((_, idx) => idx !== i))
+                            }
                           >
                             {tag}
                           </Chip>
                         ))}
+                      </div>
+                      {/* text input — Enter or comma commits a tag */}
+                      <Input
+                        placeholder="Type a tag then press Enter (e.g. adventure, falls, heritage…)"
+                        size="sm"
+                        value={formTagInput}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v.endsWith(",")) {
+                            const tag = v.slice(0, -1).trim().toLowerCase();
+                            if (tag && !formTags.includes(tag))
+                              setFormTags((prev) => [...prev, tag]);
+                            setFormTagInput("");
+                          } else {
+                            setFormTagInput(v);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            const tag = formTagInput.trim().toLowerCase();
+                            if (tag && !formTags.includes(tag))
+                              setFormTags((prev) => [...prev, tag]);
+                            setFormTagInput("");
+                          } else if (
+                            e.key === "Backspace" &&
+                            formTagInput === "" &&
+                            formTags.length > 0
+                          ) {
+                            setFormTags((prev) => prev.slice(0, -1));
+                          }
+                        }}
+                      />
+                      {/* quick-add suggestions */}
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {["nature","heritage","food","adventure","shopping","beach","culture","religion","falls","island","hiking","diving","historical","nightlife"].filter(
+                          (s) => !formTags.includes(s)
+                        ).map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            className="text-xs px-2 py-0.5 rounded-full border border-default-300 text-default-500 hover:bg-default-100 transition-colors"
+                            onClick={() => setFormTags((prev) => [...prev, s])}
+                          >
+                            +{s}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  )}
+                  </div>
                   <div className="flex flex-wrap gap-6">
                     <Switch
                       isSelected={formFamilyFriendly}
