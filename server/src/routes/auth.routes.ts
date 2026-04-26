@@ -3,6 +3,7 @@ import {
   registerUser,
   loginUser,
   loginGuest,
+  loginWithGuestCode,
   getCurrentUser,
   updateCurrentUser,
   loginAdmin,
@@ -43,6 +44,9 @@ router.post(
 router.post("/user/login", loginValidator, validate, asyncHandler(loginUser));
 
 router.post("/guest", asyncHandler(loginGuest));
+
+// Log in with a kiosk guest code (8-char session token shown on the /open page)
+router.post("/guest-login", asyncHandler(loginWithGuestCode));
 
 router.get("/user/me", authenticateUser, asyncHandler(getCurrentUser));
 

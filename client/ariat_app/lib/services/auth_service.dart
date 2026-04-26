@@ -122,10 +122,25 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  /// Log in using auth data already fetched (e.g. from GET /kiosk/guest-token).
+  /// Log in using auth data already fetched.
   Future<void> loginWithAuthData(Map<String, dynamic> data) async {
     _isOfflineSession = false;
     await _saveAuthData(data);
+  }
+
+  /// Log in using a kiosk guest code (the 8-char session token shown on the /open page).
+  Future<void> loginWithGuestCode(String code) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/auth/guest-login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'code': code.toUpperCase().trim()}),
+    ).timeout(const Duration(seconds: 30));
+    final body = jsonDecode(response.body);
+    if (response.statusCode != 200 || body['success'] != true) {
+      throw Exception(body['message'] ?? body['error'] ?? 'Invalid guest code');
+    }
+    _isOfflineSession = false;
+    await _saveAuthData(body['data']);
   }
 
   /// Migrate guest itineraries to the current real account, then delete the guest.

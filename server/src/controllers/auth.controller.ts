@@ -582,6 +582,74 @@ export const changePassword = async (
 };
 
 /**
+ * Log in using a kiosk guest code (the 8-char kiosk session token).
+ * The kiosk "Continue as Guest" flow stores the guest_user_id on the session;
+ * this endpoint looks it up and issues a JWT for that guest account.
+ * POST /api/v1/auth/guest-login
+ * Body: { code: string }
+ */
+export const loginWithGuestCode = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  const { code } = req.body;
+  if (!code || typeof code !== "string") {
+    throw new AppError("Guest code is required", 400);
+  }
+
+  const normalized = code.toUpperCase().trim();
+
+  const [sessions]: any = await pool.execute(
+    `SELECT guest_user_id FROM kiosk_sessions
+     WHERE token = ? AND guest_user_id IS NOT NULL AND expires_at > NOW()`,
+    [normalized],
+  );
+
+  if ((sessions as any[]).length === 0) {
+    throw new AppError("Invalid or expired guest code", 404);
+  }
+
+  const guestUserId = (sessions as any[])[0].guest_user_id;
+
+  const [users]: any = await pool.execute(
+    `SELECT id, email, full_name, is_guest, created_at
+     FROM users WHERE id = ? AND is_guest = TRUE AND is_active = TRUE`,
+    [guestUserId],
+  );
+
+  if ((users as any[]).length === 0) {
+    throw new AppError("Guest account not found", 404);
+  }
+
+  const guestUser = (users as any[])[0];
+  const tokens = await generateTokens({
+    id: guestUser.id,
+    email: guestUser.email,
+    type: "user",
+  });
+
+  logger.info(`[AUTH] Guest code login: session ${normalized} → user ${guestUser.id}`);
+
+  res.json({
+    success: true,
+    message: "Logged in as guest",
+    data: {
+      user: {
+        id: guestUser.id,
+        email: guestUser.email,
+        full_name: guestUser.full_name,
+        phone_number: null,
+        profile_image_url: null,
+        is_verified: false,
+        is_guest: true,
+        created_at: guestUser.created_at,
+      },
+      ...tokens,
+    },
+  });
+};
+
+/**
  * Migrate guest itineraries to a real account, then delete the guest account.
  * POST /api/v1/auth/migrate-guest
  * Body: { guest_id }

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
-import '../../main.dart' show navigatorKey;
 import '../../models/itinerary.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
@@ -10,7 +9,6 @@ import '../../theme/app_theme.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/toast_overlay.dart';
-import '../app_shell.dart';
 import '../auth/login_screen.dart';
 import '../map/map_screen.dart';
 
@@ -94,13 +92,6 @@ class _KioskClaimScreenState extends State<KioskClaimScreen> {
           }
         });
 
-        // If the kiosk created a guest account for this session, silently log in
-        if (data['has_guest_token'] == true) {
-          await _autoLoginAsGuest();
-          return;
-        }
-
-        // Otherwise start the normal countdown
         _startCountdown();
       } else {
         setState(() => _error = res['message'] ?? 'Failed to load itinerary');
@@ -110,30 +101,6 @@ class _KioskClaimScreenState extends State<KioskClaimScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  /// Fetches the single-use guest JWT from the server, logs in silently,
-  /// then navigates the user to the Saved tab where their itinerary is waiting.
-  Future<void> _autoLoginAsGuest() async {
-    final auth = context.read<AuthService>();
-    final api = context.read<ApiService>();
-    try {
-      final res = await api.get('/kiosk/guest-token/${widget.token}');
-      if (!mounted) return;
-      if (res['success'] == true) {
-        await auth.loginWithAuthData(res['data'] as Map<String, dynamic>);
-        // Use the global navigator key so the push works even if this widget
-        // was rebuilt or unmounted by the Consumer2 triggered above.
-        navigatorKey.currentState?.pushAndRemoveUntil(
-          FluentPageRoute(builder: (_) => const AppShell(initialIndex: 3)),
-          (route) => false,
-        );
-        return;
-      }
-    } catch (_) {
-      // Fall through to normal countdown
-    }
-    if (mounted) _startCountdown();
   }
 
   /// Start navigating with the itinerary immediately — no account needed.

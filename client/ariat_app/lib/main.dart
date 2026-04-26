@@ -27,8 +27,6 @@ class AriatNaApp extends StatefulWidget {
   State<AriatNaApp> createState() => _AriatNaAppState();
 }
 
-// Global navigator key — used by deep link handler and KioskClaimScreen
-// to push routes even when widget context may have been rebuilt.
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class _AriatNaAppState extends State<AriatNaApp> {
@@ -41,9 +39,6 @@ class _AriatNaAppState extends State<AriatNaApp> {
   final ThemeService _themeService = ThemeService();
   final _appLinks = AppLinks();
 
-  // Token buffered while auth is still loading — pushed once init() finishes.
-  String? _pendingKioskToken;
-
   @override
   void initState() {
     super.initState();
@@ -55,22 +50,17 @@ class _AriatNaAppState extends State<AriatNaApp> {
     _navWsService = NavigationWsService(_authService);
 
     _authService.init().then((_) {
-      // Only sync baseUrl if the user has explicitly saved a custom URL.
       final saved = _authService.baseUrl;
       if (saved != AuthService.defaultBaseUrl) {
         _apiService.baseUrl = saved;
       }
-      // Drain any kiosk deep link that arrived before init() completed.
-      _tryPushPendingKioskToken();
     });
 
     _initDeepLinks();
   }
 
   void _initDeepLinks() {
-    // App already running — foreground / background resume link
     _appLinks.uriLinkStream.listen(_handleDeepLink);
-    // Cold-start — app was opened via the link
     _appLinks.getInitialLink().then((uri) {
       if (uri != null) _handleDeepLink(uri);
     });
@@ -78,37 +68,13 @@ class _AriatNaAppState extends State<AriatNaApp> {
 
   void _handleDeepLink(Uri uri) {
     if (uri.scheme != 'airatna') return;
-
-    // airatna://kiosk/TOKEN  →  KioskClaimScreen
     if (uri.host == 'kiosk') {
       final token = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
-      if (token == null || token.isEmpty) return;
-
-      // If auth is still loading, buffer the token — we can't push yet because
-      // the Navigator may not be ready and isAuthenticated is unknown.
-      if (_authService.isLoading) {
-        _pendingKioskToken = token;
-        return;
+      if (token != null && token.isNotEmpty) {
+        navigatorKey.currentState?.push(
+          FluentPageRoute(builder: (_) => KioskClaimScreen(token: token)),
+        );
       }
-
-      _pushKioskClaim(token);
-    }
-  }
-
-  void _tryPushPendingKioskToken() {
-    final token = _pendingKioskToken;
-    if (token == null) return;
-    _pendingKioskToken = null;
-    _pushKioskClaim(token);
-  }
-
-  void _pushKioskClaim(String token) {
-    final nav = navigatorKey.currentState;
-    if (nav != null) {
-      nav.push(FluentPageRoute(builder: (_) => KioskClaimScreen(token: token)));
-    } else {
-      // Navigator widget not mounted yet — retry after the current frame.
-      WidgetsBinding.instance.addPostFrameCallback((_) => _pushKioskClaim(token));
     }
   }
 
@@ -133,7 +99,6 @@ class _AriatNaAppState extends State<AriatNaApp> {
       ],
       child: Consumer2<AuthService, ThemeService>(
         builder: (context, auth, themeService, _) {
-          // Only propagate a custom URL — never override with stale emulator address
           if (auth.baseUrl != AuthService.defaultBaseUrl) {
             _apiService.baseUrl = auth.baseUrl;
           }
