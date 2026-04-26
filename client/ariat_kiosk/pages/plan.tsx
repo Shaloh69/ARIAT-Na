@@ -12,7 +12,7 @@ import KioskAuthModal, {
   type KioskAuthUser,
 } from "@/components/KioskAuthModal";
 import QRHandoffModal from "@/components/QRHandoffModal";
-import { API_BASE_URL, API_ENDPOINTS } from "@/lib/constants";
+import { API_BASE_URL, API_ENDPOINTS, OPEN_PAGE_URL } from "@/lib/constants";
 import { toast } from "@/lib/toast";
 
 // Leaflet requires window — dynamic import with no SSR
@@ -297,6 +297,8 @@ const KioskPlanPage: NextPage = () => {
 
       if (!json.success) throw new Error(json.message ?? "Generation failed");
       setResult(json.data);
+      // Pre-warm the Render /open page so it's ready when the user scans the QR
+      fetch(OPEN_PAGE_URL, { mode: "no-cors" }).catch(() => {});
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Failed to generate itinerary";
@@ -1131,7 +1133,7 @@ const KioskPlanPage: NextPage = () => {
 
       {result && (
         <QRHandoffModal
-          deepLink={`airatna://kiosk/${result.token}`}
+          deepLink={`${OPEN_PAGE_URL}?token=${result.token}`}
           isOpen={qrOpen}
           subtitle={
             kioskUser
