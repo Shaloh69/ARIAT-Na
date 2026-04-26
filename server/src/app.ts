@@ -586,6 +586,23 @@ const ensureKioskMigration = async (): Promise<void> => {
 
 /** Migration 010: Set pickup_mode='anywhere' for all transit routes whose
  *  fare config has routing_behavior='corridor_anywhere'. */
+/** Migration 011: Add is_guest column to users if missing. */
+const ensureGuestMigration = async (): Promise<void> => {
+  try {
+    const [cols]: any = await pool.execute(
+      "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'is_guest'",
+    );
+    if (cols.length === 0) {
+      await pool.execute(
+        "ALTER TABLE users ADD COLUMN is_guest BOOLEAN NOT NULL DEFAULT FALSE AFTER is_active",
+      );
+      logger.info("[STARTUP] Added users.is_guest column (migration 011).");
+    }
+  } catch (error) {
+    logger.error("[STARTUP] Guest migration failed:", error);
+  }
+};
+
 const ensureTransitPickupModeFix = async (): Promise<void> => {
   try {
     const [result]: any = await pool.execute(`
@@ -625,6 +642,9 @@ const startServer = async (): Promise<void> => {
 
     // Fix transit route pickup_mode for corridor_anywhere fare configs (migration 010)
     await ensureTransitPickupModeFix();
+
+    // Add users.is_guest column if missing (migration 011)
+    await ensureGuestMigration();
 
     // Ensure intersections.point_type ENUM includes 'entrance'
     await ensureEntrancePointType();
