@@ -12,6 +12,7 @@ import '../../models/guide.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
+import '../../widgets/guest_wall.dart';
 import '../../widgets/toast_overlay.dart';
 import '../destinations/destination_detail_screen.dart';
 import '../explore/explore_screen.dart';
@@ -190,18 +191,30 @@ class _HomeScreenState extends State<HomeScreen> {
                                   label: 'Weekend Getaway',
                                   icon: FluentIcons.calendar,
                                   color: AppColors.green,
-                                  onTap: () => Navigator.of(context).push(
-                                    FluentPageRoute(builder: (_) => const MapScreen()),
-                                  ),
+                                  onTap: () {
+                                    if (context.read<AuthService>().isGuest) {
+                                      showGuestWall(context, featureName: 'Trip planning');
+                                      return;
+                                    }
+                                    Navigator.of(context).push(
+                                      FluentPageRoute(builder: (_) => const MapScreen()),
+                                    );
+                                  },
                                 ),
                                 const SizedBox(width: 10),
                                 _QuickActionChip(
                                   label: 'Beach Trip',
                                   icon: FluentIcons.globe,
                                   color: AppColors.blue,
-                                  onTap: () => Navigator.of(context).push(
-                                    FluentPageRoute(builder: (_) => const MapScreen()),
-                                  ),
+                                  onTap: () {
+                                    if (context.read<AuthService>().isGuest) {
+                                      showGuestWall(context, featureName: 'Trip planning');
+                                      return;
+                                    }
+                                    Navigator.of(context).push(
+                                      FluentPageRoute(builder: (_) => const MapScreen()),
+                                    );
+                                  },
                                 ),
                               ],
                             ).animate().fadeIn(delay: 250.ms, duration: 400.ms),

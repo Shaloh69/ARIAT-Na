@@ -57,9 +57,14 @@ class AuthService extends ChangeNotifier {
         try {
           _user = jsonDecode(userData) as Map<String, dynamic>;
         } catch (_) {
-          // Corrupted cached user data — clear it
           await prefs.remove(_userKey);
         }
+      }
+
+      // Guest sessions are never restored on cold start — guests must scan QR again
+      if (_user?['is_guest'] == true) {
+        await _clearTokens();
+        return;
       }
 
       if (_accessToken != null) {
@@ -114,6 +119,25 @@ class AuthService extends ChangeNotifier {
       await _onlineLogin(email, password);
     } else {
       await _offlineLogin(email, password);
+    }
+  }
+
+  /// Log in using auth data already fetched (e.g. from GET /kiosk/guest-token).
+  Future<void> loginWithAuthData(Map<String, dynamic> data) async {
+    _isOfflineSession = false;
+    await _saveAuthData(data);
+  }
+
+  /// Migrate guest itineraries to the current real account, then delete the guest.
+  Future<void> migrateGuestAccount(String guestId) async {
+    try {
+      await http.post(
+        Uri.parse('$_baseUrl/auth/migrate-guest'),
+        headers: _authHeaders(),
+        body: jsonEncode({'guest_id': guestId}),
+      ).timeout(const Duration(seconds: 30));
+    } catch (_) {
+      // Non-fatal — silent
     }
   }
 

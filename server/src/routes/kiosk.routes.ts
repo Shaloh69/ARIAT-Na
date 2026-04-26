@@ -4,6 +4,7 @@ import {
   generateKioskItinerary,
   previewKioskSession,
   claimKioskSession,
+  getKioskGuestToken,
   markScanSession,
   checkScanSession,
 } from "../controllers/kiosk.controller";
@@ -30,6 +31,13 @@ router.get("/preview/:token", asyncHandler(previewKioskSession));
  * Body: { title?: string, description?: string }
  */
 router.post("/claim/:token", authenticate, asyncHandler(claimKioskSession));
+
+/**
+ * GET /kiosk/guest-token/:token
+ * Single-use: returns guest JWT for the guest account created by kiosk "Continue as Guest".
+ * No auth required — the token itself is the credential.
+ */
+router.get("/guest-token/:token", asyncHandler(getKioskGuestToken));
 
 /**
  * POST /kiosk/scan-ping/:session

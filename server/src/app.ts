@@ -578,6 +578,29 @@ const ensureKioskMigration = async (): Promise<void> => {
         FOREIGN KEY (claimed_by) REFERENCES users(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    // guest_user_id — links the guest account auto-created by kiosk "Continue as Guest"
+    const [guestUserIdCols]: any = await pool.execute(
+      "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'kiosk_sessions' AND COLUMN_NAME = 'guest_user_id'",
+    );
+    if (guestUserIdCols.length === 0) {
+      await pool.execute(
+        "ALTER TABLE kiosk_sessions ADD COLUMN guest_user_id VARCHAR(36) NULL",
+      );
+      logger.info("[STARTUP] Added kiosk_sessions.guest_user_id column.");
+    }
+
+    // guest_token_fetched — single-use flag so the app can only claim guest JWT once
+    const [guestFetchedCols]: any = await pool.execute(
+      "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'kiosk_sessions' AND COLUMN_NAME = 'guest_token_fetched'",
+    );
+    if (guestFetchedCols.length === 0) {
+      await pool.execute(
+        "ALTER TABLE kiosk_sessions ADD COLUMN guest_token_fetched BOOLEAN NOT NULL DEFAULT FALSE",
+      );
+      logger.info("[STARTUP] Added kiosk_sessions.guest_token_fetched column.");
+    }
+
     logger.info("[STARTUP] kiosk_sessions table ready.");
   } catch (error) {
     logger.error("[STARTUP] Kiosk migration failed:", error);

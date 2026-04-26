@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart' hide Path; // dart:ui also exports Path â
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/location_service.dart';
 import '../trips/nearby_recommendations_sheet.dart';
@@ -232,10 +233,15 @@ class _MapScreenState extends State<MapScreen> {
 
   void _onMapTap(LatLng point) {
     if (!_showRoutePanel) return;
+    if (context.read<AuthService>().isGuest) return;
     _addStop(_RouteStop(position: point, name: 'Stop ${_routeStops.length + 1}'));
   }
 
   void _addDestinationStop(Destination dest) {
+    if (context.read<AuthService>().isGuest) {
+      showGuestWall(context, featureName: 'Building a route');
+      return;
+    }
     if (_routeStops.any((s) => s.destId == dest.id)) {
       AppToast.warning(context, '${dest.name} is already in the itinerary');
       return;
@@ -2525,7 +2531,7 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     ),
                   ],
-                  if (!_isNavigating)
+                  if (!_isNavigating && !context.read<AuthService>().isGuest)
                     GestureDetector(
                       onTap: () => _removeStop(i),
                       child: const Icon(FluentIcons.chrome_close,

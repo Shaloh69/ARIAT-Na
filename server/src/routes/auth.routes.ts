@@ -13,6 +13,7 @@ import {
   forgotPassword,
   resetPassword,
   changePassword,
+  migrateGuestAccount,
 } from "../controllers/auth.controller";
 import {
   registerValidator,
@@ -71,5 +72,7 @@ router.post(
 router.post("/logout", refreshTokenValidator, validate, asyncHandler(logout));
 
 router.post("/logout-all", authenticate, asyncHandler(logoutAll));
+
+router.post("/migrate-guest", authenticateUser, asyncHandler(migrateGuestAccount));
 
 export default router;

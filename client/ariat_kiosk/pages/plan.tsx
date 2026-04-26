@@ -385,6 +385,63 @@ const KioskPlanPage: NextPage = () => {
     }
   };
 
+  /**
+   * Called when "Continue as Guest" is tapped in the auth modal.
+   * Creates a temporary guest account, claims the session so the itinerary is saved,
+   * then shows the QR — the phone will pick up the guest JWT automatically.
+   */
+  const handleGuestSkip = async () => {
+    setAuthModalOpen(false);
+    if (!result) {
+      setQrOpen(true);
+      return;
+    }
+    setClaiming(true);
+    try {
+      // 1 — Create guest account
+      const guestRes = await fetch(`${API_BASE_URL}/auth/guest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const guestJson = (await guestRes.json()) as {
+        success: boolean;
+        data?: { accessToken: string; user: { id: string; full_name: string } };
+        message?: string;
+      };
+      if (!guestJson.success || !guestJson.data) {
+        toast.error(guestJson.message ?? "Could not create guest session");
+        setQrOpen(true);
+        return;
+      }
+      const guestToken = guestJson.data.accessToken;
+
+      // 2 — Claim session with guest JWT so itinerary is saved to guest account
+      const claimRes = await fetch(
+        `${API_BASE_URL}/kiosk/claim/${result.token}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${guestToken}`,
+          },
+          body: JSON.stringify({}),
+        },
+      );
+      const claimJson = (await claimRes.json()) as {
+        success: boolean;
+        message?: string;
+      };
+      if (!claimJson.success) {
+        toast.error(claimJson.message ?? "Could not save itinerary");
+      }
+    } catch {
+      toast.error("Could not create guest session — QR still works");
+    } finally {
+      setClaiming(false);
+      setQrOpen(true);
+    }
+  };
+
   const clusterMeta = (name: string): { color: string; icon: string } => {
     const n = name.toLowerCase();
 
@@ -1090,10 +1147,7 @@ const KioskPlanPage: NextPage = () => {
         isOpen={authModalOpen}
         onAuth={(user) => void handleAuthSuccess(user)}
         onClose={() => setAuthModalOpen(false)}
-        onSkip={() => {
-          setAuthModalOpen(false);
-          setQrOpen(true);
-        }}
+        onSkip={() => void handleGuestSkip()}
       />
     </KioskLayout>
   );

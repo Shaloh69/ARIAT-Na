@@ -2,6 +2,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../models/itinerary.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/gradient_background.dart';
@@ -140,6 +141,7 @@ class _SavedScreenState extends State<SavedScreen> {
   Widget build(BuildContext context) {
     final c = context.appColors;
     final filtered = _filtered;
+    final isGuest = context.watch<AuthService>().isGuest;
 
     return GradientBackground(
       child: SafeArea(
@@ -232,9 +234,10 @@ class _SavedScreenState extends State<SavedScreen> {
                     final trip = filtered[i];
                     return _TripCard(
                       trip: trip,
+                      isGuest: isGuest,
                       onTap: () => _openTrip(trip),
-                      onDelete: () => _delete(trip.id),
-                      onDuplicate: () => _duplicate(trip),
+                      onDelete: isGuest ? null : () => _delete(trip.id),
+                      onDuplicate: isGuest ? null : () => _duplicate(trip),
                     ).animate().fadeIn(delay: (i * 60).ms, duration: 400.ms);
                   },
                 ),
@@ -270,15 +273,17 @@ class _SavedScreenState extends State<SavedScreen> {
 
 class _TripCard extends StatelessWidget {
   final SavedItinerary trip;
+  final bool isGuest;
   final VoidCallback onTap;
-  final VoidCallback onDelete;
-  final VoidCallback onDuplicate;
+  final VoidCallback? onDelete;
+  final VoidCallback? onDuplicate;
 
   const _TripCard({
     required this.trip,
+    required this.isGuest,
     required this.onTap,
-    required this.onDelete,
-    required this.onDuplicate,
+    this.onDelete,
+    this.onDuplicate,
   });
 
   @override
@@ -339,16 +344,18 @@ class _TripCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(FluentIcons.chevron_right, size: 14, color: c.textFaint),
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: onDuplicate,
-                  child: Icon(FluentIcons.copy, size: 15, color: c.textMuted),
-                ),
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: onDelete,
-                  child: Icon(FluentIcons.delete, size: 16, color: AppColors.red400.withAlpha(180)),
-                ),
+                if (!isGuest) ...[
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: onDuplicate,
+                    child: Icon(FluentIcons.copy, size: 15, color: c.textMuted),
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: onDelete,
+                    child: Icon(FluentIcons.delete, size: 16, color: AppColors.red400.withAlpha(180)),
+                  ),
+                ],
               ],
             ),
           ],

@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
+import '../services/auth_service.dart';
 import '../services/connectivity_service.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
@@ -12,7 +13,8 @@ import 'saved/saved_screen.dart';
 import 'profile/profile_screen.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  final int initialIndex;
+  const AppShell({super.key, this.initialIndex = 0});
   @override
   State<AppShell> createState() => _AppShellState();
 }
@@ -20,6 +22,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
   bool? _wasOnline;
+  bool _initialApplied = false;
 
   final _pages = <Widget>[
     HomeScreen(),
@@ -32,6 +35,15 @@ class _AppShellState extends State<AppShell> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
+    // On first mount: guests always land on Saved tab (index 3) so they see
+    // the kiosk-generated itinerary immediately.
+    if (!_initialApplied) {
+      _initialApplied = true;
+      final auth = context.read<AuthService>();
+      _selectedIndex = auth.isGuest ? 3 : widget.initialIndex;
+    }
+
     final isOnline = context.watch<ConnectivityService>().isOnline;
 
     if (_wasOnline != null && _wasOnline != isOnline) {

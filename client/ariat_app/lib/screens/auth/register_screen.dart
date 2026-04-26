@@ -65,7 +65,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _loading = true);
     try {
-      await context.read<AuthService>().register(name, email, password, phone: phone);
+      final auth = context.read<AuthService>();
+      // Capture guest ID before register overwrites the session
+      final guestId = auth.isGuest ? (auth.user?['id'] as String?) : null;
+      await auth.register(name, email, password, phone: phone);
+      if (guestId != null) await auth.migrateGuestAccount(guestId);
       if (mounted) {
         AppToast.success(context, 'Account created successfully!');
         Navigator.of(context).pop();

@@ -5,8 +5,10 @@ import 'package:provider/provider.dart';
 import '../../models/destination.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
+import '../../widgets/guest_wall.dart';
 import '../../widgets/toast_overlay.dart';
 import '../map/map_screen.dart';
 
@@ -240,9 +242,15 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
                                 shape: WidgetStateProperty.all(RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12))),
                               ),
-                              onPressed: () => Navigator.of(context).push(
-                                FluentPageRoute(builder: (_) => MapScreen(destination: d)),
-                              ),
+                              onPressed: () {
+                                if (context.read<AuthService>().isGuest) {
+                                  showGuestWall(context, featureName: 'Add to Trip');
+                                  return;
+                                }
+                                Navigator.of(context).push(
+                                  FluentPageRoute(builder: (_) => MapScreen(destination: d)),
+                                );
+                              },
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: const [
@@ -370,7 +378,13 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
                                   children: List.generate(5, (i) {
                                     final star = i + 1;
                                     return GestureDetector(
-                                      onTap: _submittingRating ? null : () => _submitRating(star),
+                                      onTap: _submittingRating ? null : () {
+                                        if (context.read<AuthService>().isGuest) {
+                                          showGuestWall(context, featureName: 'Rating destinations');
+                                          return;
+                                        }
+                                        _submitRating(star);
+                                      },
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 6),
                                         child: Icon(

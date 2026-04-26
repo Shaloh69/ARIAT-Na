@@ -20,6 +20,7 @@ import {
   buildItinerary,
   buildMultiDayItinerary,
 } from "../services/itinerary.service";
+import { generateTokens } from "../utils/auth";
 import { RowDataPacket } from "mysql2";
 import { logger } from "../utils/logger";
 
@@ -247,7 +248,8 @@ export const previewKioskSession = async (
   if (!token) throw new AppError("Token is required", 400);
 
   const [rows] = await pool.execute<RowDataPacket[]>(
-    `SELECT token, itinerary_data, days, transport_mode, is_claimed, expires_at, created_at
+    `SELECT token, itinerary_data, days, transport_mode, is_claimed, guest_user_id,
+            guest_token_fetched, expires_at, created_at
      FROM kiosk_sessions
      WHERE token = ? AND expires_at > NOW()`,
     [token.toUpperCase()],
@@ -271,13 +273,18 @@ export const previewKioskSession = async (
     throw new AppError("Itinerary data is corrupted", 500);
   }
 
+  const isClaimed = session.is_claimed === 1 || session.is_claimed === true;
+  const guestTokenFetched =
+    session.guest_token_fetched === 1 || session.guest_token_fetched === true;
+
   res.json({
     success: true,
     data: {
       token: session.token,
       days: session.days,
       transport_mode: session.transport_mode,
-      is_claimed: session.is_claimed === 1 || session.is_claimed === true,
+      is_claimed: isClaimed,
+      has_guest_token: !!session.guest_user_id && !guestTokenFetched,
       expires_at: session.expires_at,
       created_at: session.created_at,
       itinerary,
@@ -321,7 +328,33 @@ export const claimKioskSession = async (
   const session = (rows as any[])[0];
 
   if (session.is_claimed === 1 || session.is_claimed === true) {
-    throw new AppError("This QR code has already been claimed.", 409);
+    // Allow re-claim only if the previous claimer was a guest user
+    if (session.claimed_by) {
+      const [prevRows] = await pool.execute<RowDataPacket[]>(
+        "SELECT is_guest FROM users WHERE id = ?",
+        [session.claimed_by],
+      );
+      const prevWasGuest =
+        (prevRows as any[])[0]?.is_guest === 1 ||
+        (prevRows as any[])[0]?.is_guest === true;
+      if (!prevWasGuest) {
+        throw new AppError("This QR code has already been claimed.", 409);
+      }
+    } else {
+      throw new AppError("This QR code has already been claimed.", 409);
+    }
+
+    // Determine if the current user is also a guest — guests cannot re-claim
+    const [curRows] = await pool.execute<RowDataPacket[]>(
+      "SELECT is_guest FROM users WHERE id = ?",
+      [userId],
+    );
+    const curIsGuest =
+      (curRows as any[])[0]?.is_guest === 1 ||
+      (curRows as any[])[0]?.is_guest === true;
+    if (curIsGuest) {
+      throw new AppError("This QR code has already been claimed.", 409);
+    }
   }
 
   let itinerary: any;
@@ -428,10 +461,23 @@ export const claimKioskSession = async (
     }
   }
 
-  // Mark session as claimed
+  // Determine if claimer is a guest to record guest_user_id
+  const [claimerRows] = await pool.execute<RowDataPacket[]>(
+    "SELECT is_guest FROM users WHERE id = ?",
+    [userId],
+  );
+  const claimerIsGuest =
+    (claimerRows as any[])[0]?.is_guest === 1 ||
+    (claimerRows as any[])[0]?.is_guest === true;
+
   await pool.execute(
-    "UPDATE kiosk_sessions SET is_claimed = TRUE, claimed_by = ?, claimed_at = NOW() WHERE token = ?",
-    [userId, token.toUpperCase()],
+    `UPDATE kiosk_sessions
+     SET is_claimed = TRUE, claimed_by = ?, claimed_at = NOW()
+         ${claimerIsGuest ? ", guest_user_id = ?" : ""}
+     WHERE token = ?`,
+    claimerIsGuest
+      ? [userId, userId, token.toUpperCase()]
+      : [userId, token.toUpperCase()],
   );
 
   logger.info(
@@ -445,6 +491,93 @@ export const claimKioskSession = async (
       title: itineraryTitle,
       days: numDays,
       total_stops: totalStops,
+    },
+  });
+};
+
+// ─── GET /kiosk/guest-token/:token ───────────────────────────────────────────
+
+/**
+ * Single-use endpoint: returns a guest JWT for the guest account auto-created
+ * by the kiosk "Continue as Guest" flow.
+ *
+ * The token is marked fetched on first call so it cannot be replayed.
+ */
+export const getKioskGuestToken = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const { token } = req.params;
+  if (!token) throw new AppError("Token is required", 400);
+
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    `SELECT id, guest_user_id, guest_token_fetched
+     FROM kiosk_sessions
+     WHERE token = ? AND expires_at > NOW()`,
+    [token.toUpperCase()],
+  );
+
+  if (!(rows as any[]).length) {
+    throw new AppError(
+      "Session not found or expired. Please scan a fresh QR code.",
+      404,
+    );
+  }
+
+  const session = (rows as any[])[0];
+
+  if (!session.guest_user_id) {
+    throw new AppError("No guest account linked to this session.", 404);
+  }
+  if (
+    session.guest_token_fetched === 1 ||
+    session.guest_token_fetched === true
+  ) {
+    throw new AppError("Guest token already used.", 409);
+  }
+
+  const [userRows] = await pool.execute<RowDataPacket[]>(
+    `SELECT id, email, full_name, is_guest, created_at
+     FROM users
+     WHERE id = ? AND is_guest = TRUE AND is_active = TRUE`,
+    [session.guest_user_id],
+  );
+
+  if (!(userRows as any[]).length) {
+    throw new AppError("Guest account not found.", 404);
+  }
+
+  const guestUser = (userRows as any[])[0];
+  const tokens = await generateTokens({
+    id: guestUser.id,
+    email: guestUser.email,
+    type: "user",
+  });
+
+  // Mark as fetched — single-use
+  await pool.execute(
+    "UPDATE kiosk_sessions SET guest_token_fetched = TRUE WHERE token = ?",
+    [token.toUpperCase()],
+  );
+
+  logger.info(
+    `[KIOSK] Guest token issued for session ${token} → user ${guestUser.id}`,
+  );
+
+  res.json({
+    success: true,
+    data: {
+      user: {
+        id: guestUser.id,
+        email: guestUser.email,
+        full_name: guestUser.full_name,
+        phone_number: null,
+        profile_image_url: null,
+        is_verified: false,
+        is_guest: true,
+        created_at: guestUser.created_at,
+      },
+      ...tokens,
     },
   });
 };

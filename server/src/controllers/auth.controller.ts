@@ -580,3 +580,53 @@ export const changePassword = async (
 
   res.json({ success: true, message: "Password changed successfully." });
 };
+
+/**
+ * Migrate guest itineraries to a real account, then delete the guest account.
+ * POST /api/v1/auth/migrate-guest
+ * Body: { guest_id }
+ */
+export const migrateGuestAccount = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  if (!req.user) throw new AppError("Authentication required", 401);
+  const realUserId = req.user.id;
+  const { guest_id } = req.body;
+  if (!guest_id) throw new AppError("guest_id is required", 400);
+
+  // Verify the guest account exists
+  const [guests]: any = await pool.execute(
+    "SELECT id FROM users WHERE id = ? AND is_guest = TRUE",
+    [guest_id],
+  );
+  if (guests.length === 0) {
+    // Already deleted or never existed — not a failure
+    res.json({ success: true, message: "No guest account to migrate" });
+    return;
+  }
+
+  // Move all itineraries from guest to real user
+  await pool.execute(
+    "UPDATE itineraries SET user_id = ? WHERE user_id = ?",
+    [realUserId, guest_id],
+  );
+
+  // Clear the guest_user_id from any kiosk sessions (so they can't re-issue a token)
+  await pool.execute(
+    "UPDATE kiosk_sessions SET guest_user_id = NULL WHERE guest_user_id = ?",
+    [guest_id],
+  );
+
+  // Delete the guest account (refresh_tokens cascade via FK)
+  await pool.execute(
+    "DELETE FROM users WHERE id = ? AND is_guest = TRUE",
+    [guest_id],
+  );
+
+  logger.info(
+    `[AUTH] Guest ${guest_id} itineraries migrated to real user ${realUserId}`,
+  );
+
+  res.json({ success: true, message: "Guest itineraries migrated" });
+};
