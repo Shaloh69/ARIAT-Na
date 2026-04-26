@@ -1090,6 +1090,10 @@ const KioskPlanPage: NextPage = () => {
         isOpen={authModalOpen}
         onAuth={(user) => void handleAuthSuccess(user)}
         onClose={() => setAuthModalOpen(false)}
+        onSkip={() => {
+          setAuthModalOpen(false);
+          setQrOpen(true);
+        }}
       />
     </KioskLayout>
   );

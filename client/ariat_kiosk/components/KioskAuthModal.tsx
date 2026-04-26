@@ -21,6 +21,7 @@ interface KioskAuthModalProps {
   isOpen: boolean;
   onAuth: (user: KioskAuthUser) => void;
   onClose: () => void;
+  onSkip?: () => void;
 }
 
 type Tab = "register" | "login";
@@ -29,6 +30,7 @@ export default function KioskAuthModal({
   isOpen,
   onAuth,
   onClose,
+  onSkip,
 }: KioskAuthModalProps) {
   const [tab, setTab] = useState<Tab>("register");
   const [name, setName] = useState("");
@@ -219,20 +221,40 @@ export default function KioskAuthModal({
           )}
         </ModalBody>
 
-        <ModalFooter className="flex justify-between items-center px-7 pb-6">
-          <Button variant="flat" onPress={handleClose}>
-            Cancel
-          </Button>
-          <Button
-            className="px-8 font-bold"
-            color="primary"
-            isLoading={loading}
-            onPress={() => void handleSubmit()}
-          >
-            {tab === "register"
-              ? "Create Account & Continue →"
-              : "Login & Continue →"}
-          </Button>
+        <ModalFooter className="flex flex-col gap-3 px-7 pb-6">
+          <div className="flex justify-between items-center w-full">
+            <Button variant="flat" onPress={handleClose}>
+              Cancel
+            </Button>
+            <Button
+              className="px-8 font-bold"
+              color="primary"
+              isLoading={loading}
+              onPress={() => void handleSubmit()}
+            >
+              {tab === "register"
+                ? "Create Account & Continue →"
+                : "Login & Continue →"}
+            </Button>
+          </div>
+          {onSkip && (
+            <div className="flex items-center gap-3 w-full">
+              <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+              <span className="text-xs" style={{ color: "var(--text-faint)" }}>or</span>
+              <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+            </div>
+          )}
+          {onSkip && (
+            <Button
+              className="w-full"
+              variant="flat"
+              onPress={() => { handleClose(); onSkip(); }}
+            >
+              <span style={{ color: "var(--text-muted)", fontSize: 13 }}>
+                Continue as Guest — trip won&apos;t be saved to an account
+              </span>
+            </Button>
+          )}
         </ModalFooter>
       </ModalContent>
     </Modal>
