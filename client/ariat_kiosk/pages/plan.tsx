@@ -111,7 +111,6 @@ const INTERESTS = [
   { emoji: "🍜", label: "Food", value: "food" },
   { emoji: "🏄", label: "Adventure", value: "adventure" },
   { emoji: "🛍️", label: "Shopping", value: "shopping" },
-  { emoji: "⛪", label: "Culture", value: "culture" },
   { emoji: "🙏", label: "Religion", value: "religion" },
   { emoji: "🐋", label: "Wildlife", value: "wildlife" },
   { emoji: "💧", label: "Waterfalls", value: "waterfall" },
