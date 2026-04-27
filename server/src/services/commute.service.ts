@@ -289,7 +289,7 @@ async function loadAllTransitRoutes(fares: FareRow[]): Promise<RouteRecord[]> {
 }
 
 async function findNearestPier(
-  lat: number, lon: number, maxKm = 15,
+  lat: number, lon: number, maxKm = 25, minKm = 1.0,
 ): Promise<StopNode | null> {
   const [rows]: any = await pool.execute(
     `SELECT id, name, latitude AS lat, longitude AS lon, point_type
@@ -299,7 +299,8 @@ async function findNearestPier(
   let bestDist = maxKm;
   for (const r of rows as any[]) {
     const d = haversine(lat, lon, r.lat, r.lon);
-    if (d < bestDist) { bestDist = d; best = r as StopNode; }
+    // Skip piers closer than minKm — those are island-side docks, not mainland embarkation
+    if (d >= minKm && d < bestDist) { bestDist = d; best = r as StopNode; }
   }
   return best;
 }
@@ -361,6 +362,10 @@ async function buildLeg(
 }
 
 // ─── Ferry injection ──────────────────────────────────────────────────────────
+//
+// Finds the nearest mainland embarkation pier to the DESTINATION (25 km radius).
+// Routes: user → pier (by land/taxi) → destination (ferry).
+// Does NOT require a pier near the user's start — the user travels to the pier first.
 
 async function injectFerryLegs(
   fromLat: number, fromLon: number,
@@ -370,35 +375,45 @@ async function injectFerryLegs(
   const ferryFare = fares.find(f => f.transport_type === "ferry");
   if (!ferryFare) return null;
 
-  const srcPier  = await findNearestPier(fromLat, fromLon);
-  const destPier = await findNearestPier(toLat, toLon);
-  if (!srcPier || !destPier) return null;
+  // Find the embarkation pier closest to the island destination (25 km radius)
+  const boardingPier = await findNearestPier(toLat, toLon, 25);
+  if (!boardingPier) return null;
 
   const legs: TransportLeg[] = [];
 
-  const toPierDist = haversine(fromLat, fromLon, srcPier.lat, srcPier.lon);
+  // Land leg: user → boarding pier (taxi/grab for comfort; may be long distance)
+  const toPierDist = haversine(fromLat, fromLon, boardingPier.lat, boardingPier.lon);
   if (toPierDist > 0.05) {
-    const landMode = toPierDist <= 0.5 ? "walk" : "tricycle";
-    const landFare = fares.find(f => f.transport_type === landMode);
+    let landMode: string;
+    let landFare: number;
+    if (toPierDist <= 0.5) {
+      landMode = "walk";
+      landFare = 0;
+    } else {
+      const taxiFare = fares.find(f => f.routing_behavior === "direct_fare") ??
+                       fares.find(f => f.transport_type === "taxi");
+      landMode = taxiFare?.transport_type ?? "taxi";
+      landFare = taxiFare ? calcFare(taxiFare, toPierDist) : Math.round(40 + toPierDist * 13.5);
+    }
     legs.push(await buildLeg(
       fromLat, fromLon, "Current Location",
-      srcPier.lat, srcPier.lon, srcPier.name,
-      landMode,
-      landFare ? calcFare(landFare, toPierDist) : 0,
-      `${landMode === "walk" ? "Walk" : "Take a tricycle"} to ${srcPier.name}`,
+      boardingPier.lat, boardingPier.lon, boardingPier.name,
+      landMode, landFare,
+      `Head to ${boardingPier.name} to board the ferry`,
     ));
   }
 
-  const ferryDist = haversine(srcPier.lat, srcPier.lon, destPier.lat, destPier.lon);
+  // Ferry leg: boarding pier → island destination
+  const ferryDist = haversine(boardingPier.lat, boardingPier.lon, toLat, toLon);
   legs.push(await buildLeg(
-    srcPier.lat, srcPier.lon, srcPier.name,
-    destPier.lat, destPier.lon, destPier.name,
+    boardingPier.lat, boardingPier.lon, boardingPier.name,
+    toLat, toLon, "Island Destination",
     "ferry",
-    0,
-    `Board a ferry at ${srcPier.name} to ${destPier.name}. Tickets may vary depending on the ferry operator.`,
+    calcFare(ferryFare, ferryDist),
+    `Board the ferry at ${boardingPier.name}. Fare may vary by operator.`,
   ));
 
-  return legs;
+  return legs.length > 0 ? legs : null;
 }
 
 // ─── Transit leg geometry ─────────────────────────────────────────────────────

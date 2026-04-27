@@ -981,6 +981,7 @@ const KioskPlanPage: NextPage = () => {
               </p>
               <input
                 className="plan-slider"
+                style={{ ['--val' as string]: `${((hoursPerDay - 3) / (14 - 3)) * 100}%` }}
                 max={14}
                 min={3}
                 step={1}

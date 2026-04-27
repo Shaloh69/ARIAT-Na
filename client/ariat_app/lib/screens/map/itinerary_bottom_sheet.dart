@@ -65,7 +65,8 @@ class _ItineraryBottomSheetState extends State<_ItineraryBottomSheet> {
 
   static const _interestOptions = [
     'nature', 'heritage', 'food', 'adventure',
-    'shopping', 'beach', 'culture', 'religion',
+    'shopping', 'beach', 'religion', 'wildlife',
+    'waterfall', 'scenic', 'entertainment', 'hotel',
   ];
 
   static final _transportOptions = [

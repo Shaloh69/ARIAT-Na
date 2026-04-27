@@ -294,6 +294,11 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _routeLoading = true;
       _routeError = null;
+      _commuteLegs = [];
+      _multiModalLegs = [];
+      _routeLegs = [];
+      _commuteFareMax = null;
+      _currentLegIndex = 0;
     });
 
     if (_transportCategory == 'commute') {
@@ -477,10 +482,22 @@ class _MapScreenState extends State<MapScreen> {
             from = waypoints[i + 1];
           }
         } else {
-          setState(() {
-            _routeError = 'No commute route found for leg ${i + 1}';
-            _routeLoading = false;
-          });
+          // Leg failed — show partial results if any were computed, with a warning
+          if (allLegs.isNotEmpty) {
+            final partial = _mergeFeeders(allLegs);
+            setState(() {
+              _commuteLegs = partial;
+              _commuteFareMax = segFareMax > 0 ? segFareMax : null;
+              _currentLegIndex = 0;
+              _routeError = 'Route incomplete: could not find a path for stop ${i + 1}';
+              _routeLoading = false;
+            });
+          } else {
+            setState(() {
+              _routeError = 'No route found for stop ${i + 1}';
+              _routeLoading = false;
+            });
+          }
           return;
         }
       }
@@ -2468,7 +2485,7 @@ class _MapScreenState extends State<MapScreen> {
         ),
 
         // Taxi sub-mode buttons — visible only when Grab/Taxi chip is active
-        if (_commuteSubMode == 'grab_taxi') ...[
+        if (_transportCategory == 'commute' && _commuteSubMode == 'grab_taxi') ...[
           const SizedBox(height: 8),
           Row(
             children: [
@@ -2954,6 +2971,7 @@ class _MapScreenState extends State<MapScreen> {
 
           // Ride-hailing fare range + disclaimer
           if (isCommute &&
+              _transportCategory == 'commute' &&
               _commuteSubMode == 'grab_taxi' &&
               _commuteFareMax != null &&
               _commuteLegs.isNotEmpty) ...[
