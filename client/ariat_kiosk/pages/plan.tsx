@@ -117,6 +117,7 @@ const INTERESTS = [
   { emoji: "💧", label: "Waterfalls", value: "waterfall" },
   { emoji: "🌅", label: "Scenic Views", value: "scenic" },
   { emoji: "🎭", label: "Entertainment", value: "entertainment" },
+  { emoji: "🏨", label: "Hotels", value: "hotel" },
 ];
 
 const GROUP_TYPES = [
