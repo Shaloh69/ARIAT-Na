@@ -55,6 +55,7 @@ class _MapScreenState extends State<MapScreen> {
   LatLng? _routeStart;
   List<_RouteStop> _routeStops = [];
   bool _routeLoading = false;
+  int _routeGeneration = 0; // increments on every new calculation; guards stale results
   String? _routeError;
   String _optimizeFor = 'distance';
   String _transportMode = 'private_car';
@@ -300,9 +301,11 @@ class _MapScreenState extends State<MapScreen> {
       _commuteFareMax = null;
       _currentLegIndex = 0;
     });
+    // Increment generation so any previous in-flight request's result is discarded
+    final gen = ++_routeGeneration;
 
     if (_transportCategory == 'commute') {
-      await _calculateCommuteRoute(stops, fromOverride: fromOverride);
+      await _calculateCommuteRoute(stops, fromOverride: fromOverride, gen: gen);
       return;
     }
 
@@ -327,6 +330,7 @@ class _MapScreenState extends State<MapScreen> {
             'optimize_for': _optimizeFor,
           }, auth: true);
 
+          if (!mounted || gen != _routeGeneration) return;
           if (res['success'] == true && res['data'] != null) {
             final mm = MultiModalRoute.fromJson(res['data'] as Map<String, dynamic>);
             mmLegs.add(mm);
@@ -348,6 +352,7 @@ class _MapScreenState extends State<MapScreen> {
             return;
           }
         }
+        if (!mounted || gen != _routeGeneration) return;
         final totalDist = mmLegs.fold<double>(0, (s, l) => s + l.totalDistance);
         final totalTime = mmLegs.fold<int>(0, (s, l) => s + l.totalDuration);
         final totalFare = mmLegs.fold<double>(0, (s, l) => s + l.totalFare);
@@ -374,6 +379,7 @@ class _MapScreenState extends State<MapScreen> {
             'optimize_for': _optimizeFor,
           }, auth: true);
 
+          if (!mounted || gen != _routeGeneration) return;
           if (res['success'] == true && res['data'] != null) {
             final leg = RouteResult.fromJson(res['data']);
             legs.add(leg);
@@ -394,6 +400,7 @@ class _MapScreenState extends State<MapScreen> {
             return;
           }
         }
+        if (!mounted || gen != _routeGeneration) return;
         final totalDist = legs.fold<double>(0, (s, l) => s + l.totalDistance);
         final totalTime = legs.fold<int>(0, (s, l) => s + l.estimatedTime);
         setState(() {
@@ -406,6 +413,7 @@ class _MapScreenState extends State<MapScreen> {
         }
       }
     } catch (e) {
+      if (!mounted || gen != _routeGeneration) return;
       setState(() {
         _routeError = e.toString().replaceFirst('Exception: ', '');
         _routeLoading = false;
@@ -451,7 +459,7 @@ class _MapScreenState extends State<MapScreen> {
     return result;
   }
 
-  Future<void> _calculateCommuteRoute(List<_RouteStop> stops, {LatLng? fromOverride}) async {
+  Future<void> _calculateCommuteRoute(List<_RouteStop> stops, {LatLng? fromOverride, required int gen}) async {
     try {
       final api = context.read<ApiService>();
       final waypoints = [fromOverride ?? _routeStart!, ...stops.map((s) => s.position)];
@@ -470,6 +478,9 @@ class _MapScreenState extends State<MapScreen> {
           'end_lon': to.longitude,
           'sub_mode': serverSubMode,
         }, auth: true);
+
+        // Discard result if a newer calculation was started while this one was in-flight
+        if (!mounted || gen != _routeGeneration) return;
 
         if (res['success'] == true && res['data'] != null) {
           final mm = MultiModalRoute.fromJson(res['data'] as Map<String, dynamic>);
@@ -502,6 +513,7 @@ class _MapScreenState extends State<MapScreen> {
         }
       }
 
+      if (!mounted || gen != _routeGeneration) return;
       final merged = _mergeFeeders(allLegs);
       final totalDist = merged.fold<double>(0, (s, l) => s + l.distance);
       final totalTime = merged.fold<int>(0, (s, l) => s + l.duration);
@@ -528,6 +540,7 @@ class _MapScreenState extends State<MapScreen> {
             '$modeLabel · ${totalDist.toStringAsFixed(2)} km · ~$totalTime min · $fareText');
       }
     } catch (e) {
+      if (!mounted || gen != _routeGeneration) return;
       setState(() {
         _routeError = e.toString().replaceFirst('Exception: ', '');
         _routeLoading = false;
@@ -3134,8 +3147,9 @@ class _MapScreenState extends State<MapScreen> {
             ? 'grab_taxi'
             : 'bus';
     final selected = activeChip == value;
+    final locked = _routeLoading;
     return GestureDetector(
-      onTap: () {
+      onTap: locked ? null : () {
         setState(() {
           if (value == 'private') {
             _transportCategory = 'private';
@@ -3151,25 +3165,28 @@ class _MapScreenState extends State<MapScreen> {
         });
         if (_routeStops.isNotEmpty) _calculateRoute(_routeStops);
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.red500 : c.surfaceElevated,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? AppColors.red500 : c.borderSubtle),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 13, color: selected ? Colors.white : c.textMuted),
-            const SizedBox(width: 4),
-            Text(label,
-                style: TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w600,
-                  color: selected ? Colors.white : c.textMuted,
-                )),
-          ],
+      child: Opacity(
+        opacity: locked && !selected ? 0.45 : 1.0,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.red500 : c.surfaceElevated,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: selected ? AppColors.red500 : c.borderSubtle),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 13, color: selected ? Colors.white : c.textMuted),
+              const SizedBox(width: 4),
+              Text(label,
+                  style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w600,
+                    color: selected ? Colors.white : c.textMuted,
+                  )),
+            ],
+          ),
         ),
       ),
     );
@@ -3177,8 +3194,9 @@ class _MapScreenState extends State<MapScreen> {
 
   Widget _taxiSubChip(String value, String label, AppColorScheme c) {
     final selected = _taxiSubMode == value;
+    final locked = _routeLoading;
     return GestureDetector(
-      onTap: () {
+      onTap: locked ? null : () {
         setState(() {
           _taxiSubMode = value;
           _commuteLegs = [];
@@ -3189,23 +3207,26 @@ class _MapScreenState extends State<MapScreen> {
         });
         if (_routeStops.isNotEmpty) _calculateRoute(_routeStops);
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.amber.withAlpha(30) : c.surfaceElevated,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? AppColors.amber : c.borderSubtle,
-            width: selected ? 1.5 : 1.0,
+      child: Opacity(
+        opacity: locked && !selected ? 0.45 : 1.0,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.amber.withAlpha(30) : c.surfaceElevated,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected ? AppColors.amber : c.borderSubtle,
+              width: selected ? 1.5 : 1.0,
+            ),
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-            color: selected ? AppColors.amber : c.textMuted,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+              color: selected ? AppColors.amber : c.textMuted,
+            ),
           ),
         ),
       ),
@@ -3215,25 +3236,29 @@ class _MapScreenState extends State<MapScreen> {
   Widget _optimizeChip(String value, String label) {
     final c = context.appColors;
     final isSelected = _optimizeFor == value;
+    final locked = _routeLoading;
     return GestureDetector(
-      onTap: () {
+      onTap: locked ? null : () {
         setState(() => _optimizeFor = value);
         if (_routeStops.isNotEmpty) _calculateRoute(_routeStops);
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.red500 : c.surfaceElevated,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: isSelected ? AppColors.red500 : c.borderSubtle),
+      child: Opacity(
+        opacity: locked && !isSelected ? 0.45 : 1.0,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.red500 : c.surfaceElevated,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: isSelected ? AppColors.red500 : c.borderSubtle),
+          ),
+          child: Text(label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                color: isSelected ? Colors.white : c.textMuted,
+              )),
         ),
-        child: Text(label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-              color: isSelected ? Colors.white : c.textMuted,
-            )),
       ),
     );
   }

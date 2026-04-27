@@ -40,11 +40,11 @@ class ApiService {
         final uri =
             Uri.parse('$baseUrl$path').replace(queryParameters: query);
         var response = await http.get(uri, headers: _headers(auth: auth))
-            .timeout(const Duration(seconds: 60));
+            .timeout(const Duration(seconds: 120));
         if (response.statusCode == 401 && auth) {
           await _tryRefresh();
           response = await http.get(uri, headers: _headers(auth: true))
-              .timeout(const Duration(seconds: 60));
+              .timeout(const Duration(seconds: 120));
         }
         final body = _handleResponse(response);
 
