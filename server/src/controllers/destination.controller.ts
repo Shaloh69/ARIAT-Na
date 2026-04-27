@@ -55,13 +55,39 @@ function formatDestination(dest: any) {
   };
 }
 
-/** Subquery that returns a JSON array of {id,name,slug} for all categories of a destination. */
+/**
+ * Subquery that returns a JSON array of {id,name,slug} for all categories.
+ * Uses the junction table when migration 012 has been run; falls back to the
+ * legacy category_id column otherwise (handled at runtime via tableChecked flag).
+ */
 const CATEGORIES_SUBQUERY = `(
   SELECT JSON_ARRAYAGG(JSON_OBJECT('id', c2.id, 'name', c2.name, 'slug', c2.slug))
   FROM destination_categories dc2
   JOIN categories c2 ON dc2.category_id = c2.id
   WHERE dc2.destination_id = d.id
 ) AS categories`;
+
+const CATEGORIES_SUBQUERY_LEGACY = `(
+  SELECT JSON_ARRAYAGG(JSON_OBJECT('id', c2.id, 'name', c2.name, 'slug', c2.slug))
+  FROM categories c2
+  WHERE c2.id = d.category_id
+) AS categories`;
+
+// Cache whether the junction table exists so we don't check on every request
+let _junctionTableExists: boolean | null = null;
+async function categoriesSubquery(): Promise<string> {
+  if (_junctionTableExists === null) {
+    try {
+      await pool.execute(
+        "SELECT 1 FROM destination_categories LIMIT 1",
+      );
+      _junctionTableExists = true;
+    } catch {
+      _junctionTableExists = false;
+    }
+  }
+  return _junctionTableExists ? CATEGORIES_SUBQUERY : CATEGORIES_SUBQUERY_LEGACY;
+}
 
 /**
  * Get all destinations (with filters and pagination)
@@ -166,8 +192,9 @@ export const getDestinations = async (
   const total = countResult[0].total;
 
   // Get destinations with categories
+  const csq = await categoriesSubquery();
   const sql = `
-    SELECT d.*, ${CATEGORIES_SUBQUERY}
+    SELECT d.*, ${csq}
     FROM destinations d
     ${whereClause}
     ORDER BY d.popularity_score DESC, d.rating DESC
@@ -203,9 +230,10 @@ export const getDestinationById = async (
   res: Response,
 ): Promise<void> => {
   const { id } = req.params;
+  const csq = await categoriesSubquery();
 
   const sql = `
-    SELECT d.*, ${CATEGORIES_SUBQUERY}
+    SELECT d.*, ${csq}
     FROM destinations d
     WHERE d.id = ?
   `;
@@ -459,8 +487,9 @@ export const createDestination = async (
   }
 
   // Fetch created destination with categories
+  const csq = await categoriesSubquery();
   const [destinations]: any = await pool.execute(
-    `SELECT d.*, ${CATEGORIES_SUBQUERY} FROM destinations d WHERE d.id = ?`,
+    `SELECT d.*, ${csq} FROM destinations d WHERE d.id = ?`,
     [destinationId],
   );
 
@@ -596,8 +625,9 @@ export const updateDestination = async (
   }
 
   // Fetch updated destination with categories
+  const csq = await categoriesSubquery();
   const [destinations]: any = await pool.execute(
-    `SELECT d.*, ${CATEGORIES_SUBQUERY} FROM destinations d WHERE d.id = ?`,
+    `SELECT d.*, ${csq} FROM destinations d WHERE d.id = ?`,
     [id],
   );
 
@@ -641,8 +671,9 @@ export const getFeaturedDestinations = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
+  const csq = await categoriesSubquery();
   const sql = `
-    SELECT d.*, ${CATEGORIES_SUBQUERY}
+    SELECT d.*, ${csq}
     FROM destinations d
     WHERE d.is_featured = ? AND d.is_active = ?
     ORDER BY d.popularity_score DESC
@@ -653,7 +684,7 @@ export const getFeaturedDestinations = async (
 
   if ((destinations as any[]).length === 0) {
     const fallbackSql = `
-      SELECT d.*, ${CATEGORIES_SUBQUERY}
+      SELECT d.*, ${csq}
       FROM destinations d
       WHERE d.is_active = TRUE
       ORDER BY d.rating DESC, d.popularity_score DESC
@@ -676,9 +707,10 @@ export const getDestinationsGeoJSON = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
+  const csq = await categoriesSubquery();
   const sql = `
     SELECT d.id, d.name, d.latitude, d.longitude, d.address, d.images, d.is_featured,
-           ${CATEGORIES_SUBQUERY}
+           ${csq}
     FROM destinations d
     WHERE d.is_active = ?
     ORDER BY d.popularity_score DESC, d.rating DESC
@@ -725,8 +757,9 @@ export const getPopularDestinations = async (
 ): Promise<void> => {
   const { limit = 10 } = req.query;
 
+  const csq = await categoriesSubquery();
   const sql = `
-    SELECT d.*, ${CATEGORIES_SUBQUERY}
+    SELECT d.*, ${csq}
     FROM destinations d
     WHERE d.is_active = ?
     ORDER BY d.popularity_score DESC, d.rating DESC

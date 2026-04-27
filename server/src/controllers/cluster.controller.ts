@@ -17,26 +17,53 @@ export const getClusters = async (
   let rows: RowDataPacket[];
 
   if (interestSlugs.length > 0) {
-    const placeholders = interestSlugs.map(() => "?").join(",");
-    const tagsJson = JSON.stringify(interestSlugs);
-    [rows] = await pool.execute<RowDataPacket[]>(
-      `SELECT cl.*, COUNT(DISTINCT d.id) AS destination_count
-       FROM clusters cl
-       LEFT JOIN destinations d ON d.cluster_id = cl.id
-         AND d.is_active = TRUE
-         AND (
-           EXISTS (
-             SELECT 1 FROM destination_categories dc
-             JOIN categories c ON dc.category_id = c.id
-             WHERE dc.destination_id = d.id AND c.slug IN (${placeholders})
+    const catPlaceholders = interestSlugs.map(() => "?").join(",");
+    // JSON_CONTAINS works on MySQL 5.7+; one condition per slug, joined with OR
+    const tagConditions = interestSlugs
+      .map(() => "JSON_CONTAINS(COALESCE(d.tags, '[]'), JSON_QUOTE(?))")
+      .join(" OR ");
+
+    try {
+      // Primary path: use junction table (requires migration 012 to have been run)
+      [rows] = await pool.execute<RowDataPacket[]>(
+        `SELECT cl.*, COUNT(DISTINCT d.id) AS destination_count
+         FROM clusters cl
+         LEFT JOIN destinations d ON d.cluster_id = cl.id
+           AND d.is_active = TRUE
+           AND (
+             EXISTS (
+               SELECT 1 FROM destination_categories dc
+               JOIN categories c ON dc.category_id = c.id
+               WHERE dc.destination_id = d.id AND c.slug IN (${catPlaceholders})
+             )
+             OR (${tagConditions})
            )
-           OR JSON_OVERLAPS(COALESCE(d.tags, '[]'), ?)
-         )
-       WHERE cl.is_active = TRUE
-       GROUP BY cl.id
-       ORDER BY cl.display_order ASC`,
-      [...interestSlugs, tagsJson],
-    );
+         WHERE cl.is_active = TRUE
+         GROUP BY cl.id
+         ORDER BY cl.display_order ASC`,
+        [...interestSlugs, ...interestSlugs],
+      );
+    } catch (e: any) {
+      if (e.code === "ER_NO_SUCH_TABLE") {
+        // Migration 012 not yet run — fall back to category_id column
+        [rows] = await pool.execute<RowDataPacket[]>(
+          `SELECT cl.*, COUNT(d.id) AS destination_count
+           FROM clusters cl
+           LEFT JOIN destinations d ON d.cluster_id = cl.id
+             AND d.is_active = TRUE
+             AND (
+               d.category_id IN (SELECT id FROM categories WHERE slug IN (${catPlaceholders}))
+               OR (${tagConditions})
+             )
+           WHERE cl.is_active = TRUE
+           GROUP BY cl.id
+           ORDER BY cl.display_order ASC`,
+          [...interestSlugs, ...interestSlugs],
+        );
+      } else {
+        throw e;
+      }
+    }
   } else {
     [rows] = await pool.execute<RowDataPacket[]>(
       `SELECT cl.*, COUNT(d.id) AS destination_count
