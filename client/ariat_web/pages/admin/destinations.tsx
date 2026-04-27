@@ -1124,7 +1124,7 @@ export default function DestinationsPage() {
                       />
                       {/* quick-add suggestions */}
                       <div className="flex flex-wrap gap-1 mt-2">
-                        {["nature","heritage","food","adventure","shopping","beach","culture","religion","falls","island","hiking","diving","historical","nightlife"].filter(
+                        {["nature","heritage","food","adventure","shopping","beach","culture","religion","falls","island","hiking","diving","historical","nightlife","hotel","resort","scenic","wildlife","entertainment"].filter(
                           (s) => !formTags.includes(s)
                         ).map((s) => (
                           <button

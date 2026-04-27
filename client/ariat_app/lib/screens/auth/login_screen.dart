@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/auth_service.dart';
 import '../../services/connectivity_service.dart';
+import '../app_shell.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/gradient_background.dart';
 import '../../widgets/glass_card.dart';
@@ -50,6 +51,10 @@ class _LoginScreenState extends State<LoginScreen> {
         } else {
           AppToast.success(context, 'Welcome back!');
         }
+        Navigator.of(context).pushAndRemoveUntil(
+          FluentPageRoute(builder: (_) => const AppShell()),
+          (route) => false,
+        );
       }
     } catch (e) {
       if (mounted) AppToast.error(context, e.toString().replaceFirst('Exception: ', ''));
@@ -147,7 +152,12 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
     try {
       await context.read<AuthService>().loginWithGuestCode(code);
-      // Consumer2 in main.dart rebuilds → AppShell shown (isGuest → Saved tab)
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          FluentPageRoute(builder: (_) => const AppShell()),
+          (route) => false,
+        );
+      }
     } catch (e) {
       if (mounted) AppToast.error(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
