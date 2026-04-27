@@ -213,28 +213,43 @@ const KioskPlanPage: NextPage = () => {
     void load();
   }, [planMode]);
 
-  // Fetch clusters for AI mode
-  useEffect(() => {
-    if (planMode !== "ai") return;
-    const load = async () => {
-      setLoadingClusters(true);
-      try {
-        const res = await fetch(`${API_BASE_URL}${API_ENDPOINTS.CLUSTERS}`);
-        const json = (await res.json()) as {
-          data: typeof clusters;
-          success: boolean;
-        };
+  // Fetch clusters when entering the regions step, filtered by selected interests
+  const loadClusters = useCallback(async (interestValues: string[]) => {
+    setLoadingClusters(true);
+    try {
+      const param =
+        interestValues.length > 0
+          ? `?interests=${interestValues.join(",")}`
+          : "";
+      const res = await fetch(
+        `${API_BASE_URL}${API_ENDPOINTS.CLUSTERS}${param}`,
+      );
+      const json = (await res.json()) as {
+        data: typeof clusters;
+        success: boolean;
+      };
 
-        if (json.success && json.data) setClusters(json.data);
-      } catch {
-        toast.error("Failed to load regions");
-      } finally {
-        setLoadingClusters(false);
+      if (json.success && json.data) {
+        setClusters(json.data);
+        // Deselect any previously chosen clusters that now have 0 matching destinations
+        setSelectedClusters((prev) =>
+          prev.filter((id) => {
+            const c = (json.data as typeof clusters).find((cl) => cl.id === id);
+            return c && Number(c.destination_count ?? 0) > 0;
+          }),
+        );
       }
-    };
+    } catch {
+      toast.error("Failed to load regions");
+    } finally {
+      setLoadingClusters(false);
+    }
+  }, []);
 
-    void load();
-  }, [planMode]);
+  useEffect(() => {
+    if (planMode !== "ai" || aiStep !== "regions") return;
+    void loadClusters(interests);
+  }, [planMode, aiStep]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Filtered destinations ─────────────────────────────────────────
   const filtered = allDestinations.filter((d) => {
@@ -868,18 +883,7 @@ const KioskPlanPage: NextPage = () => {
                 <button
                   className="plan-cluster-retry"
                   type="button"
-                  onClick={() => {
-                    setLoadingClusters(true);
-                    fetch(`${API_BASE_URL}${API_ENDPOINTS.CLUSTERS}`)
-                      .then((r) => r.json())
-                      .then(
-                        (json: { data: typeof clusters; success: boolean }) => {
-                          if (json.success && json.data) setClusters(json.data);
-                        },
-                      )
-                      .catch(() => toast.error("Failed to load regions"))
-                      .finally(() => setLoadingClusters(false));
-                  }}
+                  onClick={() => void loadClusters(interests)}
                 >
                   Retry
                 </button>
@@ -891,6 +895,15 @@ const KioskPlanPage: NextPage = () => {
                   const active = selectedClusters.includes(cluster.id);
                   const count = Number(cluster.destination_count ?? 0);
                   const isEmpty = count === 0;
+                  const hasFilter = interests.length > 0;
+
+                  const countLabel = isEmpty
+                    ? hasFilter
+                      ? "No matching places"
+                      : "No destinations"
+                    : hasFilter
+                      ? `${count} matching place${count !== 1 ? "s" : ""}`
+                      : `${count} place${count !== 1 ? "s" : ""}`;
 
                   return (
                     <button
@@ -900,9 +913,11 @@ const KioskPlanPage: NextPage = () => {
                         background: active ? color + "30" : color + "10",
                         borderColor: active ? color : color + "40",
                         boxShadow: active ? `0 0 0 2px ${color}` : "none",
-                        opacity: isEmpty ? 0.45 : 1,
+                        opacity: isEmpty ? 0.4 : 1,
+                        cursor: isEmpty ? "not-allowed" : "pointer",
                       }}
                       type="button"
+                      disabled={isEmpty}
                       onClick={() => {
                         if (isEmpty) return;
                         setSelectedClusters((prev) =>
@@ -913,20 +928,18 @@ const KioskPlanPage: NextPage = () => {
                       }}
                     >
                       <span className="text-3xl">{icon}</span>
-                      <p className="plan-cluster-name" style={{ color }}>
+                      <p className="plan-cluster-name" style={{ color: isEmpty ? "rgba(255,255,255,0.4)" : color }}>
                         {cluster.name}
                       </p>
                       <p
                         className="plan-cluster-count"
                         style={{
                           color: isEmpty
-                            ? "rgba(255,255,255,0.3)"
+                            ? "rgba(255,255,255,0.25)"
                             : color + "cc",
                         }}
                       >
-                        {isEmpty
-                          ? "No destinations"
-                          : `${count} place${count !== 1 ? "s" : ""}`}
+                        {countLabel}
                       </p>
                       {active && <span className="plan-cluster-check">✓</span>}
                     </button>
@@ -936,7 +949,9 @@ const KioskPlanPage: NextPage = () => {
             )}
             <p className="plan-hint">
               {selectedClusters.length === 0
-                ? "Select regions to focus on, or skip to explore all of Cebu"
+                ? interests.length > 0
+                  ? "Grayed regions have no destinations matching your interests"
+                  : "Select regions to focus on, or skip to explore all of Cebu"
                 : `${selectedClusters.length} region${selectedClusters.length > 1 ? "s" : ""} selected`}
             </p>
           </div>

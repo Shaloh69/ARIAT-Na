@@ -6,17 +6,40 @@ const toNum = (v: any, fallback: number | null = 0): number | null =>
   v !== null && v !== undefined && v !== "" ? Number(v) : fallback;
 
 export const getClusters = async (
-  _req: Request,
+  req: Request,
   res: Response,
 ): Promise<void> => {
-  const [rows] = await pool.execute<RowDataPacket[]>(
-    `SELECT cl.*, COUNT(d.id) AS destination_count
-     FROM clusters cl
-     LEFT JOIN destinations d ON d.cluster_id = cl.id AND d.is_active = TRUE
-     WHERE cl.is_active = TRUE
-     GROUP BY cl.id
-     ORDER BY cl.display_order ASC`,
-  );
+  const interestsParam = req.query.interests as string | undefined;
+  const interestSlugs = interestsParam
+    ? interestsParam.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
+
+  let rows: RowDataPacket[];
+
+  if (interestSlugs.length > 0) {
+    const placeholders = interestSlugs.map(() => "?").join(",");
+    [rows] = await pool.execute<RowDataPacket[]>(
+      `SELECT cl.*, COUNT(d.id) AS destination_count
+       FROM clusters cl
+       LEFT JOIN destinations d ON d.cluster_id = cl.id
+         AND d.is_active = TRUE
+         AND d.category_id IN (SELECT id FROM categories WHERE slug IN (${placeholders}))
+       WHERE cl.is_active = TRUE
+       GROUP BY cl.id
+       ORDER BY cl.display_order ASC`,
+      interestSlugs,
+    );
+  } else {
+    [rows] = await pool.execute<RowDataPacket[]>(
+      `SELECT cl.*, COUNT(d.id) AS destination_count
+       FROM clusters cl
+       LEFT JOIN destinations d ON d.cluster_id = cl.id AND d.is_active = TRUE
+       WHERE cl.is_active = TRUE
+       GROUP BY cl.id
+       ORDER BY cl.display_order ASC`,
+    );
+  }
+
   const data = (rows as any[]).map((cl) => ({
     ...cl,
     center_lat: toNum(cl.center_lat, null),
