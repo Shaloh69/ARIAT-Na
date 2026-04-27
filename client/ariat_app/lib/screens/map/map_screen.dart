@@ -95,6 +95,8 @@ class _MapScreenState extends State<MapScreen> {
   // ── Commute navigation ────────────────────────────────────────────────────
   String _transportCategory = 'private'; // 'private' | 'commute'
   String _commuteSubMode = 'saver';       // 'saver' | 'grab_taxi'
+  String _taxiSubMode = 'grab';           // 'metered_taxi' | 'grab'
+  double? _commuteFareMax;                // peak-hour max fare for ride-hailing leg
   List<TransportLeg> _commuteLegs = [];
   int _currentLegIndex = 0;
   /// True once the 200m approaching announcement has fired for the current leg.
@@ -451,19 +453,23 @@ class _MapScreenState extends State<MapScreen> {
       final allLegs = <TransportLeg>[];
 
       LatLng from = waypoints[0];
+      double segFareMax = 0;
       for (int i = 0; i < waypoints.length - 1; i++) {
         final to = waypoints[i + 1];
+        // For ride-hailing chips, send the specific sub-type instead of 'grab_taxi'
+        final serverSubMode = _commuteSubMode == 'grab_taxi' ? _taxiSubMode : _commuteSubMode;
         final res = await api.post('/routes/calculate-commute', body: {
           'start_lat': from.latitude,
           'start_lon': from.longitude,
           'end_lat': to.latitude,
           'end_lon': to.longitude,
-          'sub_mode': _commuteSubMode,
+          'sub_mode': serverSubMode,
         }, auth: true);
 
         if (res['success'] == true && res['data'] != null) {
           final mm = MultiModalRoute.fromJson(res['data'] as Map<String, dynamic>);
           allLegs.addAll(mm.legs);
+          if (mm.fareMax != null) segFareMax += mm.fareMax!;
           final lastGeo = mm.legs.isNotEmpty ? mm.legs.last.geometry : null;
           if (lastGeo != null && lastGeo.isNotEmpty) {
             from = LatLng(lastGeo.last[0], lastGeo.last[1]);
@@ -484,17 +490,25 @@ class _MapScreenState extends State<MapScreen> {
       final totalTime = merged.fold<int>(0, (s, l) => s + l.duration);
       final totalFare = merged.fold<double>(0, (s, l) => s + l.fare);
 
+      final commuteFareMax = segFareMax > 0 ? segFareMax : null;
       setState(() {
         _commuteLegs = merged;
+        _commuteFareMax = commuteFareMax;
         _currentLegIndex = 0;
         _routeLegs = [];
         _multiModalLegs = [];
         _routeLoading = false;
       });
       if (mounted) {
-        final modeLabel = _commuteSubMode == 'grab_taxi' ? 'Grab/Taxi' : 'Bus';
+        final taxiLabels = {'metered_taxi': 'Metered Taxi', 'grab': 'Grab'};
+        final modeLabel = _commuteSubMode == 'grab_taxi'
+            ? (taxiLabels[_taxiSubMode] ?? 'Grab/Taxi')
+            : 'Bus';
+        final fareText = (commuteFareMax != null && commuteFareMax > totalFare)
+            ? '₱${totalFare.toStringAsFixed(0)}–₱${commuteFareMax.toStringAsFixed(0)}'
+            : '₱${totalFare.toStringAsFixed(0)}';
         AppToast.success(context,
-            '$modeLabel · ${totalDist.toStringAsFixed(2)} km · ~$totalTime min · ₱${totalFare.toStringAsFixed(0)}');
+            '$modeLabel · ${totalDist.toStringAsFixed(2)} km · ~$totalTime min · $fareText');
       }
     } catch (e) {
       setState(() {
@@ -2442,7 +2456,7 @@ class _MapScreenState extends State<MapScreen> {
         ),
         const SizedBox(height: 10),
 
-        // Transport chips — Private | Bus | Grab/Taxi/Maxim
+        // Transport chips — Private | Bus | Grab/Taxi
         Row(
           children: [
             Expanded(child: _transportChip('private', 'Private', FluentIcons.car, c)),
@@ -2452,6 +2466,18 @@ class _MapScreenState extends State<MapScreen> {
             Expanded(child: _transportChip('grab_taxi', 'Grab/Taxi', FluentIcons.taxi, c)),
           ],
         ),
+
+        // Taxi sub-mode buttons — visible only when Grab/Taxi chip is active
+        if (_commuteSubMode == 'grab_taxi') ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _taxiSubChip('metered_taxi', 'Metered Taxi', c),
+              const SizedBox(width: 6),
+              _taxiSubChip('grab', 'Grab', c),
+            ],
+          ),
+        ],
         const SizedBox(height: 10),
 
         // Optimize toggle (private only)
@@ -2797,7 +2823,7 @@ class _MapScreenState extends State<MapScreen> {
           if (isCommute &&
               _commuteSubMode == 'saver' &&
               _commuteLegs.length == 1 &&
-              (_commuteLegs.first.mode == 'taxi' || _commuteLegs.first.mode == 'maxim')) ...[
+              _commuteLegs.first.mode == 'taxi') ...[
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(10),
@@ -2924,6 +2950,51 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               );
             }),
+          ],
+
+          // Ride-hailing fare range + disclaimer
+          if (isCommute &&
+              _commuteSubMode == 'grab_taxi' &&
+              _commuteFareMax != null &&
+              _commuteLegs.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.amber.withAlpha(18),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.amber.withAlpha(60)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(FluentIcons.taxi, size: 12, color: AppColors.amber),
+                      const SizedBox(width: 6),
+                      Text(
+                        {'metered_taxi': 'Metered Taxi', 'grab': 'Grab'}[_taxiSubMode] ?? 'Ride-Hailing',
+                        style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.amber,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '₱${_commuteLegs.fold<double>(0, (s, l) => s + l.fare).toStringAsFixed(0)} – ₱${_commuteFareMax!.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.amber,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Estimated range. Booking fee & surge pricing may apply. Final fare is determined by the app.',
+                    style: TextStyle(fontSize: 10, color: Color(0xFF92400E)),
+                  ),
+                ],
+              ),
+            ),
           ],
           const SizedBox(height: 10),
 
@@ -3055,6 +3126,9 @@ class _MapScreenState extends State<MapScreen> {
             _commuteSubMode = value == 'grab_taxi' ? 'grab_taxi' : 'saver';
           }
           _commuteLegs = [];
+          _multiModalLegs = [];
+          _routeLegs = [];
+          _commuteFareMax = null;
           _currentLegIndex = 0;
         });
         if (_routeStops.isNotEmpty) _calculateRoute(_routeStops);
@@ -3078,6 +3152,43 @@ class _MapScreenState extends State<MapScreen> {
                   color: selected ? Colors.white : c.textMuted,
                 )),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _taxiSubChip(String value, String label, AppColorScheme c) {
+    final selected = _taxiSubMode == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _taxiSubMode = value;
+          _commuteLegs = [];
+          _multiModalLegs = [];
+          _routeLegs = [];
+          _commuteFareMax = null;
+          _currentLegIndex = 0;
+        });
+        if (_routeStops.isNotEmpty) _calculateRoute(_routeStops);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.amber.withAlpha(30) : c.surfaceElevated,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? AppColors.amber : c.borderSubtle,
+            width: selected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+            color: selected ? AppColors.amber : c.textMuted,
+          ),
         ),
       ),
     );

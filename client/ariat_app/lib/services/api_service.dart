@@ -66,13 +66,13 @@ class ApiService {
     var response = await http.post(uri,
         headers: _headers(auth: auth),
         body: body != null ? jsonEncode(body) : null)
-        .timeout(const Duration(seconds: 60));
+        .timeout(const Duration(seconds: 120));
     if (response.statusCode == 401 && auth) {
       await _tryRefresh();
       response = await http.post(uri,
           headers: _headers(auth: true),
           body: body != null ? jsonEncode(body) : null)
-          .timeout(const Duration(seconds: 60));
+          .timeout(const Duration(seconds: 120));
     }
     return _handleResponse(response);
   }

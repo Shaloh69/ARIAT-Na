@@ -53,8 +53,8 @@ router.post(
 
 /**
  * POST /routes/calculate-commute
- * Build a multi-leg commute route (saver or grab_taxi).
- * Body: { start_lat, start_lon, end_lat, end_lon, sub_mode?: 'saver'|'grab_taxi' }
+ * Build a multi-leg commute route.
+ * Body: { start_lat, start_lon, end_lat, end_lon, sub_mode?: 'saver'|'metered_taxi'|'grab'|'maxim' }
  */
 router.post("/calculate-commute", authenticate, calculateCommuteRouteHandler);
 

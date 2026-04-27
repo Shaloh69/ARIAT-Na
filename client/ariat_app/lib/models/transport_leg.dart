@@ -67,6 +67,7 @@ class MultiModalRoute {
   final double totalDistance;
   final int totalDuration;
   final double totalFare;
+  final double? fareMax; // peak-hour max fare for ride-hailing; null for transit
   final String summary;
   final List<String> warnings;
 
@@ -75,6 +76,7 @@ class MultiModalRoute {
     required this.totalDistance,
     required this.totalDuration,
     required this.totalFare,
+    this.fareMax,
     required this.summary,
     this.warnings = const [],
   });
@@ -88,6 +90,7 @@ class MultiModalRoute {
       totalDistance: (json['totalDistance'] as num?)?.toDouble() ?? 0,
       totalDuration: (json['totalDuration'] as num?)?.toInt() ?? 0,
       totalFare: (json['totalFare'] as num?)?.toDouble() ?? 0,
+      fareMax: (json['fareMax'] as num?)?.toDouble(),
       summary: json['summary'] ?? '',
       warnings:
           (json['warnings'] as List?)?.map((w) => w.toString()).toList() ?? [],

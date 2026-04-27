@@ -9,7 +9,7 @@
  *               required).  Feeder gaps use walk (≤500 m) or cheapest
  *               direct_fare.  Falls back to direct_fare with note when no
  *               transit route is found.
- *   grab_taxi — Single direct_fare leg; admin-configurable via fare_configs.
+ *   metered_taxi/grab — Single direct_fare leg using the respective fare config.
  *
  * Ferry is injected automatically when A* finds no road path.
  */
@@ -20,7 +20,7 @@ import { TransportLeg } from "./multimodal.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type CommuteSubMode = "saver" | "metered_taxi" | "grab" | "maxim";
+export type CommuteSubMode = "saver" | "metered_taxi" | "grab";
 
 interface FareRow {
   transport_type: string;
@@ -808,13 +808,12 @@ async function buildSaverRoute(
 const RIDE_HAILING_TYPE: Record<string, string> = {
   metered_taxi: "taxi",
   grab:         "grab",
-  maxim:        "maxim",
 };
 
 async function buildGrabTaxiRoute(
   startLat: number, startLon: number,
   endLat: number, endLon: number,
-  subMode: "metered_taxi" | "grab" | "maxim",
+  subMode: "metered_taxi" | "grab",
 ): Promise<{ legs: TransportLeg[]; fareMax: number }> {
   const fares = await loadFares();
 
