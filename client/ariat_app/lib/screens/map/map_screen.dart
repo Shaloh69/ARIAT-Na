@@ -286,7 +286,7 @@ class _MapScreenState extends State<MapScreen> {
     'bus_commute', 'bus', 'jeepney', 'taxi', 'ferry', 'habal_habal', 'tricycle', 'walk'
   };
 
-  Future<void> _calculateRoute(List<_RouteStop> stops) async {
+  Future<void> _calculateRoute(List<_RouteStop> stops, {LatLng? fromOverride}) async {
     if (_routeStart == null || stops.isEmpty) return;
 
     setState(() {
@@ -295,7 +295,7 @@ class _MapScreenState extends State<MapScreen> {
     });
 
     if (_transportCategory == 'commute') {
-      await _calculateCommuteRoute(stops);
+      await _calculateCommuteRoute(stops, fromOverride: fromOverride);
       return;
     }
 
@@ -303,7 +303,7 @@ class _MapScreenState extends State<MapScreen> {
 
     try {
       final api = context.read<ApiService>();
-      final waypoints = [_routeStart!, ...stops.map((s) => s.position)];
+      final waypoints = [fromOverride ?? _routeStart!, ...stops.map((s) => s.position)];
 
       if (useMultiModal) {
         final mmLegs = <MultiModalRoute>[];
@@ -444,10 +444,10 @@ class _MapScreenState extends State<MapScreen> {
     return result;
   }
 
-  Future<void> _calculateCommuteRoute(List<_RouteStop> stops) async {
+  Future<void> _calculateCommuteRoute(List<_RouteStop> stops, {LatLng? fromOverride}) async {
     try {
       final api = context.read<ApiService>();
-      final waypoints = [_routeStart!, ...stops.map((s) => s.position)];
+      final waypoints = [fromOverride ?? _routeStart!, ...stops.map((s) => s.position)];
       final allLegs = <TransportLeg>[];
 
       LatLng from = waypoints[0];
@@ -752,12 +752,11 @@ class _MapScreenState extends State<MapScreen> {
               _offRouteCount = 0;
               setState(() {
                 _rerouting = true;
-                _routeStart = userLatLng;
                 _currentStepIndex = -1;
               });
               _speak('Off route. Recalculating.');
               AppToast.warning(context, 'Off route — recalculating...');
-              _calculateRoute(_routeStops).whenComplete(() {
+              _calculateRoute(_routeStops, fromOverride: userLatLng).whenComplete(() {
                 if (mounted) setState(() => _rerouting = false);
                 _speak('Route updated.');
               });
