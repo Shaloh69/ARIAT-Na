@@ -637,7 +637,7 @@ async function buildChainLegs(
         fromLat, fromLon, "Current Location",
         firstBoard.lat, firstBoard.lon, firstBoard.name,
         "walk", 0,
-        `Walk ${Math.round(boardADist * 1000)}m to ${firstBoard.name}`,
+        `Walk or Ride Any Public Transportation (Ask around the area) to ${firstBoard.name}`,
       ));
     } else {
       legs.push(await buildLeg(
@@ -645,7 +645,7 @@ async function buildChainLegs(
         firstBoard.lat, firstBoard.lon, firstBoard.name,
         cheapestDirect.transport_type,
         calcFare(cheapestDirect, boardADist),
-        `Book a ${cheapestDirect.display_name} to ${firstBoard.name}. Fare: ₱${calcFare(cheapestDirect, boardADist).toFixed(0)}`,
+        `Walk or Ride Any Public Transportation (Ask around the area) to ${firstBoard.name}`,
       ));
     }
   }
@@ -695,7 +695,7 @@ async function buildChainLegs(
             xfer.from.lat, xfer.from.lon, xfer.from.name,
             xfer.to.lat, xfer.to.lon, xfer.to.name,
             "walk", 0,
-            `Walk ${Math.round(xferDist * 1000)}m to transfer to next route`,
+            `Walk or Ride Any Public Transportation (Ask around the area) to ${chain.chainLegs[idx + 1].boardNode.name}`,
           ));
         } else {
           legs.push(await buildLeg(
@@ -703,7 +703,7 @@ async function buildChainLegs(
             xfer.to.lat, xfer.to.lon, xfer.to.name,
             cheapestDirect.transport_type,
             calcFare(cheapestDirect, xferDist),
-            `Book a ${cheapestDirect.display_name} to transfer. Fare: ₱${calcFare(cheapestDirect, xferDist).toFixed(0)}`,
+            `Walk or Ride Any Public Transportation (Ask around the area) to ${chain.chainLegs[idx + 1].boardNode.name}`,
           ));
         }
       }
@@ -718,7 +718,7 @@ async function buildChainLegs(
         lastAlight.lat, lastAlight.lon, lastAlight.name,
         toLat, toLon, "Destination",
         "walk", 0,
-        `Walk ${Math.round(alightToDest * 1000)}m to your destination`,
+        `Walk or Ride Any Public Transportation (Ask around the area) to your destination`,
       ));
     } else {
       legs.push(await buildLeg(
@@ -726,7 +726,7 @@ async function buildChainLegs(
         toLat, toLon, "Destination",
         cheapestDirect.transport_type,
         calcFare(cheapestDirect, alightToDest),
-        `Book a ${cheapestDirect.display_name} to your destination. Fare: ₱${calcFare(cheapestDirect, alightToDest).toFixed(0)}`,
+        `Walk or Ride Any Public Transportation (Ask around the area) to your destination`,
       ));
     }
   }
