@@ -531,6 +531,38 @@ class _MapScreenState extends State<MapScreen> {
       );
       return;
     }
+    // Travel time disclaimer
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => ContentDialog(
+        title: const Row(
+          children: [
+            Icon(FluentIcons.warning, size: 20, color: Color(0xFFF59E0B)),
+            SizedBox(width: 8),
+            Text('Before You Go'),
+          ],
+        ),
+        content: const Text(
+          'Estimated travel times and fares are based on typical conditions '
+          'and may vary due to traffic congestion, road closures, weather, '
+          'or other unforeseen circumstances.\n\n'
+          'Always allow extra time, stay alert, and follow local traffic rules.',
+        ),
+        actions: [
+          Button(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(ctx, false),
+          ),
+          FilledButton(
+            child: const Text('Got it, Start'),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+
     locationService.startTracking();
     locationService.clearMonitoring();
 
