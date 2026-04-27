@@ -20,15 +20,17 @@ import { TransportLeg } from "./multimodal.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type CommuteSubMode = "saver" | "grab_taxi";
+export type CommuteSubMode = "saver" | "metered_taxi" | "grab" | "maxim";
 
 interface FareRow {
   transport_type: string;
   display_name: string;
   base_fare: number;
   per_km_rate: number;
+  per_minute_rate: number;
   minimum_fare: number;
   peak_hour_multiplier: number;
+  booking_fee: number;
   routing_behavior: string;
   display_order: number;
 }
@@ -68,6 +70,7 @@ export interface CommuteRoute {
   totalDistance: number;
   totalDuration: number;
   totalFare: number;
+  fareMax?: number;
   summary: string;
   subMode: CommuteSubMode;
 }
@@ -94,12 +97,24 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number): numb
 function calcFare(row: FareRow, distKm: number): number {
   const raw     = row.base_fare + row.per_km_rate * distKm;
   const withMin = Math.max(row.minimum_fare, raw);
-  const mult    = row.routing_behavior === "direct_fare" ? (row.peak_hour_multiplier ?? 1) : 1;
-  const base    = Math.round(withMin * mult * 100) / 100;
-  if (row.routing_behavior !== "direct_fare") return base;
-  // ₱2/min time-based charge for ride-hailing (estimated at 35 km/h average speed)
+  if (row.routing_behavior !== "direct_fare") return Math.round(withMin * 100) / 100;
+  // Per-minute charge (estimated at 35 km/h average speed in city traffic)
+  const perMinRate = row.per_minute_rate ?? 2;
   const estMinutes = Math.ceil(distKm / 35 * 60);
-  return Math.round((base + 2 * estMinutes) * 100) / 100;
+  const subtotal = withMin + perMinRate * estMinutes;
+  return Math.round((subtotal + (row.booking_fee ?? 0)) * 100) / 100;
+}
+
+/** Peak-hour maximum fare: applies surge multiplier to variable part, keeps booking fee flat. */
+function calcFareMax(row: FareRow, distKm: number): number {
+  if (row.routing_behavior !== "direct_fare") return calcFare(row, distKm);
+  const raw     = row.base_fare + row.per_km_rate * distKm;
+  const withMin = Math.max(row.minimum_fare, raw);
+  const perMinRate = row.per_minute_rate ?? 2;
+  const estMinutes = Math.ceil(distKm / 35 * 60);
+  const variable = withMin + perMinRate * estMinutes;
+  const surged   = variable * (row.peak_hour_multiplier ?? 1.2);
+  return Math.round((surged + (row.booking_fee ?? 0)) * 100) / 100;
 }
 
 function feederFare(dist: number, cheapestDirect: FareRow | null): number {
@@ -169,8 +184,8 @@ function findClosestTransfer(
 
 async function loadFares(): Promise<FareRow[]> {
   const [rows]: any = await pool.execute(
-    `SELECT transport_type, display_name, base_fare, per_km_rate,
-            minimum_fare, peak_hour_multiplier, routing_behavior, display_order
+    `SELECT transport_type, display_name, base_fare, per_km_rate, per_minute_rate,
+            minimum_fare, peak_hour_multiplier, booking_fee, routing_behavior, display_order
      FROM fare_configs
      WHERE is_active = TRUE
      ORDER BY display_order ASC`,
@@ -742,10 +757,10 @@ async function buildSaverRoute(
 ): Promise<TransportLeg[]> {
   const fares          = await loadFares();
   const directFareModes = fares.filter(f => f.routing_behavior === "direct_fare");
-  const taxiMode: FareRow = directFareModes[directFareModes.length - 1] ?? {
+  const taxiMode: FareRow = fares.find(f => f.transport_type === "taxi") ?? directFareModes[0] ?? {
     transport_type: "taxi", display_name: "Taxi/Grab",
-    base_fare: 40, per_km_rate: 13.5, minimum_fare: 40,
-    peak_hour_multiplier: 1.2, routing_behavior: "direct_fare", display_order: 99,
+    base_fare: 40, per_km_rate: 13.5, per_minute_rate: 2, minimum_fare: 40,
+    peak_hour_multiplier: 1.2, booking_fee: 15, routing_behavior: "direct_fare", display_order: 99,
   };
   const cheapestDirect: FareRow = directFareModes[0] ?? taxiMode;
 
@@ -788,35 +803,51 @@ async function buildSaverRoute(
   )];
 }
 
-// ─── Grab/Taxi sub-mode ───────────────────────────────────────────────────────
+// ─── Ride-hailing sub-modes ───────────────────────────────────────────────────
+
+const RIDE_HAILING_TYPE: Record<string, string> = {
+  metered_taxi: "taxi",
+  grab:         "grab",
+  maxim:        "maxim",
+};
 
 async function buildGrabTaxiRoute(
   startLat: number, startLon: number,
   endLat: number, endLon: number,
-): Promise<TransportLeg[]> {
-  const fares           = await loadFares();
-  const directFareModes = fares.filter(f => f.routing_behavior === "direct_fare");
+  subMode: "metered_taxi" | "grab" | "maxim",
+): Promise<{ legs: TransportLeg[]; fareMax: number }> {
+  const fares = await loadFares();
+
+  const transportType = RIDE_HAILING_TYPE[subMode] ?? "taxi";
+  const mode: FareRow =
+    fares.find(f => f.transport_type === transportType && f.routing_behavior === "direct_fare") ??
+    fares.find(f => f.routing_behavior === "direct_fare") ?? {
+      transport_type: "taxi", display_name: "Taxi/Grab",
+      base_fare: 40, per_km_rate: 13.5, per_minute_rate: 2, minimum_fare: 40,
+      peak_hour_multiplier: 1.2, booking_fee: 15, routing_behavior: "direct_fare", display_order: 99,
+    };
 
   const reachable = await canReachByRoad(startLat, startLon, endLat, endLon);
   if (!reachable) {
     const ferryLegs = await injectFerryLegs(startLat, startLon, endLat, endLon, fares);
-    if (ferryLegs) return ferryLegs;
+    if (ferryLegs) {
+      return { legs: ferryLegs, fareMax: ferryLegs.reduce((s, l) => s + l.fare, 0) };
+    }
   }
 
-  const mode: FareRow = directFareModes[0] ?? {
-    transport_type: "taxi", display_name: "Taxi/Grab",
-    base_fare: 40, per_km_rate: 13.5, minimum_fare: 40,
-    peak_hour_multiplier: 1.2, routing_behavior: "direct_fare", display_order: 99,
-  };
-
-  const dist = haversine(startLat, startLon, endLat, endLon);
-  return [await buildLeg(
+  const roughDist = haversine(startLat, startLon, endLat, endLon);
+  const leg = await buildLeg(
     startLat, startLon, "Current Location",
     endLat, endLon, "Destination",
     mode.transport_type,
-    calcFare(mode, dist),
-    `Book a ${mode.display_name} directly to your destination. Fare: ₱${calcFare(mode, dist).toFixed(0)}`,
-  )];
+    calcFare(mode, roughDist),
+    `Book a ${mode.display_name} to your destination`,
+  );
+  // Recalculate fare using actual road distance from A* routing
+  leg.fare    = calcFare(mode, leg.distance);
+  const fareMax = calcFareMax(mode, leg.distance);
+
+  return { legs: [leg], fareMax };
 }
 
 // ─── Public entry point ───────────────────────────────────────────────────────
@@ -826,10 +857,16 @@ export async function buildCommuteRoute(
   endLat: number, endLon: number,
   subMode: CommuteSubMode,
 ): Promise<CommuteRoute> {
-  const legs =
-    subMode === "saver"
-      ? await buildSaverRoute(startLat, startLon, endLat, endLon)
-      : await buildGrabTaxiRoute(startLat, startLon, endLat, endLon);
+  let legs: TransportLeg[];
+  let fareMax: number | undefined;
+
+  if (subMode === "saver") {
+    legs = await buildSaverRoute(startLat, startLon, endLat, endLon);
+  } else {
+    const result = await buildGrabTaxiRoute(startLat, startLon, endLat, endLon, subMode);
+    legs    = result.legs;
+    fareMax = result.fareMax;
+  }
 
   const totalDistance = legs.reduce((s, l) => s + l.distance, 0);
   const totalDuration = legs.reduce((s, l) => s + l.duration, 0);
@@ -840,7 +877,8 @@ export async function buildCommuteRoute(
     legs,
     totalDistance: Math.round(totalDistance * 100) / 100,
     totalDuration,
-    totalFare: Math.round(totalFare * 100) / 100,
+    totalFare:     Math.round(totalFare * 100) / 100,
+    fareMax:       fareMax !== undefined ? Math.round(fareMax * 100) / 100 : undefined,
     summary,
     subMode,
   };

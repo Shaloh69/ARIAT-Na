@@ -335,8 +335,8 @@ export const calculateMultiModalRouteHandler = async (
 
 /**
  * POST /routes/calculate-commute
- * Build a multi-leg commute route (saver or grab_taxi sub-mode).
- * Body: { start_lat, start_lon, end_lat, end_lon, sub_mode?: 'saver'|'grab_taxi' }
+ * Build a multi-leg commute route.
+ * Body: { start_lat, start_lon, end_lat, end_lon, sub_mode?: 'saver'|'metered_taxi'|'grab'|'maxim' }
  */
 export const calculateCommuteRouteHandler = async (
   req: AuthRequest,
@@ -355,7 +355,7 @@ export const calculateCommuteRouteHandler = async (
       return;
     }
 
-    const validSubModes: CommuteSubMode[] = ["saver", "grab_taxi"];
+    const validSubModes: CommuteSubMode[] = ["saver", "metered_taxi", "grab", "maxim"];
     const subMode: CommuteSubMode = validSubModes.includes(sub_mode) ? sub_mode : "saver";
 
     const result = await buildCommuteRoute(
