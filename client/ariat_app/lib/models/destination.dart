@@ -4,6 +4,7 @@ class Destination {
   final String? description;
   final String? categoryName;
   final String? categorySlug;
+  final List<String> categoryNames;
   final String? clusterId;
   final String? clusterName;
   final String? clusterSlug;
@@ -50,6 +51,7 @@ class Destination {
     this.description,
     this.categoryName,
     this.categorySlug,
+    this.categoryNames = const [],
     this.clusterId,
     this.clusterName,
     this.clusterSlug,
@@ -110,6 +112,11 @@ class Destination {
       description: json['description'],
       categoryName: json['category_name'],
       categorySlug: json['category_slug'],
+      categoryNames: (json['categories'] as List?)
+              ?.map((c) => c['name'] as String? ?? '')
+              .where((n) => n.isNotEmpty)
+              .toList() ??
+          [],
       clusterId: json['cluster_id'],
       clusterName: json['cluster_name'],
       clusterSlug: json['cluster_slug'],

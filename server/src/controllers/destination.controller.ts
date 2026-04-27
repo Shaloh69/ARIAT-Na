@@ -25,22 +25,21 @@ function safeJsonParse(value: any, fallback: any = null): any {
  * Format a destination row from DB, safely handling JSON columns.
  */
 function formatDestination(dest: any) {
-  // mysql2 returns DECIMAL columns as strings by default.
-  // Normalize all numeric DECIMAL fields so Flutter (and any other consumer)
-  // receives proper JSON numbers, not strings.
   const toNum = (v: any, fallback = 0): number =>
     v !== null && v !== undefined && v !== "" ? Number(v) : fallback;
 
+  const categories: Array<{ id: string; name: string; slug: string }> =
+    safeJsonParse(dest.categories, []);
+  const firstCat = categories[0] ?? null;
+
   return {
     ...dest,
-    // Coordinate & metric DECIMAL columns
     latitude: toNum(dest.latitude),
     longitude: toNum(dest.longitude),
     rating: toNum(dest.rating),
     popularity_score: toNum(dest.popularity_score),
     entrance_fee_local: toNum(dest.entrance_fee_local),
     entrance_fee_foreign: toNum(dest.entrance_fee_foreign),
-    // JSON columns (may arrive as string or already parsed object)
     images: safeJsonParse(dest.images, []),
     menu_images: safeJsonParse(dest.menu_images, []),
     operating_hours: safeJsonParse(dest.operating_hours, null),
@@ -49,8 +48,20 @@ function formatDestination(dest: any) {
     cuisine_types: safeJsonParse(dest.cuisine_types, []),
     service_types: safeJsonParse(dest.service_types, []),
     accommodation_pricing: safeJsonParse(dest.accommodation_pricing, null),
+    // Multi-category fields
+    categories,
+    category_name: firstCat?.name ?? null,
+    category_slug: firstCat?.slug ?? null,
   };
 }
+
+/** Subquery that returns a JSON array of {id,name,slug} for all categories of a destination. */
+const CATEGORIES_SUBQUERY = `(
+  SELECT JSON_ARRAYAGG(JSON_OBJECT('id', c2.id, 'name', c2.name, 'slug', c2.slug))
+  FROM destination_categories dc2
+  JOIN categories c2 ON dc2.category_id = c2.id
+  WHERE dc2.destination_id = d.id
+) AS categories`;
 
 /**
  * Get all destinations (with filters and pagination)
@@ -86,7 +97,9 @@ export const getDestinations = async (
   }
 
   if (category) {
-    conditions.push("d.category_id = ?");
+    conditions.push(
+      "EXISTS (SELECT 1 FROM destination_categories dc WHERE dc.destination_id = d.id AND dc.category_id = ?)",
+    );
     params.push(category);
   }
 
@@ -152,14 +165,10 @@ export const getDestinations = async (
   const [countResult]: any = await pool.execute(countSql, params);
   const total = countResult[0].total;
 
-  // Get destinations with category info
+  // Get destinations with categories
   const sql = `
-    SELECT
-      d.*,
-      c.name as category_name,
-      c.slug as category_slug
+    SELECT d.*, ${CATEGORIES_SUBQUERY}
     FROM destinations d
-    LEFT JOIN categories c ON d.category_id = c.id
     ${whereClause}
     ORDER BY d.popularity_score DESC, d.rating DESC
     LIMIT ? OFFSET ?
@@ -196,12 +205,8 @@ export const getDestinationById = async (
   const { id } = req.params;
 
   const sql = `
-    SELECT
-      d.*,
-      c.name as category_name,
-      c.slug as category_slug
+    SELECT d.*, ${CATEGORIES_SUBQUERY}
     FROM destinations d
-    LEFT JOIN categories c ON d.category_id = c.id
     WHERE d.id = ?
   `;
 
@@ -219,14 +224,15 @@ export const getDestinationById = async (
     `SELECT d.id, d.name, d.latitude, d.longitude, d.address, d.images,
             d.rating, d.average_visit_duration, d.entrance_fee_local,
             d.budget_level, d.cluster_id,
-            c.name AS category_name, c.slug AS category_slug,
+            (SELECT JSON_ARRAYAGG(JSON_OBJECT('id', c2.id, 'name', c2.name, 'slug', c2.slug))
+             FROM destination_categories dc2 JOIN categories c2 ON dc2.category_id = c2.id
+             WHERE dc2.destination_id = d.id) AS categories,
             (6371 * ACOS(
               COS(RADIANS(?)) * COS(RADIANS(d.latitude)) *
               COS(RADIANS(d.longitude) - RADIANS(?)) +
               SIN(RADIANS(?)) * SIN(RADIANS(d.latitude))
             )) AS distance_km
      FROM destinations d
-     LEFT JOIN categories c ON d.category_id = c.id
      WHERE d.id != ? AND d.is_active = TRUE
      HAVING distance_km < ?
      ORDER BY distance_km ASC
@@ -240,10 +246,17 @@ export const getDestinationById = async (
     ],
   );
 
-  const nearby_places = (nearbyRows as any[]).map((n: any) => ({
-    ...n,
-    images: safeJsonParse(n.images, []),
-  }));
+  const nearby_places = (nearbyRows as any[]).map((n: any) => {
+    const cats: Array<{ id: string; name: string; slug: string }> =
+      safeJsonParse(n.categories, []);
+    return {
+      ...n,
+      images: safeJsonParse(n.images, []),
+      categories: cats,
+      category_name: cats[0]?.name ?? null,
+      category_slug: cats[0]?.slug ?? null,
+    };
+  });
 
   res.json({
     success: true,
@@ -262,7 +275,8 @@ export const createDestination = async (
   const {
     name,
     description,
-    category_id,
+    category_id,       // legacy single-value — still accepted for backward compat
+    category_ids: rawCategoryIds, // new multi-value array
     latitude,
     longitude,
     address,
@@ -288,12 +302,21 @@ export const createDestination = async (
     check_out_time,
   } = req.body;
 
+  // Normalise to an array: prefer category_ids, fall back to legacy category_id
+  const categoryIds: string[] = Array.isArray(rawCategoryIds)
+    ? rawCategoryIds.filter(Boolean)
+    : rawCategoryIds
+      ? [String(rawCategoryIds)]
+      : category_id
+        ? [String(category_id)]
+        : [];
+
   // Validate required fields
   if (!name || !String(name).trim()) {
     throw new AppError("Destination name is required", 400);
   }
-  if (!category_id) {
-    throw new AppError("Category ID is required", 400);
+  if (categoryIds.length === 0) {
+    throw new AppError("At least one category is required", 400);
   }
   if (latitude === undefined || longitude === undefined) {
     throw new AppError("Latitude and longitude are required", 400);
@@ -384,7 +407,7 @@ export const createDestination = async (
       destinationId,
       String(name).trim(),
       description || null,
-      category_id,
+      categoryIds[0] || null,   // primary category (backward compat)
       Number(latitude),
       Number(longitude),
       address || null,
@@ -417,19 +440,27 @@ export const createDestination = async (
       true,
       is_featured ? 1 : 0,
     ]);
+
+    // Insert all categories into the junction table
+    for (let i = 0; i < categoryIds.length; i++) {
+      await pool.execute(
+        "INSERT IGNORE INTO destination_categories (id, destination_id, category_id, display_order) VALUES (UUID(), ?, ?, ?)",
+        [destinationId, categoryIds[i], i],
+      );
+    }
   } catch (dbError: any) {
     if (dbError.code === "ER_NO_REFERENCED_ROW_2") {
       throw new AppError(
-        "Invalid category — the selected category does not exist",
+        "Invalid category — one or more selected categories do not exist",
         400,
       );
     }
     throw dbError;
   }
 
-  // Fetch created destination
+  // Fetch created destination with categories
   const [destinations]: any = await pool.execute(
-    "SELECT * FROM destinations WHERE id = ?",
+    `SELECT d.*, ${CATEGORIES_SUBQUERY} FROM destinations d WHERE d.id = ?`,
     [destinationId],
   );
 
@@ -465,7 +496,6 @@ export const updateDestination = async (
   const allowedFields = [
     "name",
     "description",
-    "category_id",
     "latitude",
     "longitude",
     "address",
@@ -536,18 +566,45 @@ export const updateDestination = async (
 
   await pool.execute(sql, [...updateValues, id]);
 
-  // Fetch updated destination
+  // Handle category_ids update if provided
+  const rawUpdatedIds = updates.category_ids ?? updates.category_id;
+  if (rawUpdatedIds !== undefined) {
+    const updatedIds: string[] = Array.isArray(rawUpdatedIds)
+      ? rawUpdatedIds.filter(Boolean)
+      : rawUpdatedIds
+        ? [String(rawUpdatedIds)]
+        : [];
+
+    if (updatedIds.length > 0) {
+      // Replace junction entries
+      await pool.execute(
+        "DELETE FROM destination_categories WHERE destination_id = ?",
+        [id],
+      );
+      for (let i = 0; i < updatedIds.length; i++) {
+        await pool.execute(
+          "INSERT IGNORE INTO destination_categories (id, destination_id, category_id, display_order) VALUES (UUID(), ?, ?, ?)",
+          [id, updatedIds[i], i],
+        );
+      }
+      // Keep category_id in sync with primary category
+      await pool.execute(
+        "UPDATE destinations SET category_id = ? WHERE id = ?",
+        [updatedIds[0], id],
+      );
+    }
+  }
+
+  // Fetch updated destination with categories
   const [destinations]: any = await pool.execute(
-    "SELECT * FROM destinations WHERE id = ?",
+    `SELECT d.*, ${CATEGORIES_SUBQUERY} FROM destinations d WHERE d.id = ?`,
     [id],
   );
-
-  const destination = destinations[0];
 
   res.json({
     success: true,
     message: "Destination updated successfully",
-    data: formatDestination(destination),
+    data: formatDestination(destinations[0]),
   });
 };
 
@@ -585,12 +642,8 @@ export const getFeaturedDestinations = async (
   res: Response,
 ): Promise<void> => {
   const sql = `
-    SELECT
-      d.*,
-      c.name as category_name,
-      c.slug as category_slug
+    SELECT d.*, ${CATEGORIES_SUBQUERY}
     FROM destinations d
-    LEFT JOIN categories c ON d.category_id = c.id
     WHERE d.is_featured = ? AND d.is_active = ?
     ORDER BY d.popularity_score DESC
     LIMIT 10
@@ -598,12 +651,10 @@ export const getFeaturedDestinations = async (
 
   let [destinations]: any = await pool.execute(sql, [true, true]);
 
-  // Fallback: if no destinations are marked featured, return the top-rated active ones
   if ((destinations as any[]).length === 0) {
     const fallbackSql = `
-      SELECT d.*, c.name as category_name, c.slug as category_slug
+      SELECT d.*, ${CATEGORIES_SUBQUERY}
       FROM destinations d
-      LEFT JOIN categories c ON d.category_id = c.id
       WHERE d.is_active = TRUE
       ORDER BY d.rating DESC, d.popularity_score DESC
       LIMIT 10
@@ -626,12 +677,9 @@ export const getDestinationsGeoJSON = async (
   res: Response,
 ): Promise<void> => {
   const sql = `
-    SELECT
-      d.id, d.name, d.latitude, d.longitude, d.address,
-      d.images, d.is_featured,
-      c.name as category_name, c.slug as category_slug
+    SELECT d.id, d.name, d.latitude, d.longitude, d.address, d.images, d.is_featured,
+           ${CATEGORIES_SUBQUERY}
     FROM destinations d
-    LEFT JOIN categories c ON d.category_id = c.id
     WHERE d.is_active = ?
     ORDER BY d.popularity_score DESC, d.rating DESC
   `;
@@ -648,8 +696,8 @@ export const getDestinationsGeoJSON = async (
         address: dest.address,
         image: Array.isArray(images) && images.length > 0 ? images[0] : null,
         is_featured: dest.is_featured,
-        category_name: dest.category_name,
-        category_slug: dest.category_slug,
+        category_name: safeJsonParse(dest.categories, [])[0]?.name ?? null,
+        category_slug: safeJsonParse(dest.categories, [])[0]?.slug ?? null,
       },
       geometry: {
         type: "Point",
@@ -678,12 +726,8 @@ export const getPopularDestinations = async (
   const { limit = 10 } = req.query;
 
   const sql = `
-    SELECT
-      d.*,
-      c.name as category_name,
-      c.slug as category_slug
+    SELECT d.*, ${CATEGORIES_SUBQUERY}
     FROM destinations d
-    LEFT JOIN categories c ON d.category_id = c.id
     WHERE d.is_active = ?
     ORDER BY d.popularity_score DESC, d.rating DESC
     LIMIT ?

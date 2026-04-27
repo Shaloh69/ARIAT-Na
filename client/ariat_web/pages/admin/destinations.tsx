@@ -27,9 +27,10 @@ interface Destination {
   id: string;
   name: string;
   description?: string;
-  category_id: string;
+  category_id?: string;
   category_name?: string;
   category_slug?: string;
+  categories?: { id: string; name: string; slug: string }[];
   cluster_id?: string;
   municipality?: string;
   budget_level?: string;
@@ -144,10 +145,10 @@ export default function DestinationsPage() {
   const [saving, setSaving] = useState(false);
 
   // ── Basic form fields ──────────────────────────────────────────────────────
+  const [formCategoryIds, setFormCategoryIds] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    category_id: "",
     latitude: "",
     longitude: "",
     address: "",
@@ -206,12 +207,10 @@ export default function DestinationsPage() {
   const [formCheckOut, setFormCheckOut] = useState("12:00");
 
   // ── Derived ────────────────────────────────────────────────────────────────
-  const selectedCategory = categories.find(
-    (c) => c.id === formData.category_id,
-  );
+  const primaryCategory = categories.find((c) => formCategoryIds[0] === c.id);
   const { isRestaurant, isHotel } = detectCatType(
-    selectedCategory?.slug ?? "",
-    selectedCategory?.name ?? "",
+    primaryCategory?.slug ?? "",
+    primaryCategory?.name ?? "",
   );
 
   // ─── Data fetching ────────────────────────────────────────────────────────
@@ -265,10 +264,10 @@ export default function DestinationsPage() {
   // ─── Modal helpers ────────────────────────────────────────────────────────
 
   const resetForm = useCallback(() => {
+    setFormCategoryIds([]);
     setFormData({
       name: "",
       description: "",
-      category_id: "",
       latitude: "",
       longitude: "",
       address: "",
@@ -313,10 +312,13 @@ export default function DestinationsPage() {
   const handleOpenModal = (destination?: Destination) => {
     if (destination) {
       setEditingDestination(destination);
+      setFormCategoryIds(
+        destination.categories?.map((c) => c.id) ??
+          (destination.category_id ? [destination.category_id] : []),
+      );
       setFormData({
         name: destination.name,
         description: destination.description || "",
-        category_id: destination.category_id,
         latitude: String(destination.latitude),
         longitude: String(destination.longitude),
         address: destination.address || "",
@@ -508,8 +510,8 @@ export default function DestinationsPage() {
 
       return;
     }
-    if (!formData.category_id) {
-      toast.error("Category is required");
+    if (formCategoryIds.length === 0) {
+      toast.error("At least one category is required");
 
       return;
     }
@@ -533,7 +535,7 @@ export default function DestinationsPage() {
     const payload: Record<string, any> = {
       name: formData.name.trim(),
       description: formData.description || undefined,
-      category_id: formData.category_id,
+      category_ids: formCategoryIds,
       latitude: parseFloat(formData.latitude),
       longitude: parseFloat(formData.longitude),
       address: formData.address || undefined,
@@ -1017,13 +1019,16 @@ export default function DestinationsPage() {
                   />
                   <Select
                     isRequired
-                    label="Category"
-                    placeholder="Select a category"
-                    selectedKeys={
-                      formData.category_id ? [formData.category_id] : []
-                    }
-                    onChange={(e) =>
-                      setFormData({ ...formData, category_id: e.target.value })
+                    label="Categories"
+                    placeholder="Select one or more categories"
+                    selectedKeys={new Set(formCategoryIds)}
+                    selectionMode="multiple"
+                    onSelectionChange={(keys) =>
+                      setFormCategoryIds(
+                        keys === "all"
+                          ? categories.map((c) => c.id)
+                          : Array.from(keys as Set<string>),
+                      )
                     }
                   >
                     {categories.map((c) => (

@@ -18,15 +18,18 @@ export const getClusters = async (
 
   if (interestSlugs.length > 0) {
     const placeholders = interestSlugs.map(() => "?").join(",");
-    // tagsJson is a JSON array string e.g. '["beach","waterfall"]' for JSON_OVERLAPS
     const tagsJson = JSON.stringify(interestSlugs);
     [rows] = await pool.execute<RowDataPacket[]>(
-      `SELECT cl.*, COUNT(d.id) AS destination_count
+      `SELECT cl.*, COUNT(DISTINCT d.id) AS destination_count
        FROM clusters cl
        LEFT JOIN destinations d ON d.cluster_id = cl.id
          AND d.is_active = TRUE
          AND (
-           d.category_id IN (SELECT id FROM categories WHERE slug IN (${placeholders}))
+           EXISTS (
+             SELECT 1 FROM destination_categories dc
+             JOIN categories c ON dc.category_id = c.id
+             WHERE dc.destination_id = d.id AND c.slug IN (${placeholders})
+           )
            OR JSON_OVERLAPS(COALESCE(d.tags, '[]'), ?)
          )
        WHERE cl.is_active = TRUE
