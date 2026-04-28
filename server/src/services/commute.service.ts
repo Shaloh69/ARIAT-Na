@@ -73,6 +73,9 @@ export interface CommuteRoute {
   fareMax?: number;
   summary: string;
   subMode: CommuteSubMode;
+  /** Fare rate components — only present for metered_taxi. Used by the app to
+   *  run a client-side meter (base + per-km + per-minute) during navigation. */
+  fareConfig?: { baseFare: number; perKmRate: number; perMinuteRate: number };
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -829,7 +832,7 @@ async function buildGrabTaxiRoute(
   startLat: number, startLon: number,
   endLat: number, endLon: number,
   subMode: "metered_taxi" | "grab",
-): Promise<{ legs: TransportLeg[]; fareMax: number }> {
+): Promise<{ legs: TransportLeg[]; fareMax: number; fareConfig: { baseFare: number; perKmRate: number; perMinuteRate: number } }> {
   const fares = await loadFares();
 
   const transportType = RIDE_HAILING_TYPE[subMode] ?? "taxi";
@@ -841,11 +844,13 @@ async function buildGrabTaxiRoute(
       peak_hour_multiplier: 1.2, booking_fee: 15, routing_behavior: "direct_fare", display_order: 99,
     };
 
+  const fareConfig = { baseFare: mode.base_fare, perKmRate: mode.per_km_rate, perMinuteRate: mode.per_minute_rate };
+
   const reachable = await canReachByRoad(startLat, startLon, endLat, endLon);
   if (!reachable) {
     const ferryLegs = await injectFerryLegs(startLat, startLon, endLat, endLon, fares);
     if (ferryLegs) {
-      return { legs: ferryLegs, fareMax: ferryLegs.reduce((s, l) => s + l.fare, 0) };
+      return { legs: ferryLegs, fareMax: ferryLegs.reduce((s, l) => s + l.fare, 0), fareConfig };
     }
   }
 
@@ -861,7 +866,7 @@ async function buildGrabTaxiRoute(
   leg.fare    = calcFare(mode, leg.distance);
   const fareMax = calcFareMax(mode, leg.distance);
 
-  return { legs: [leg], fareMax };
+  return { legs: [leg], fareMax, fareConfig };
 }
 
 // ─── Public entry point ───────────────────────────────────────────────────────
@@ -873,6 +878,7 @@ export async function buildCommuteRoute(
 ): Promise<CommuteRoute> {
   let legs: TransportLeg[];
   let fareMax: number | undefined;
+  let fareConfig: CommuteRoute["fareConfig"];
 
   if (subMode === "saver") {
     legs = await buildSaverRoute(startLat, startLon, endLat, endLon);
@@ -880,6 +886,7 @@ export async function buildCommuteRoute(
     const result = await buildGrabTaxiRoute(startLat, startLon, endLat, endLon, subMode);
     legs    = result.legs;
     fareMax = result.fareMax;
+    if (subMode === "metered_taxi") fareConfig = result.fareConfig;
   }
 
   const totalDistance = legs.reduce((s, l) => s + l.distance, 0);
@@ -895,5 +902,6 @@ export async function buildCommuteRoute(
     fareMax:       fareMax !== undefined ? Math.round(fareMax * 100) / 100 : undefined,
     summary,
     subMode,
+    fareConfig,
   };
 }

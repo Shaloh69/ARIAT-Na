@@ -27,6 +27,13 @@ double _parseDouble(dynamic v, [double fallback = 0.0]) {
   return fallback;
 }
 
+class _TaxiFareConfig {
+  final double baseFare;
+  final double perKm;
+  final double perMinute;
+  const _TaxiFareConfig(this.baseFare, this.perKm, this.perMinute);
+}
+
 class MapScreen extends StatefulWidget {
   /// Single destination pre-loaded as the first stop.
   final Destination? destination;
@@ -48,7 +55,7 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   final MapController _mapController = MapController();
   List<Destination> _destinations = [];
   List<RouteResult> _routeLegs = [];
@@ -102,6 +109,38 @@ class _MapScreenState extends State<MapScreen> {
   int _currentLegIndex = 0;
   /// True once the 200m approaching announcement has fired for the current leg.
   bool _commuteApproachSpoken = false;
+
+  // ── Commute fare locking / metered-taxi meter ─────────────────────────────
+  /// Grab / Bus: fare locked at nav-start; display never changes mid-trip.
+  double? _navLockedFare;
+  /// Metered taxi: rate components from server (cached on first route calc).
+  _TaxiFareConfig? _taxiFareConfig;
+  /// True while metered-taxi meter is actively running (between nav-start and stop).
+  bool _taxiMeterActive = false;
+  /// GPS distance accumulated since nav-start (km).
+  double _taxiKmTraveled = 0;
+  /// Elapsed time accumulated since nav-start (minutes, includes idle/traffic).
+  double _taxiMinutesTraveled = 0;
+  /// Last GPS position used to compute delta distance.
+  LatLng? _taxiLastGpsPos;
+  /// Timestamp of the last GPS update (used to compute delta minutes).
+  DateTime? _taxiLastGpsTime;
+  /// Server estimate of remaining fare from current GPS to destination (updated on reroute).
+  double _taxiRemainingEstimate = 0;
+
+  // ── Smooth navigation camera ──────────────────────────────────────────────
+  /// Drives 60-fps position interpolation between GPS fixes.
+  late final AnimationController _navCamController;
+  Animation<double>? _camLatAnim;
+  Animation<double>? _camLonAnim;
+  /// Smoothly interpolated marker position (updated by _navCamController).
+  LatLng? _animMarkerPos;
+  /// Speed-adaptive zoom level (updated on each GPS fix).
+  double _navZoom = 17.0;
+  /// Previous GPS fix — used to compute speed.
+  LatLng? _lastNavGpsPos;
+  /// Timestamp of previous GPS fix — used to compute speed.
+  DateTime? _lastNavGpsTime;
 
   // ── Turn-by-turn navigation (private car) ────────────────────────────────
   late final FlutterTts _tts;
@@ -170,6 +209,13 @@ class _MapScreenState extends State<MapScreen> {
     _tts.setLanguage('en-US');
     _tts.setSpeechRate(0.9);
 
+    // Smooth navigation camera animation
+    _navCamController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _navCamController.addListener(_onNavCamTick);
+
     // Register location listener and set GPS start after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -211,6 +257,7 @@ class _MapScreenState extends State<MapScreen> {
     _locationService?.removeListener(_handleLocationUpdate);
     _arrivedSubscription?.cancel();
     _tts.stop();
+    _navCamController.dispose();
     super.dispose();
   }
 
@@ -483,7 +530,19 @@ class _MapScreenState extends State<MapScreen> {
         if (!mounted || gen != _routeGeneration) return;
 
         if (res['success'] == true && res['data'] != null) {
-          final mm = MultiModalRoute.fromJson(res['data'] as Map<String, dynamic>);
+          final data = res['data'] as Map<String, dynamic>;
+          // Cache fare rates for metered taxi meter (only needed once)
+          if (_taxiSubMode == 'metered_taxi' && _taxiFareConfig == null) {
+            final fcRaw = data['fareConfig'] as Map<String, dynamic>?;
+            if (fcRaw != null) {
+              _taxiFareConfig = _TaxiFareConfig(
+                _parseDouble(fcRaw['baseFare']),
+                _parseDouble(fcRaw['perKmRate']),
+                _parseDouble(fcRaw['perMinuteRate']),
+              );
+            }
+          }
+          final mm = MultiModalRoute.fromJson(data);
           allLegs.addAll(mm.legs);
           if (mm.fareMax != null) segFareMax += mm.fareMax!;
           final lastGeo = mm.legs.isNotEmpty ? mm.legs.last.geometry : null;
@@ -527,6 +586,12 @@ class _MapScreenState extends State<MapScreen> {
         _routeLegs = [];
         _multiModalLegs = [];
         _routeLoading = false;
+        // Metered taxi reroute: refresh remaining-fare estimate without touching
+        // the already-accumulated meter (_taxiKmTraveled / _taxiMinutesTraveled).
+        if (_taxiMeterActive && _taxiSubMode == 'metered_taxi') {
+          final baseFare = _taxiFareConfig?.baseFare ?? 50.0;
+          _taxiRemainingEstimate = (totalFare - baseFare).clamp(0.0, double.infinity);
+        }
       });
       if (mounted) {
         final taxiLabels = {'metered_taxi': 'Metered Taxi', 'grab': 'Grab'};
@@ -623,6 +688,10 @@ class _MapScreenState extends State<MapScreen> {
     await _arrivedSubscription?.cancel();
     _arrivedSubscription = locationService.arrivedStream.listen(_onArrivedAtDestination);
 
+    final currentPos = locationService.currentPosition;
+    final startPos = currentPos != null
+        ? LatLng(currentPos.latitude, currentPos.longitude)
+        : _routeStart;
     setState(() {
       _isNavigating = true;
       _arrivedDestination = null;
@@ -632,9 +701,36 @@ class _MapScreenState extends State<MapScreen> {
       _offRouteCount = 0;
       _lastRerouteTime = null;
       _lastHandledPositionTime = null;
+      _animMarkerPos = startPos;
+      _navZoom = 17.0;
+      _lastNavGpsPos = null;
+      _lastNavGpsTime = null;
     });
     _currentStepIndex = -1;
     _commuteApproachSpoken = false;
+
+    // Lock fare at nav-start (Grab / Bus) or start the meter (Metered Taxi).
+    if (_commuteLegs.isNotEmpty) {
+      final tripFare = _commuteLegs.fold<double>(0, (s, l) => s + l.fare);
+      if (_commuteSubMode == 'saver' ||
+          (_commuteSubMode == 'grab_taxi' && _taxiSubMode == 'grab')) {
+        setState(() => _navLockedFare = tripFare);
+      } else if (_commuteSubMode == 'grab_taxi' && _taxiSubMode == 'metered_taxi') {
+        final baseFare = _taxiFareConfig?.baseFare ?? 50.0;
+        final pos = _locationService?.currentPosition;
+        setState(() {
+          _taxiMeterActive = true;
+          _taxiKmTraveled = 0;
+          _taxiMinutesTraveled = 0;
+          _taxiLastGpsPos = pos != null
+              ? LatLng(pos.latitude, pos.longitude)
+              : _routeStart;
+          _taxiLastGpsTime = DateTime.now();
+          _taxiRemainingEstimate =
+              (tripFare - baseFare).clamp(0.0, double.infinity);
+        });
+      }
+    }
     final stopCount = _routeStops.length;
     _speak('Navigation started. $stopCount stop${stopCount == 1 ? '' : 's'} ahead.');
     // Announce first commute leg after the opening message
@@ -749,7 +845,19 @@ class _MapScreenState extends State<MapScreen> {
       _currentStepIndex = -1;
       _currentLegIndex = 0;
       _commuteApproachSpoken = false;
+      _navLockedFare = null;
+      _taxiMeterActive = false;
+      _taxiKmTraveled = 0;
+      _taxiMinutesTraveled = 0;
+      _taxiLastGpsPos = null;
+      _taxiLastGpsTime = null;
+      _taxiRemainingEstimate = 0;
+      _animMarkerPos = null;
+      _navZoom = 17.0;
+      _lastNavGpsPos = null;
+      _lastNavGpsTime = null;
     });
+    _navCamController.stop();
     // Reset map to north-up
     try { _mapController.rotate(0); } catch (_) {}
     AppToast.info(context, 'Navigation stopped');
@@ -767,6 +875,100 @@ class _MapScreenState extends State<MapScreen> {
       _routeError = null;
       _isAiItinerary = false;
     });
+  }
+
+  // ── Smooth navigation camera helpers ─────────────────────────────────────
+
+  /// Called by _navCamController on every animation frame.
+  /// Updates the animated marker position — camera follows in _handleLocationUpdate.
+  void _onNavCamTick() {
+    if (!mounted || _camLatAnim == null || _camLonAnim == null) return;
+    setState(() {
+      _animMarkerPos = LatLng(_camLatAnim!.value, _camLonAnim!.value);
+    });
+  }
+
+  /// Start a smooth transition from the current animated position to [target].
+  /// Also recomputes zoom from GPS speed.
+  void _startNavCamAnim(LatLng target) {
+    final start = _animMarkerPos ?? _snappedPosition ?? target;
+    final now = DateTime.now();
+    if (_lastNavGpsTime != null && _lastNavGpsPos != null) {
+      final distKm = _distMeters(_lastNavGpsPos!, target) / 1000;
+      final elapsedH =
+          now.difference(_lastNavGpsTime!).inMilliseconds / 3600000.0;
+      final speedKmh =
+          elapsedH > 0 ? (distKm / elapsedH).clamp(0.0, 150.0) : 25.0;
+      final targetZoom = _computeNavZoom(speedKmh);
+      // Exponential smoothing — avoids sudden zoom jumps
+      _navZoom = _navZoom * 0.75 + targetZoom * 0.25;
+    }
+    _lastNavGpsPos = target;
+    _lastNavGpsTime = now;
+    _camLatAnim = Tween<double>(begin: start.latitude, end: target.latitude)
+        .animate(CurvedAnimation(
+            parent: _navCamController, curve: Curves.easeOut));
+    _camLonAnim = Tween<double>(begin: start.longitude, end: target.longitude)
+        .animate(CurvedAnimation(
+            parent: _navCamController, curve: Curves.easeOut));
+    _navCamController.forward(from: 0);
+  }
+
+  /// Zoom level based on estimated speed.
+  double _computeNavZoom(double speedKmh) {
+    if (speedKmh < 8)  return 18.5; // walking / very slow
+    if (speedKmh < 25) return 17.5; // slow city
+    if (speedKmh < 50) return 17.0; // normal city
+    if (speedKmh < 80) return 16.0; // fast road
+    return 15.5;                    // highway
+  }
+
+  /// Ahead-offset distance in km that places the user ~1/3 from the bottom.
+  double _lookAheadKm() {
+    if (_navZoom >= 18) return 0.05;
+    if (_navZoom >= 17) return 0.10;
+    if (_navZoom >= 16) return 0.18;
+    return 0.28;
+  }
+
+  /// Returns a point [offsetKm] ahead of [pos] in [headingDeg] direction.
+  /// Used to keep the user in the lower third so more road ahead is visible.
+  LatLng _lookAheadCenter(LatLng pos, double headingDeg, double offsetKm) {
+    const R = 6371.0;
+    final delta = offsetKm / R;
+    final lat1 = pos.latitude * pi / 180;
+    final lon1 = pos.longitude * pi / 180;
+    final theta = headingDeg * pi / 180;
+    final sinLat2 =
+        sin(lat1) * cos(delta) + cos(lat1) * sin(delta) * cos(theta);
+    final lat2 = asin(sinLat2.clamp(-1.0, 1.0));
+    final lon2 = lon1 +
+        atan2(sin(theta) * sin(delta) * cos(lat1),
+            cos(delta) - sin(lat1) * sinLat2);
+    return LatLng(lat2 * 180 / pi, lon2 * 180 / pi);
+  }
+
+  // ── Fare display ─────────────────────────────────────────────────────────
+
+  /// Returns the fare to show in all commute fare widgets.
+  /// • Not navigating: raw API total from current leg list.
+  /// • Grab / Bus navigating: locked at nav-start, never fluctuates.
+  /// • Metered Taxi navigating: live meter (base + km + time) + remaining estimate.
+  double get _displayedCommuteFare {
+    if (_commuteLegs.isEmpty) return 0;
+    if (_isNavigating) {
+      if (_commuteSubMode == 'grab_taxi' &&
+          _taxiSubMode == 'metered_taxi' &&
+          _taxiMeterActive) {
+        final cfg = _taxiFareConfig;
+        final meter = (cfg?.baseFare ?? 50.0)
+            + _taxiKmTraveled * (cfg?.perKm ?? 14.5)
+            + _taxiMinutesTraveled * (cfg?.perMinute ?? 2.0);
+        return meter + _taxiRemainingEstimate;
+      }
+      if (_navLockedFare != null) return _navLockedFare!;
+    }
+    return _commuteLegs.fold<double>(0, (s, l) => s + l.fare);
   }
 
   // ── Location update handler ───────────────────────────────────────────────
@@ -789,20 +991,33 @@ class _MapScreenState extends State<MapScreen> {
 
     final userLatLng = LatLng(pos.latitude, pos.longitude);
 
-    // ── Camera: follow + rotate (cheap, runs on compass + GPS updates) ──
-    final displayPos = _snappedPosition ?? userLatLng;
+    // ── Camera: smooth animated follow + look-ahead offset ───────────────
+    // _animMarkerPos is updated at 60 fps by _navCamController.
+    // On compass updates (~10 Hz) the camera heading is refreshed directly.
+    final markerPos = _animMarkerPos ?? _snappedPosition ?? userLatLng;
+    final center = _lookAheadCenter(markerPos, ls.heading, _lookAheadKm());
     try {
-      _mapController.moveAndRotate(
-        displayPos,
-        _mapController.camera.zoom,
-        -ls.heading, // negative: map rotates so heading direction faces "up"
-      );
+      _mapController.moveAndRotate(center, _navZoom, -ls.heading);
     } catch (_) {}
 
     // ── Snapping + off-route: only on new GPS positions ──────────────────
     final posTime = ls.lastPositionUpdate;
     if (posTime == null || posTime == _lastHandledPositionTime) return;
     _lastHandledPositionTime = posTime;
+
+    // ── Metered taxi: accumulate GPS distance + elapsed time ─────────────
+    if (_taxiMeterActive && _taxiLastGpsPos != null && _taxiLastGpsTime != null) {
+      final distKm = _distMeters(userLatLng, _taxiLastGpsPos!) / 1000;
+      final now = DateTime.now();
+      final elapsedMin =
+          now.difference(_taxiLastGpsTime!).inMilliseconds / 60000.0;
+      setState(() {
+        _taxiKmTraveled += distKm;
+        _taxiMinutesTraveled += elapsedMin;
+        _taxiLastGpsPos = userLatLng;
+        _taxiLastGpsTime = now;
+      });
+    }
 
     final polyline = _flatRoutePolyline();
     if (polyline.length >= 2) {
@@ -846,6 +1061,9 @@ class _MapScreenState extends State<MapScreen> {
     } else {
       setState(() => _snappedPosition = userLatLng);
     }
+
+    // ── Smooth position animation: glide marker to new snapped position ──
+    _startNavCamAnim(_snappedPosition ?? userLatLng);
 
     // ── Commute leg auto-advance + TTS ───────────────────────────────────
     if (_isNavigating && _commuteLegs.isNotEmpty && _currentLegIndex < _commuteLegs.length) {
@@ -1372,7 +1590,7 @@ class _MapScreenState extends State<MapScreen> {
             if (userPos != null && _isNavigating)
               MarkerLayer(markers: [
                 Marker(
-                  point: _snappedPosition ?? LatLng(userPos.latitude, userPos.longitude),
+                  point: _animMarkerPos ?? _snappedPosition ?? LatLng(userPos.latitude, userPos.longitude),
                   width: 44, height: 44,
                   rotate: true,
                   child: CustomPaint(
@@ -2348,7 +2566,7 @@ class _MapScreenState extends State<MapScreen> {
             ? _multiModalLegs.fold<int>(0, (s, l) => s + l.totalDuration)
             : _routeLegs.fold<int>(0, (s, l) => s + l.estimatedTime);
     final totalFare = isCommute
-        ? _commuteLegs.fold<double>(0, (s, l) => s + l.fare)
+        ? _displayedCommuteFare
         : isMultiModal
             ? _multiModalLegs.fold<double>(0, (s, l) => s + l.totalFare)
             : 0.0;
@@ -2419,7 +2637,7 @@ class _MapScreenState extends State<MapScreen> {
             ? _multiModalLegs.fold<int>(0, (s, l) => s + l.totalDuration)
             : _routeLegs.fold<int>(0, (s, l) => s + l.estimatedTime);
     final totalFare = isCommute
-        ? _commuteLegs.fold<double>(0, (s, l) => s + l.fare)
+        ? _displayedCommuteFare
         : isMultiModal
             ? _multiModalLegs.fold<double>(0, (s, l) => s + l.totalFare)
             : 0.0;
@@ -3011,7 +3229,7 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                       const Spacer(),
                       Text(
-                        '₱${_commuteLegs.fold<double>(0, (s, l) => s + l.fare).toStringAsFixed(0)} – ₱${_commuteFareMax!.toStringAsFixed(0)}',
+                        '₱${_displayedCommuteFare.toStringAsFixed(0)} – ₱${_commuteFareMax!.toStringAsFixed(0)}',
                         style: const TextStyle(
                           fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.amber,
                         ),
@@ -3162,6 +3380,9 @@ class _MapScreenState extends State<MapScreen> {
           _routeLegs = [];
           _commuteFareMax = null;
           _currentLegIndex = 0;
+          _taxiFareConfig = null;
+          _navLockedFare = null;
+          _taxiMeterActive = false;
         });
         if (_routeStops.isNotEmpty) _calculateRoute(_routeStops);
       },
@@ -3204,6 +3425,9 @@ class _MapScreenState extends State<MapScreen> {
           _routeLegs = [];
           _commuteFareMax = null;
           _currentLegIndex = 0;
+          _taxiFareConfig = null;
+          _navLockedFare = null;
+          _taxiMeterActive = false;
         });
         if (_routeStops.isNotEmpty) _calculateRoute(_routeStops);
       },
