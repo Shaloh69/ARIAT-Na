@@ -374,6 +374,7 @@ async function injectFerryLegs(
   fromLat: number, fromLon: number,
   toLat: number, toLon: number,
   fares: FareRow[],
+  landVehicle: "direct_fare" | "private_car" = "direct_fare",
 ): Promise<TransportLeg[] | null> {
   const ferryFare = fares.find(f => f.transport_type === "ferry");
   if (!ferryFare) return null;
@@ -384,25 +385,32 @@ async function injectFerryLegs(
 
   const legs: TransportLeg[] = [];
 
-  // Land leg: user → boarding pier (taxi/grab for comfort; may be long distance)
+  // Land leg: user → boarding pier
   const toPierDist = haversine(fromLat, fromLon, boardingPier.lat, boardingPier.lon);
   if (toPierDist > 0.05) {
     let landMode: string;
     let landFare: number;
+    let landInstruction: string;
     if (toPierDist <= 0.5) {
       landMode = "walk";
       landFare = 0;
+      landInstruction = `Walk to ${boardingPier.name} to board the ferry`;
+    } else if (landVehicle === "private_car") {
+      landMode = "private_car";
+      landFare = 0;
+      landInstruction = `Drive to ${boardingPier.name} and load your car onto the ferry`;
     } else {
       const taxiFare = fares.find(f => f.routing_behavior === "direct_fare") ??
                        fares.find(f => f.transport_type === "taxi");
       landMode = taxiFare?.transport_type ?? "taxi";
       landFare = taxiFare ? calcFare(taxiFare, toPierDist) : Math.round(40 + toPierDist * 13.5);
+      landInstruction = `Head to ${boardingPier.name} to board the ferry`;
     }
     legs.push(await buildLeg(
       fromLat, fromLon, "Current Location",
       boardingPier.lat, boardingPier.lon, boardingPier.name,
       landMode, landFare,
-      `Head to ${boardingPier.name} to board the ferry`,
+      landInstruction,
     ));
   }
 
@@ -867,6 +875,30 @@ async function buildGrabTaxiRoute(
   const fareMax = calcFareMax(mode, leg.distance);
 
   return { legs: [leg], fareMax, fareConfig };
+}
+
+// ─── Private-car ferry fallback ──────────────────────────────────────────────
+
+/**
+ * Tries to build a private-car + ferry route when A* finds no road path
+ * (typically an island destination).  Land legs use private_car mode with
+ * zero fare (user's own vehicle).  Returns null if already reachable by road
+ * or if no pier is found within range.
+ */
+export async function buildPrivateCarFerryRoute(
+  fromLat: number, fromLon: number,
+  toLat: number, toLon: number,
+): Promise<{ legs: TransportLeg[]; totalDistance: number; totalDuration: number; totalFare: number } | null> {
+  if (await canReachByRoad(fromLat, fromLon, toLat, toLon)) return null;
+  const fares = await loadFares();
+  const legs  = await injectFerryLegs(fromLat, fromLon, toLat, toLon, fares, "private_car");
+  if (!legs || legs.length === 0) return null;
+  return {
+    legs,
+    totalDistance: Math.round(legs.reduce((s, l) => s + l.distance, 0) * 100) / 100,
+    totalDuration: legs.reduce((s, l) => s + l.duration, 0),
+    totalFare:     Math.round(legs.reduce((s, l) => s + l.fare, 0) * 100) / 100,
+  };
 }
 
 // ─── Public entry point ───────────────────────────────────────────────────────

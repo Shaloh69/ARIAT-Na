@@ -7,7 +7,7 @@ import {
   checkIfOffCourse,
 } from "../services/pathfinding.service";
 import { calculateMultiModalRoute } from "../services/multimodal.service";
-import { buildCommuteRoute, CommuteSubMode } from "../services/commute.service";
+import { buildCommuteRoute, buildPrivateCarFerryRoute, CommuteSubMode } from "../services/commute.service";
 import { AuthRequest } from "../types";
 
 /**
@@ -110,6 +110,17 @@ export const calculateRouteByCoordinates = async (
     );
 
     if (!result.success) {
+      // Island destination fallback: try car-on-ferry route before giving up
+      try {
+        const ferryRoute = await buildPrivateCarFerryRoute(
+          parseFloat(start_lat), parseFloat(start_lon),
+          parseFloat(end_lat), parseFloat(end_lon),
+        );
+        if (ferryRoute) {
+          res.json({ success: false, ferryRoute });
+          return;
+        }
+      } catch { /* fall through to 404 */ }
       res.status(404).json({
         success: false,
         message:

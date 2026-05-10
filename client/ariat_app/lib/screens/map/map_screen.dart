@@ -440,6 +440,22 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               snappedFrom = waypoints[i + 1];
             }
           } else {
+            // Island destination? Server may have injected a car-on-ferry fallback.
+            final ferryData = res['ferryRoute'] as Map<String, dynamic>?;
+            if (ferryData != null) {
+              final ferryLegs = (ferryData['legs'] as List?)
+                  ?.map((l) => TransportLeg.fromJson(l as Map<String, dynamic>))
+                  .toList() ?? [];
+              if (ferryLegs.isNotEmpty && mounted && gen == _routeGeneration) {
+                setState(() {
+                  _commuteLegs = ferryLegs;
+                  _routeLegs = [];
+                  _routeLoading = false;
+                });
+                if (mounted) AppToast.info(context, 'Ferry route — drive to pier, load car, board ferry.');
+                return;
+              }
+            }
             final fromName = i == 0 ? 'Start' : stops[i - 1].name;
             final toName = stops[i].name;
             setState(() {
@@ -1016,7 +1032,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     _lastHandledPositionTime = posTime;
 
     // ── Metered taxi: accumulate GPS distance + elapsed time ─────────────
-    if (_taxiMeterActive && _taxiLastGpsPos != null && _taxiLastGpsTime != null) {
+    // Meter is suspended during ferry legs — ferry fare is fixed, not metered.
+    final onFerryLeg = _commuteLegs.isNotEmpty &&
+        _currentLegIndex < _commuteLegs.length &&
+        _commuteLegs[_currentLegIndex].mode == 'ferry';
+    if (_taxiMeterActive && !onFerryLeg && _taxiLastGpsPos != null && _taxiLastGpsTime != null) {
       final distKm = _distMeters(userLatLng, _taxiLastGpsPos!) / 1000;
       final now = DateTime.now();
       final elapsedMin =
@@ -2000,7 +2020,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                       fontSize: 15, fontWeight: FontWeight.w800,
                                       color: isApproaching ? AppColors.amber : _modeColor(leg.mode),
                                     )),
-                                if (leg.fare > 0)
+                                if (leg.mode == 'ferry')
+                                  const Text('Varies',
+                                      style: TextStyle(fontSize: 11, color: Color(0xFF7c3aed),
+                                          fontWeight: FontWeight.w600))
+                                else if (leg.fare > 0)
                                   Text('₱${leg.fare.toStringAsFixed(0)}',
                                       style: TextStyle(fontSize: 11, color: AppColors.amber,
                                           fontWeight: FontWeight.w600)),
@@ -2010,6 +2034,36 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             ),
                           ],
                         ),
+                        // Ferry ticket notice strip
+                        if (leg.mode == 'ferry') ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF7c3aed).withAlpha(25),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(FluentIcons.airplane, size: 12, color: Color(0xFF7c3aed)),
+                                SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Ticket prices may vary — purchase at the pier.',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF7c3aed),
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         // Action strip for walk / book-a-ride legs
                         if (leg.mode == 'walk' ||
                             (!_transitModes.contains(leg.mode) && leg.mode != 'ferry')) ...[
