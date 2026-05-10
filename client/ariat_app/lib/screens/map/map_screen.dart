@@ -127,6 +127,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   DateTime? _taxiLastGpsTime;
   /// Server estimate of remaining fare from current GPS to destination (updated on reroute).
   double _taxiRemainingEstimate = 0;
+  /// km accumulated at the time _taxiRemainingEstimate was last set (nav-start or reroute).
+  /// Used to cancel out the km component so normal progress doesn't inflate the total.
+  double _taxiKmAtLastReroute = 0;
 
   // ── Smooth navigation camera ──────────────────────────────────────────────
   /// Drives 60-fps position interpolation between GPS fixes.
@@ -591,6 +594,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         if (_taxiMeterActive && _taxiSubMode == 'metered_taxi') {
           final baseFare = _taxiFareConfig?.baseFare ?? 50.0;
           _taxiRemainingEstimate = (totalFare - baseFare).clamp(0.0, double.infinity);
+          _taxiKmAtLastReroute = _taxiKmTraveled;
         }
       });
       if (mounted) {
@@ -728,6 +732,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           _taxiLastGpsTime = DateTime.now();
           _taxiRemainingEstimate =
               (tripFare - baseFare).clamp(0.0, double.infinity);
+          _taxiKmAtLastReroute = 0;
         });
       }
     }
@@ -852,6 +857,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       _taxiLastGpsPos = null;
       _taxiLastGpsTime = null;
       _taxiRemainingEstimate = 0;
+      _taxiKmAtLastReroute = 0;
       _animMarkerPos = null;
       _navZoom = 17.0;
       _lastNavGpsPos = null;
@@ -964,7 +970,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         final meter = (cfg?.baseFare ?? 50.0)
             + _taxiKmTraveled * (cfg?.perKm ?? 14.5)
             + _taxiMinutesTraveled * (cfg?.perMinute ?? 2.0);
-        return meter + _taxiRemainingEstimate;
+        final perKm = cfg?.perKm ?? 14.5;
+        final kmSinceReroute = _taxiKmTraveled - _taxiKmAtLastReroute;
+        final remaining = (_taxiRemainingEstimate - kmSinceReroute * perKm)
+            .clamp(0.0, double.infinity);
+        return meter + remaining;
       }
       if (_navLockedFare != null) return _navLockedFare!;
     }
